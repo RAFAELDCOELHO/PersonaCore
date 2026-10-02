@@ -5,6 +5,7 @@ sidecars -> ``phase36_probe.emit`` -> ``build_record`` -> ``_write_record`` into
 consumer/producer shape drift goes red here. Nothing is written under the real results/ or ledger/.
 """
 
+import ast
 import copy
 import datetime
 import json
@@ -636,3 +637,556 @@ def test_derive_private_steps_match_derive(planted):
     assert phase36_budget._front_seconds(prices, caps, True)["R1b"] == 0.0
     assert phase36_budget._apply_cuts(caps, {"r1b": 1}) is True
     assert phase36_budget._apply_cuts(caps, {}) is False
+
+
+# =================================================================================================
+# Task 2 — committed inputs, the fill chain, dry, emit, recompute, ancestry
+# =================================================================================================
+
+import phase30_points  # noqa: E402  (scripts/ is not a package)
+
+from test_phase29_prereg import _assert_frozen_before  # noqa: E402
+from test_phase36_prereg import _untested_functions  # noqa: E402
+from test_phase36_probe import _live_run  # noqa: E402
+
+BUDGET = phase36_budget.BUDGET_RECORD
+LEDGER = phase36_ledger.LEDGER_PATH
+RECORDS = phase36_prereg.PROBE_RECORDS
+HALT_MESSAGE = (
+    "[phase35_prereg] the fronts do not fit Rafael's MPS ceiling: HALT and take the cut options "
+    "to Rafael (COST-02); no front is cut unilaterally"
+)
+
+
+@pytest.fixture(autouse=True)
+def clean_tree(monkeypatch):
+    """emit refuses a dirty tree and this suite runs on dirty trees, so the guard is RECORDED."""
+    calls = []
+    monkeypatch.setattr(phase36_budget, "refuse_if_dirty", lambda **kw: calls.append(kw) or "")
+    return calls
+
+
+def _tracked():
+    return phase36_budget.phase36_caps.tracked_files()
+
+
+def _phase36_results_state():
+    return (
+        _git("status", "--porcelain", "--untracked-files=all", "--", "results/phase36_*"),
+        sorted(p.name for p in (_ROOT / "results").glob("phase36_*")),
+    )
+
+
+def _committed_inputs(monkeypatch, records, spent=float(P)):
+    """The committed-file loaders replaced by the planted records (no probe record exists yet)."""
+    monkeypatch.setattr(phase36_budget, "probe_record_paths", lambda tracked=None: RECORDS)
+    monkeypatch.setattr(phase36_budget, "load_probes", lambda tracked: copy.deepcopy(records))
+    monkeypatch.setattr(phase36_budget, "load_historical", lambda tracked: _historical())
+    monkeypatch.setattr(phase36_budget, "ledger_probes_seconds", lambda tracked: spent)
+
+
+def _clock(record):
+    run = record["provenance"]["run"]
+    return (
+        datetime.datetime.fromisoformat(run["finished_utc"])
+        - datetime.datetime.fromisoformat(run["started_utc"])
+    ).total_seconds()
+
+
+def test_load_historical_reads_the_committed_records():
+    assert phase36_budget.load_historical(_tracked()) == _real_historical()
+    assert "results/phase31_probe_point.json" not in phase36_budget.HISTORICAL_RECORDS
+
+
+def test_head_blob_reads_head_and_refuses_untracked():
+    rel = "results/phase17_personas_report.md"
+    assert phase36_budget._head_blob(rel, _tracked()) == (_ROOT / rel).read_bytes()
+    with pytest.raises(SystemExit, match="is not TRACKED"):
+        phase36_budget._head_blob(rel, [])
+
+
+def test_ledger_blob_is_the_committed_ledger():
+    """Honest in both states: the ledger is committed by the probe run's emit-all (36-07)."""
+    tracked = _tracked()
+    if LEDGER in tracked:
+        assert (
+            phase36_budget._ledger_blob(tracked)
+            == subprocess.run(
+                ["git", "show", f"HEAD:{LEDGER}"], cwd=_ROOT, capture_output=True, check=True
+            ).stdout
+        )
+    else:
+        with pytest.raises(SystemExit, match="is not TRACKED"):
+            phase36_budget._ledger_blob(tracked)
+
+
+def test_probe_record_paths_refuses_a_partial_set_naming_the_fronts():
+    assert phase36_budget.probe_record_paths(list(RECORDS)) == RECORDS
+    with pytest.raises(SystemExit, match=r"fronts \['e3', 'e6'\]"):
+        phase36_budget.probe_record_paths([r for r in RECORDS if "_e3" not in r and "_e6" not in r])
+    tracked = _tracked()
+    if all(r in tracked for r in RECORDS):
+        assert phase36_budget.probe_record_paths() == RECORDS
+    else:
+        with pytest.raises(SystemExit, match="probe records missing for fronts"):
+            phase36_budget.probe_record_paths()
+
+
+def test_load_probes_reads_each_record_through_tracked_json(planted, monkeypatch):
+    by_path = {phase36_prereg.probe_record(f): r for f, r in planted.items()}
+    seen = []
+
+    def committed(rel, tracked, what):
+        seen.append(rel)
+        return by_path[rel]
+
+    monkeypatch.setattr(phase30_points, "_tracked_json", committed)
+    assert phase36_budget.load_probes(list(RECORDS)) == planted
+    assert sorted(seen) == sorted(RECORDS)
+
+
+def _ledger_text(lines):
+    out = []
+    for fields in lines:
+        line = dict.fromkeys(phase36_ledger.LINE_FIELDS)
+        line.update(fields)
+        out.append(json.dumps(line, sort_keys=True))
+    return ("\n".join(out) + "\n").encode("utf-8")
+
+
+def test_ledger_probes_seconds_counts_the_lost_attempt(planted, monkeypatch):
+    """W2: two probe end lines (their records' clocks) + one lost probe line of 120 s; an OPEN
+    line of another front is out of scope and does not refuse."""
+    e5, e6 = phase36_prereg.probe_record("e5"), phase36_prereg.probe_record("e6")
+    rid = {f: phase36_ledger.run_id(36, "probes", f) for f in ("e5", "e6", "e3")}
+    utc = "2026-10-02T00:00:00+00:00"
+    blob = _ledger_text(
+        [
+            {"utc": utc, "event": "start", "run_id": rid["e5"], "phase": 36, "front": "probes"},
+            {"utc": utc, "event": "end", "run_id": rid["e5"], "phase": 36, "front": "probes"}
+            | {"record": e5},
+            {"utc": utc, "event": "start", "run_id": rid["e6"], "phase": 36, "front": "probes"},
+            {"utc": utc, "event": "end", "run_id": rid["e6"], "phase": 36, "front": "probes"}
+            | {"record": e6},
+            {"utc": utc, "event": "start", "run_id": rid["e3"], "phase": 36, "front": "probes"},
+            {"utc": utc, "event": "lost", "run_id": rid["e3"], "phase": 36, "front": "probes"}
+            | {"seconds": 120.0, "flag": phase36_ledger.LOST_FLAG},
+            {"utc": utc, "event": "start", "run_id": "v6/41/E1/x", "phase": 41, "front": "E1"},
+        ]
+    )
+    asked = []
+    monkeypatch.setattr(phase36_budget, "_ledger_blob", lambda tracked: asked.append(1) or blob)
+    by_path = {e5: planted["e5"], e6: planted["e6"]}
+    monkeypatch.setattr(phase30_points, "_tracked_json", lambda rel, tracked, what: by_path[rel])
+    seconds = phase36_budget.ledger_probes_seconds([LEDGER, e5, e6])
+    assert seconds == SPANS["e5"] + SPANS["e6"] + 120.0
+    assert seconds == _clock(planted["e5"]) + _clock(planted["e6"]) + 120.0
+    assert asked == [1]
+    with pytest.raises(SystemExit, match="is not tracked"):
+        phase36_budget.ledger_probes_seconds([e5, e6])
+    assert asked == [1]  # refused before any read
+
+
+def test_committed_derive_and_chosen_on_committed_loaders(planted, monkeypatch):
+    _committed_inputs(monkeypatch, planted)
+    derived = phase36_budget.committed_derive(RECORDS)
+    assert derived == _derive(planted)
+    approved = {"approved": "planted"}
+    assert phase36_budget.committed_derive(RECORDS, **approved) == derived
+    value = phase36_budget.chosen(RECORDS, **approved)
+    assert value == {
+        "front_hours": derived["front_hours"],
+        "stop_line_hours": derived["stop_line_hours"],
+        "e2_seed_count": 5,
+    }
+    assert phase36_budget._fit_value(derived) == value
+    with pytest.raises(SystemExit, match="are not the probe records"):
+        phase36_budget.committed_derive(RECORDS[:4])
+
+
+def test_derivation_names_every_input_and_each_override():
+    value = {"front_hours": {}, "stop_line_hours": 1.0, "e2_seed_count": 5}
+    ruling = {
+        "price_rulings": {"a2_draw_basis": "at_cap"},
+        "cap_rulings": {"E3.max_batch": "batch 16 approved"},
+        "divergences_investigated": {"r1b_e1_k48": "warm-up"},
+        "cuts": {"e4_reserve": 1},
+        "approved": "approved",
+    }
+    entry = phase36_budget.derivation(value, RECORDS, **ruling)
+    assert set(entry) == set(phase35_prereg.ENTRY_FIELDS) and entry["kind"] == "derived"
+    assert entry["value"] is value
+    for rel in (*RECORDS, *phase36_budget.HISTORICAL_RECORDS, LEDGER):
+        assert rel in entry["source"]
+    text = entry["derivation"]
+    assert "price ruling a2_draw_basis: at_cap (default k78)" in text
+    assert "cap ruling E3.max_batch: batch 16 approved" in text
+    assert "finding r1b_e1_k48: warm-up" in text and '"e4_reserve": 1' in text
+    assert text.endswith("approved by Rafael: approved")
+    assert phase35_prereg.FORBIDDEN_PHRASE not in text + entry["source"]
+    assert "the proposal (CAP_DERIVATIONS)" in phase36_budget._describe({})[-2]
+    with pytest.raises(SystemExit, match="no approved text"):
+        phase36_budget.derivation(value, RECORDS)
+    with pytest.raises(SystemExit, match="unknown ruling keys"):
+        phase36_budget.derivation(value, RECORDS, approved="x", fill=1)
+
+
+def test_consumer_fill_chain_on_real_producer_records(tmp_path, monkeypatch):
+    """The five records the CPU live run EMITTED through the real phase36_probe.emit ->
+    _emit_target -> _write_record (W10) feed derive, the v6.0 fill, the budget record, then
+    fill('e2_S') and fill('e1_checkpoint_grid'). DOCUMENTED SUBSTITUTIONS: PROBE_DEVICE = "cpu"
+    (CPU fixture runs); probes_spent_seconds = the fsum of the five records' clocks (the no-lost-
+    attempt case spent(fronts=('probes',)) returns on a ledger naming exactly these records; the
+    lost-attempt case is test_ledger_probes_seconds_counts_the_lost_attempt); a finding for every
+    gated comparator (fixture seconds are CPU seconds at fixture scale)."""
+    live = _live_run(tmp_path / "live", None)
+    repo = tmp_path / "repo"
+    (repo / "results").mkdir(parents=True)
+    for front, rel in zip(phase36_prereg.PROBE_FRONTS, RECORDS, strict=True):
+        emitted = live["root"] / "emitted" / f"phase36_probe_{front}.json"
+        (repo / rel).write_bytes(emitted.read_bytes())  # byte for byte
+    probes = {
+        f: json.loads((repo / rel).read_text(encoding="utf-8"))
+        for f, rel in zip(phase36_prereg.PROBE_FRONTS, RECORDS, strict=True)
+    }
+    assert probes == live["records"]
+    monkeypatch.setattr(phase36_budget, "PROBE_DEVICE", "cpu")
+    spent = math.fsum(_clock(r) for r in probes.values())
+    findings = {
+        row["id"]: "fixture: CPU seconds at fixture scale"
+        for row in phase36_prereg.ENTRIES["divergence_comparators"]["value"]
+        if row["gated"]
+    }
+    ruling = {"divergences_investigated": findings, "approved": "fixture: CPU live run"}
+    historical = phase36_budget.load_historical(_tracked())
+    derived = phase36_budget.derive(
+        probes, historical, probes_spent_seconds=spent, divergences_investigated=findings
+    )
+    assert derived["fits"], derived["total_hours"]
+    value = phase36_budget._fit_value(derived)
+
+    monkeypatch.setattr(phase35_prereg, "_REPO_ROOT", repo)
+    real_fill, filled_slots = phase35_prereg.fill, []
+    monkeypatch.setattr(
+        phase35_prereg,
+        "fill",
+        lambda slot, **kw: filled_slots.append(slot) or real_fill(slot, **kw),
+    )
+    filled = phase35_prereg.fill(
+        "v6_budget_and_stop_line",
+        **value,
+        input_records=RECORDS,
+        derivation=phase36_budget.derivation(value, RECORDS, **ruling),
+    )
+    assert dict(filled["front_hours"]) == derived["front_hours"]
+    assert filled["total_hours"] == derived["total_hours"]
+    record = phase36_budget.budget_record(filled, derived, ruling)
+    assert record["approved"] == ruling["approved"] and "RESOURCE" in record["note"]
+    assert record["unit_prices"]["e4_point_seconds"] > 0
+    (repo / BUDGET).write_text(json.dumps(record), encoding="utf-8")
+
+    budget_only = (BUDGET,)
+    seeds = record["e2_seed_count"]
+    s = phase35_prereg.fill(
+        "e2_S",
+        input_records=budget_only,
+        derivation={
+            "value": seeds,
+            "derivation": "fixture: S read from the budget record",
+            "kind": "derived",
+            "source": BUDGET,
+        },
+    )
+    assert s == seeds == 5
+    checkpoints = tuple(range(1, record["unit_caps"]["E1"]["checkpoints_per_cell"] + 1))
+    grid = phase35_prereg.fill(
+        "e1_checkpoint_grid",
+        checkpoints=checkpoints,
+        input_records=budget_only,
+        derivation={
+            "value": checkpoints,
+            "derivation": "fixture: the proposed grid at the cap",
+            "kind": "derived",
+            "source": BUDGET,
+        },
+    )
+    assert grid["checkpoints"] == checkpoints
+    assert filled_slots == ["v6_budget_and_stop_line", "e2_S", "e1_checkpoint_grid"]
+    assert phase36_budget.phase36_caps.owner_overruns({"e1_checkpoint_grid": grid}, record) == []
+
+
+def test_budget_record_refuses_values_off_the_derivation(planted):
+    derived = _derive(planted)
+    filled = {**phase36_budget._fit_value(derived), "total_hours": derived["total_hours"]}
+    filled["e2_seed_count"] = 4
+    with pytest.raises(SystemExit, match="is not the derived one"):
+        phase36_budget.budget_record(filled, derived, {"approved": "x"})
+
+
+def test_halt_chain_refuses_and_writes_nothing(planted, monkeypatch):
+    before = _phase36_results_state()
+    _committed_inputs(monkeypatch, planted, spent=150000.0)
+    with pytest.raises(SystemExit, match="HALT: the fronts total") as caught:
+        phase36_budget.chosen(RECORDS, approved="x")
+    assert "no front is cut unilaterally" in str(caught.value)
+    derived = phase36_budget.committed_derive(RECORDS)
+    assert derived["fits"] is False and len(derived["cut_table"]) == len(phase36_budget.CUT_ORDER)
+    hours = derived["front_hours"]
+    with pytest.raises(SystemExit) as caught:
+        phase35_prereg.fill(
+            "v6_budget_and_stop_line",
+            front_hours=hours,
+            stop_line_hours=math.fsum(hours.values()),
+            e2_seed_count=5,
+            input_records=RECORDS,
+            derivation={"value": {}, "derivation": "x", "kind": "derived", "source": "x"},
+        )
+    assert str(caught.value) == HALT_MESSAGE
+    assert _phase36_results_state() == before
+
+
+def _listing():
+    return (
+        _git("status", "--porcelain", "--untracked-files=all"),
+        sorted(p.relative_to(_ROOT).as_posix() for p in (_ROOT / "results").iterdir()),
+    )
+
+
+def test_dry_writes_nothing_and_prints_every_number(planted, monkeypatch, tmp_path, capsys):
+    _committed_inputs(monkeypatch, planted)
+    before = _listing()
+    derived = phase36_budget.dry()
+    out = capsys.readouterr().out
+    assert derived == _derive(planted)
+    assert "[phase36_budget] FITS" in out and "HALT" not in out
+    assert out.count("[phase36_budget] comparison:") == len(derived["comparisons"])
+    for text in phase36_budget.SURFACED:
+        assert json.dumps(text) in out
+    for name, (default, alternative) in phase36_budget.RULING_ALTERNATIVES.items():
+        assert f"ruling {name}={default}:" in out and f"ruling {name}={alternative}:" in out
+    assert "E3 hours at recipes 4:" in out and "E3 hours at recipes 5:" in out
+    assert "E3 max_batch:" in out and "front_hours:" in out and "stop_line_hours:" in out
+    for name in phase36_budget.CAP_DERIVATIONS:
+        assert f"cap {name}:" in out
+
+    ruling = tmp_path / "ruling.json"
+    ruling.write_text(
+        json.dumps({"price_rulings": {"a2_draw_basis": "at_cap"}, "approved": "x"}),
+        encoding="utf-8",
+    )
+    ruled = phase36_budget.dry(ruling)
+    assert ruled["price_rulings"] == {"a2_draw_basis": "at_cap"}
+    _committed_inputs(monkeypatch, planted, spent=150000.0)
+    halted = phase36_budget.dry()
+    out = capsys.readouterr().out
+    assert halted["fits"] is False and "HALT:" in out
+    assert out.count("[phase36_budget] cut:") == len(phase36_budget.CUT_ORDER)
+    assert _listing() == before
+
+    ruling.write_text(json.dumps({"cut": {}}), encoding="utf-8")
+    with pytest.raises(SystemExit, match="unknown ruling keys"):
+        phase36_budget.dry(ruling)
+    with pytest.raises(SystemExit, match="never lives under results/"):
+        phase36_budget.dry(_ROOT / "results" / "ruling.json")
+
+
+def test_dry_prints_the_comparisons_before_a_divergence_refusal(tmp_path, monkeypatch, capsys):
+    _committed_inputs(monkeypatch, _plant(tmp_path, e1_totals=(1.3 * 4115.04, 4064.0)))
+    with pytest.raises(SystemExit, match="investigate BEFORE"):
+        phase36_budget.dry()
+    out = capsys.readouterr().out
+    assert '"id": "r1b_e1_k48#1"' in out and '"exceeds": true' in out
+
+
+def test_dry_refuses_naming_the_missing_probe_records_on_the_real_tree():
+    if all(r in _tracked() for r in RECORDS):
+        return  # the probe records exist: dry runs (36-07)
+    before = _listing()
+    done = subprocess.run(
+        [sys.executable, "scripts/phase36_budget.py", "dry"],
+        cwd=_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert done.returncode == 1
+    assert "probe records missing for fronts" in done.stderr
+    assert _listing() == before
+
+
+def test_show_and_main_dispatch(monkeypatch, capsys):
+    phase36_budget._show("label", {"b": 1, "a": 2})
+    assert capsys.readouterr().out == '[phase36_budget] label: {"a": 2, "b": 1}\n'
+    calls = []
+    monkeypatch.setattr(phase36_budget, "dry", lambda ruling_path=None: calls.append(ruling_path))
+    monkeypatch.setattr(phase36_budget, "emit", lambda out_path=BUDGET: calls.append(out_path))
+    assert phase36_budget.main(["dry"]) == 0
+    assert phase36_budget.main(["dry", "--ruling", "/tmp/r.json"]) == 0
+    assert phase36_budget.main(["emit"]) == 0
+    assert calls == [None, "/tmp/r.json", BUDGET]
+    with pytest.raises(SystemExit):
+        phase36_budget.main(["write"])
+
+
+def test_later_records_reads_phase_37_onwards_end_lines(monkeypatch):
+    lines = [
+        {"event": "end", "phase": 36, "record": RECORDS[0]},
+        {"event": "end", "phase": 37, "record": "results/phase37_replica.json"},
+        {"event": "end", "phase": 41, "record": "results/phase41_untracked.json"},
+        {"event": "start", "phase": 42, "record": None},
+    ]
+    monkeypatch.setattr(phase36_ledger, "read_ledger", lambda path=None: lines)
+    tracked = [RECORDS[0], "results/phase37_replica.json"]
+    assert phase36_budget.later_records(tracked) == ["results/phase37_replica.json"]
+
+
+def test_emit_refuses_an_existing_output_first(tmp_path, clean_tree):
+    out = tmp_path / "budget.json"
+    out.write_text("{}", encoding="utf-8")
+    with pytest.raises(SystemExit, match="REFUSING to overwrite"):
+        phase36_budget.emit(out)
+    assert out.read_text(encoding="utf-8") == "{}" and clean_tree == []
+
+
+def test_emit_dirty_pathspec_then_fill_file_refusals(monkeypatch, clean_tree):
+    rel = "results/phase36_never_written_budget.json"
+
+    def stop():
+        raise SystemExit("[test] stopped after the dirty check")
+
+    monkeypatch.setattr(phase36_budget.phase36_caps, "tracked_files", stop)
+    with pytest.raises(SystemExit, match="stopped after the dirty check"):
+        phase36_budget.emit(rel)
+    (call,) = clean_tree
+    assert call["cwd"] == phase36_budget._GIT_ROOT
+    assert call["pathspec"] == ("scripts", "src", "results", f":(exclude){rel}")
+    assert not (_ROOT / rel).exists()
+    monkeypatch.setattr(phase36_budget.phase36_caps, "tracked_files", lambda: list(RECORDS))
+    with pytest.raises(SystemExit, match="phase36_budget_prereg.py is not tracked"):
+        phase36_budget.emit(rel)
+
+
+def test_emit_refuses_after_a_phase_37_record(monkeypatch, tmp_path):
+    later = "results/phase37_replica.json"
+    monkeypatch.setattr(phase36_budget, "FILL_FILE", "scripts/phase36_prereg.py")
+    monkeypatch.setattr(
+        phase36_budget.phase36_caps,
+        "tracked_files",
+        lambda: ["scripts/phase36_prereg.py", *RECORDS, later],
+    )
+    monkeypatch.setattr(
+        phase36_ledger,
+        "read_ledger",
+        lambda path=None: [{"event": "end", "phase": 37, "record": later}],
+    )
+    monkeypatch.setattr(phase36_budget, "committed_derive", lambda *a, **k: pytest.fail("built"))
+    out = tmp_path / "budget.json"
+    with pytest.raises(SystemExit, match="precedes every phase-37..43 MPS record"):
+        phase36_budget.emit(out)
+    assert not out.exists()
+
+
+def _fill_module(value, total, ruling):
+    module = type(sys)("phase36_budget_prereg")
+    module.RULING = ruling
+    module.V6_BUDGET_AND_STOP_LINE = {**value, "total_hours": total}
+    return module
+
+
+def test_emit_writes_the_rederived_budget(planted, monkeypatch, tmp_path):
+    """The fill file is planted (plan 08 writes the real one after Rafael's approved); the
+    committed loaders are planted; FILL_FILE points at a tracked, unchanged module."""
+    _committed_inputs(monkeypatch, planted)
+    monkeypatch.setattr(phase36_budget, "FILL_FILE", "scripts/phase36_prereg.py")
+    monkeypatch.setattr(
+        phase36_budget.phase36_caps,
+        "tracked_files",
+        lambda: ["scripts/phase36_prereg.py", *RECORDS, LEDGER],
+    )
+    monkeypatch.setattr(phase36_ledger, "read_ledger", lambda path=None: [])
+    monkeypatch.setattr(phase36_budget, "_head_blob", lambda rel, tracked: rel.encode("utf-8"))
+    ruling = {"approved": "planted"}
+    derived = _derive(planted)
+    value = phase36_budget._fit_value(derived)
+    fill = _fill_module(value, derived["total_hours"], ruling)
+    monkeypatch.setitem(sys.modules, "phase36_budget_prereg", fill)
+    out = tmp_path / "budget.json"
+    record = phase36_budget.emit(out)
+    written = json.loads(out.read_text(encoding="utf-8"))
+    assert written == json.loads(json.dumps(record))
+    assert written["front_hours"] == derived["front_hours"]
+    assert set(written["sources"]) == {*RECORDS, *phase36_budget.HISTORICAL_RECORDS, LEDGER}
+    assert set(written["provenance"]["module_sha256"]) == {
+        "scripts/phase36_budget.py",
+        "scripts/phase36_prereg.py",
+        "scripts/phase36_caps.py",
+    }
+    assert {"git_sha", "head_at_write", "written_utc"} <= set(written["provenance"])
+
+    bad = _fill_module({**value, "e2_seed_count": 4}, derived["total_hours"], ruling)
+    monkeypatch.setitem(sys.modules, "phase36_budget_prereg", bad)
+    with pytest.raises(SystemExit, match="is not the re-derived budget"):
+        phase36_budget.emit(tmp_path / "other.json")
+    _committed_inputs(monkeypatch, planted, spent=150000.0)
+    with pytest.raises(SystemExit, match="HALT"):
+        phase36_budget.emit(tmp_path / "halt.json")
+    assert not (tmp_path / "other.json").exists() and not (tmp_path / "halt.json").exists()
+
+
+def _strip(record):
+    return {k: v for k, v in record.items() if k not in ("provenance", "sources")}
+
+
+def test_recompute_the_committed_budget(planted, monkeypatch):
+    tracked = _tracked()
+    if BUDGET in tracked:
+        import phase36_budget_prereg as fill_file
+
+        committed = json.loads((_ROOT / BUDGET).read_text(encoding="utf-8"))
+        derived = phase36_budget.committed_derive(
+            phase36_budget.probe_record_paths(tracked), **fill_file.RULING
+        )
+        rebuilt = phase36_budget.budget_record(
+            fill_file.V6_BUDGET_AND_STOP_LINE, derived, fill_file.RULING
+        )
+        assert _strip(json.loads(json.dumps(rebuilt))) == _strip(committed)
+        return
+    # Honest branch: no committed budget yet. Two derives on the same records are identical.
+    _committed_inputs(monkeypatch, planted)
+    first = phase36_budget.committed_derive(RECORDS)
+    second = phase36_budget.committed_derive(RECORDS)
+    assert json.dumps(first, sort_keys=True) == json.dumps(second, sort_keys=True)
+
+
+def test_ancestry_probes_fill_file_budget_and_later_records():
+    tracked = _tracked()
+    later = phase36_budget.later_records(tracked)
+    if BUDGET in tracked:
+        _assert_frozen_before(phase36_budget.FILL_FILE, [BUDGET])
+        for record in RECORDS:
+            _assert_frozen_before(record, [phase36_budget.FILL_FILE])
+        _assert_frozen_before(BUDGET, later)
+    else:
+        assert later == [], f"{later} tracked before the v6.0 budget"
+    # NON-VACUITY (natural RED): phase35_prereg was added before phase36_prereg existed.
+    with pytest.raises(subprocess.CalledProcessError):
+        _assert_frozen_before("scripts/phase36_prereg.py", ["scripts/phase35_prereg.py"])
+
+
+def test_every_budget_function_has_a_cpu_test():
+    source = (_SCRIPTS / "phase36_budget.py").read_text(encoding="utf-8")
+    test_source = pathlib.Path(__file__).read_text(encoding="utf-8")
+    assert len([n for n in ast.parse(source).body if isinstance(n, ast.FunctionDef)]) > 1
+    assert _untested_functions("phase36_budget", source, test_source) == []
+
+
+def test_budget_module_never_fills_and_never_names_the_v6_module():
+    tree = ast.parse((_SCRIPTS / "phase36_budget.py").read_text(encoding="utf-8"))
+    attrs = [n for n in ast.walk(tree) if isinstance(n, ast.Attribute)]
+    assert attrs, "meta-guard: the walk saw no attribute"
+    owner = [n for n in attrs if isinstance(n.value, ast.Name) and n.value.id == "phase35_prereg"]
+    assert owner, "meta-guard: no phase35_prereg access, the walk is blind"
+    assert [n.attr for n in owner if n.attr == "fill" or n.attr.startswith("_")] == []
+    assert not [
+        n for n in ast.walk(tree) if isinstance(n, ast.Constant) and n.value == "phase35_prereg"
+    ]
+    assert not (_SCRIPTS / "phase36_budget.py").name.endswith("prereg.py")

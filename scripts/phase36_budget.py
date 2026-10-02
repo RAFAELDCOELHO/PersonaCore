@@ -20,11 +20,17 @@ fill site, in a ``phase36_*prereg.py``.
 Torch-free at import AND at derive.
 """
 
+import argparse
+import datetime
+import hashlib
+import json
 import math
 import pathlib
 import re
 import statistics
+import subprocess
 import sys
+import tempfile
 
 _GIT_ROOT = pathlib.Path(__file__).resolve().parent.parent
 _SCRIPTS = str(_GIT_ROOT / "scripts")
@@ -34,9 +40,16 @@ _SRC = str(_GIT_ROOT / "src")
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
-import phase35_prereg  # noqa: E402  (scripts/ is not a package; torch-free)
+import phase25_run  # noqa: E402  (scripts/ is not a package; torch-free)
+import phase30_points  # noqa: E402  (same)
+import phase35_prereg  # noqa: E402  (same)
 import phase36_caps  # noqa: E402  (same)
+import phase36_ledger  # noqa: E402  (same)
 import phase36_prereg  # noqa: E402  (same)
+
+from personacore.provenance import git_sha, refuse_if_dirty  # noqa: E402
+
+INSTRUMENT_GIT_SHA = git_sha()
 
 # =================================================================================================
 # CONSTANTS — read from the pre-registrations, never typed (the typed proposals carry a source)
@@ -757,3 +770,356 @@ def derive(
         "cut_table": [] if fits else cut_table(prices, caps, front_hours, total),
         "formula": FORMULA,
     }
+
+
+# =================================================================================================
+# COMMITTED INPUTS — git blobs only — and the fill-file helpers
+# =================================================================================================
+
+
+def _head_blob(rel, tracked):
+    """``rel``'s blob at HEAD; refuses an untracked path."""
+    _prove(rel in set(tracked), f"{rel} is not TRACKED: only a committed file is read")
+    shown = subprocess.run(["git", "show", f"HEAD:{rel}"], cwd=_GIT_ROOT, capture_output=True)
+    _prove(shown.returncode == 0, f"{rel} has no committed blob at HEAD")
+    return shown.stdout
+
+
+def _ledger_blob(tracked):
+    """The ledger's COMMITTED bytes (later appends on disk never change the probes front)."""
+    return _head_blob(phase36_ledger.LEDGER_PATH, tracked)
+
+
+def probe_record_paths(tracked=None):
+    """The five probe records, all tracked; a partial set is refused naming the missing fronts."""
+    tracked = set(phase36_caps.tracked_files() if tracked is None else tracked)
+    missing = [
+        f
+        for f, p in zip(phase36_prereg.PROBE_FRONTS, phase36_prereg.PROBE_RECORDS)
+        if p not in tracked
+    ]
+    _prove(
+        not missing,
+        f"probe records missing for fronts {missing} "
+        f"({[phase36_prereg.probe_record(f) for f in missing]}): the budget prices five COMMITTED "
+        "probe records",
+    )
+    return phase36_prereg.PROBE_RECORDS
+
+
+def load_probes(tracked):
+    return {
+        front: phase30_points._tracked_json(phase36_prereg.probe_record(front), tracked, "probe")
+        for front in phase36_prereg.PROBE_FRONTS
+    }
+
+
+def load_historical(tracked):
+    return {
+        rel: (
+            _head_blob(rel, tracked).decode("utf-8")
+            if rel.endswith(".md")
+            else phase30_points._tracked_json(rel, tracked, "the historical record")
+        )
+        for rel in HISTORICAL_RECORDS
+    }
+
+
+def ledger_probes_seconds(tracked):
+    """W2: the probes front's seconds from the COMMITTED ledger, lost attempts included."""
+    _prove(
+        phase36_ledger.LEDGER_PATH in set(tracked),
+        f"{phase36_ledger.LEDGER_PATH} is not tracked: the probes front is read from the committed "
+        "ledger (W2), so commit it first (phase36_probe.py emit-all)",
+    )
+    with tempfile.TemporaryDirectory() as scratch:
+        path = pathlib.Path(scratch) / "ledger.jsonl"
+        path.write_bytes(_ledger_blob(tracked))
+        spent = phase36_ledger.spent(tracked, ledger_path=path, fronts=("probes",))
+    return spent["by_front"]["probes"]
+
+
+def committed_derive(paths, *, tracked=None, approved=None, **ruling):
+    """derive on the COMMITTED records at ``paths``; ``approved`` is accepted and unused (one
+    RULING dict splats into chosen, derivation and budget_record)."""
+    tracked = phase36_caps.tracked_files() if tracked is None else tracked
+    _prove(
+        tuple(paths) == probe_record_paths(tracked),
+        f"paths {paths} are not the probe records {phase36_prereg.PROBE_RECORDS}",
+    )
+    return derive(
+        load_probes(tracked),
+        load_historical(tracked),
+        probes_spent_seconds=ledger_probes_seconds(tracked),
+        **ruling,
+    )
+
+
+def _fit_value(derived):
+    _prove(
+        derived["fits"],
+        f"HALT: the fronts total {derived['total_hours']:.3f} h and do not fit Rafael's "
+        f"{CEILING} h ceiling — take the cut table to Rafael (COST-02, D-15); no front is cut "
+        "unilaterally",
+    )
+    return {
+        "front_hours": dict(derived["front_hours"]),
+        "stop_line_hours": derived["stop_line_hours"],
+        "e2_seed_count": derived["e2_seed_count"],
+    }
+
+
+def chosen(paths, **ruling):
+    """The fill's chosen value from committed records; refuses a HALT."""
+    return _fit_value(committed_derive(paths, **ruling))
+
+
+def _describe(ruling):
+    lines = [f"formula.{k}: {v}" for k, v in FORMULA.items()]
+    caps = ruling.get("unit_caps")
+    lines.append(
+        "unit_caps: "
+        + ("the proposal (CAP_DERIVATIONS)" if caps is None else json.dumps(caps, sort_keys=True))
+    )
+    lines.append(f"cuts applied: {json.dumps(ruling.get('cuts') or {}, sort_keys=True)}")
+    for key, text in sorted((ruling.get("divergences_investigated") or {}).items()):
+        lines.append(f"finding {key}: {text}")
+    for name, choice in sorted((ruling.get("price_rulings") or {}).items()):
+        default = RULING_ALTERNATIVES[name][0]
+        lines.append(f"price ruling {name}: {choice} (default {default})")
+    for key, text in sorted((ruling.get("cap_rulings") or {}).items()):
+        lines.append(f"cap ruling {key}: {text} (default: the probed value)")
+    return lines
+
+
+def derivation(value, paths, **ruling):
+    """The four-field derivation for the fill; ``source`` names every input path."""
+    unknown = sorted(set(ruling) - set(RULING_KEYS))
+    _prove(not unknown, f"unknown ruling keys {unknown}")
+    approved = ruling.get("approved")
+    _prove(isinstance(approved, str) and approved.strip(), "no approved text from Rafael")
+    return {
+        "value": value,
+        "derivation": "; ".join([*_describe(ruling), f"approved by Rafael: {approved}"]),
+        "kind": "derived",
+        "source": " ".join(
+            [
+                *paths,
+                *HISTORICAL_RECORDS,
+                phase36_ledger.LEDGER_PATH,
+                "36-CONTEXT D-01..D-19 and Addendum (43a8432, 5deba79)",
+            ]
+        ),
+    }
+
+
+def budget_record(filled, derived, ruling):
+    """The budget record from the fill's output and derive's; the shape re-proved (D-09)."""
+    plain = {
+        "front_hours": dict(filled["front_hours"]),
+        "total_hours": filled["total_hours"],
+        "stop_line_hours": filled["stop_line_hours"],
+        "e2_seed_count": filled["e2_seed_count"],
+    }
+    _prove(
+        plain["front_hours"] == derived["front_hours"]
+        and plain["stop_line_hours"] == derived["stop_line_hours"]
+        and plain["e2_seed_count"] == derived["e2_seed_count"],
+        "the filled budget is not the derived one",
+    )
+    record = {
+        **plain,
+        "unit_caps": derived["unit_caps"],
+        "cap_derivations": CAP_DERIVATIONS,
+        "unit_prices": derived["unit_prices"],
+        "price_alternatives": derived["price_alternatives"],
+        "price_rulings": derived["price_rulings"],
+        "cap_rulings": derived["cap_rulings"],
+        "comparisons": derived["comparisons"],
+        "formula": derived["formula"],
+        "cuts_applied": derived["cuts_applied"],
+        "divergences_investigated": derived["divergences_investigated"],
+        "approved": ruling.get("approved"),
+        "note": RESOURCE_NOT_OUTCOME,
+    }
+    return phase36_caps.prove_budget_shape(record)
+
+
+# =================================================================================================
+# dry (writes nothing), the precede refusal, the write-once emit, the CLI
+# =================================================================================================
+
+
+def _show(label, value):
+    print(f"[phase36_budget] {label}: {json.dumps(value, sort_keys=True)}", flush=True)
+
+
+def dry(ruling_path=None):
+    """Every number for Rafael's checkpoint, from committed files. Writes NOTHING."""
+    tracked = phase36_caps.tracked_files()
+    paths = probe_record_paths(tracked)  # zero records: the refusal names the missing fronts
+    ruling = {}
+    if ruling_path is not None:
+        ruling_path = pathlib.Path(ruling_path).resolve()
+        _prove(
+            not ruling_path.is_relative_to(_GIT_ROOT / "results"),
+            "a ruling file never lives under results/",
+        )
+        ruling = json.loads(ruling_path.read_text(encoding="utf-8"))
+        unknown = sorted(set(ruling) - set(RULING_KEYS))
+        _prove(not unknown, f"unknown ruling keys {unknown}")
+    kwargs = {k: v for k, v in ruling.items() if k != "approved"}
+    probes, historical = load_probes(tracked), load_historical(tracked)
+    spent = ledger_probes_seconds(tracked)
+    _show("inputs", [*paths, *HISTORICAL_RECORDS, phase36_ledger.LEDGER_PATH])
+    for row in comparisons(probes, historical):
+        _show("comparison", row)
+    derived = derive(probes, historical, probes_spent_seconds=spent, **kwargs)
+    _show("unit_prices", derived["unit_prices"])
+    _show("unit_caps", derived["unit_caps"])
+    for name, text in CAP_DERIVATIONS.items():
+        _show(f"cap {name}", text)
+    _show("front_hours", derived["front_hours"])
+    _show("total_hours", derived["total_hours"])
+    _show("stop_line_hours", derived["stop_line_hours"])
+    _show("e2_seed_count", derived["e2_seed_count"])
+    for text in SURFACED:
+        _show("surfaced for Rafael", text)
+    for name, pair in RULING_ALTERNATIVES.items():
+        for choice in pair:
+            rulings = {**(kwargs.get("price_rulings") or {}), name: choice}
+            try:
+                alt = derive(
+                    probes,
+                    historical,
+                    probes_spent_seconds=spent,
+                    **{**kwargs, "price_rulings": rulings},
+                )
+            except SystemExit as refused:
+                _show(f"ruling {name}={choice}", str(refused))
+                continue
+            _show(
+                f"ruling {name}={choice}",
+                {"front_hours": alt["front_hours"], "total_hours": alt["total_hours"]},
+            )
+    for recipes in (E3_RECIPES, E3_RECIPES + 1):
+        caps = {f: dict(b) for f, b in derived["unit_caps"].items()}
+        caps["E3"]["recipes"] = recipes
+        alt = derive(
+            probes, historical, probes_spent_seconds=spent, **{**kwargs, "unit_caps": caps}
+        )
+        _show(f"E3 hours at recipes {recipes}", alt["front_hours"]["E3"])
+    _show(
+        "E3 max_batch",
+        f"{derived['unit_caps']['E3']['max_batch']} (the probed batch; a larger batch needs "
+        "cap_rulings['E3.max_batch'], priced linearly per step, W10)",
+    )
+    if derived["fits"]:
+        print("[phase36_budget] FITS", flush=True)
+    else:
+        print(
+            f"[phase36_budget] HALT: {derived['overflow_hours']:.3f} h over the {CEILING} h "
+            "ceiling — the cut table goes to Rafael; nothing is cut without his ruling",
+            flush=True,
+        )
+        for row in derived["cut_table"]:
+            _show("cut", row)
+    return derived
+
+
+def later_records(tracked):
+    """Tracked records named by a ledger end line of phase >= 37 (the budget must precede them)."""
+    tracked = set(tracked)
+    return sorted(
+        {
+            line["record"]
+            for line in phase36_ledger.read_ledger()
+            if line["event"] == "end" and line["phase"] >= 37 and line["record"] in tracked
+        }
+    )
+
+
+def emit(out_path=BUDGET_RECORD):
+    """Write-once: overwrite, dirty, fill file, precede refusals; re-derive; prove; write."""
+    out_path = pathlib.Path(out_path)
+    if not out_path.is_absolute():
+        out_path = _GIT_ROOT / out_path
+    _prove(
+        not out_path.exists(),
+        f"{out_path} exists — REFUSING to overwrite it. The budget is write-once; corrections are "
+        "dated continuations",
+    )
+    pathspec = ("scripts", "src", "results")
+    if out_path.is_relative_to(_GIT_ROOT):
+        pathspec += (f":(exclude){out_path.relative_to(_GIT_ROOT).as_posix()}",)
+    refuse_if_dirty(
+        who="phase36_budget",
+        detail=(
+            "the budget publishes git_sha and hashes its pinned modules from the working tree; a "
+            "record written from a dirty tree names a commit it cannot be regenerated from"
+        ),
+        pathspec=pathspec,
+        cwd=_GIT_ROOT,
+    )
+    tracked = phase36_caps.tracked_files()
+    _prove(FILL_FILE in tracked, f"{FILL_FILE} is not tracked: commit it after Rafael's approved")
+    unchanged = subprocess.run(["git", "diff", "--quiet", "HEAD", "--", FILL_FILE], cwd=_GIT_ROOT)
+    _prove(unchanged.returncode == 0, f"{FILL_FILE} differs from its committed blob")
+    later = later_records(tracked)
+    _prove(
+        not later,
+        f"{later} already tracked: the budget precedes every phase-37..43 MPS record",
+    )
+    import phase36_budget_prereg as fill_file  # lazy: exists only after Rafael's approved
+
+    paths = probe_record_paths(tracked)
+    derived = committed_derive(paths, tracked=tracked, **fill_file.RULING)
+    value = _fit_value(derived)
+    filled = fill_file.V6_BUDGET_AND_STOP_LINE
+    _prove(
+        value
+        == {
+            "front_hours": dict(filled["front_hours"]),
+            "stop_line_hours": filled["stop_line_hours"],
+            "e2_seed_count": filled["e2_seed_count"],
+        },
+        "the fill file's V6_BUDGET_AND_STOP_LINE is not the re-derived budget",
+    )
+    record = budget_record(filled, derived, fill_file.RULING)
+    read = [*paths, *HISTORICAL_RECORDS, phase36_ledger.LEDGER_PATH]
+    record["sources"] = {rel: hashlib.sha256(_head_blob(rel, tracked)).hexdigest() for rel in read}
+    record["provenance"] = {
+        "module_sha256": {
+            rel: hashlib.sha256((_GIT_ROOT / rel).read_bytes()).hexdigest()
+            for rel in (
+                "scripts/phase36_budget.py",
+                FILL_FILE,
+                "scripts/phase36_prereg.py",
+                "scripts/phase36_caps.py",
+            )
+        },
+        "git_sha": INSTRUMENT_GIT_SHA,
+        "head_at_write": git_sha(),
+        "written_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    }
+    phase25_run.atomic_write_json(out_path, record)
+    print(f"[phase36_budget] stop line {record['stop_line_hours']:.3f} h — wrote {out_path}")
+    return record
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="The v6.0 MPS budget (COST-02).")
+    sub = parser.add_subparsers(dest="mode", required=True)
+    dry_parser = sub.add_parser("dry", help="print every number; writes nothing")
+    dry_parser.add_argument("--ruling", default=None, help="a ruling JSON (never under results/)")
+    sub.add_parser("emit", help="write results/phase36_budget.json after the fill file")
+    args = parser.parse_args(argv)
+    if args.mode == "dry":
+        dry(args.ruling)
+    else:
+        emit()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
