@@ -30,7 +30,6 @@ import inspect
 import json
 import math
 import pathlib
-import re
 import subprocess
 import sys
 
@@ -946,12 +945,15 @@ def _control_payload(recipe, seed, taught, heldout):
     }
 
 
-def _budget_payload(**hours):
+def _budget_payload(e2_seed_count=None, **hours):
     front_hours = {f: hours.get(f, 5.0) for f in phase35_prereg.V6_MPS_FRONTS}
+    if e2_seed_count is None:
+        e2_seed_count = phase35_prereg.ENTRIES["e2_min_seeds"]["value"]
     return {
         "front_hours": front_hours,
         "total_hours": math.fsum(front_hours.values()),
         "stop_line_hours": 60.0,
+        "e2_seed_count": e2_seed_count,
     }
 
 
@@ -1006,7 +1008,7 @@ def test_slot_measured_rules_consume_their_inputs(tmp_path, monkeypatch):
     minting = "results/phase38_minting.json"
     paths = _inputs(tmp_path, monkeypatch, {minting: {"m": 16}, "results/phase39_x.json": {}})
     consume = phase35_prereg._consume_inputs
-    good = consume("e5_set_sizes", 7, (minting,), _measured(7, (minting,)))
+    good = phase35_prereg._consume_inputs("e5_set_sizes", 7, (minting,), _measured(7, (minting,)))
     assert dict(good) == {minting: {"m": 16}}
 
     missing = "results/phase38_minting_missing.json"
@@ -1020,6 +1022,7 @@ def test_slot_measured_rules_consume_their_inputs(tmp_path, monkeypatch):
         ((minting,), _measured(8, (minting,))),  # value is not the filled value
         ((minting,), {**_measured(7, (minting,)), "proposer": "Rafael"}),  # D-14
         ((), _measured(7, (minting,))),  # no input at all
+        ((minting, minting), _measured(7, (minting,))),  # review IN-02: a duplicate path
     ):
         with pytest.raises(SystemExit):
             consume("e5_set_sizes", 7, records, derivation)
@@ -1030,31 +1033,64 @@ def test_slot_measured_rules_consume_their_inputs(tmp_path, monkeypatch):
 
 def test_e2_S_refuses_more_seeds_than_the_list(tmp_path, monkeypatch):
     most = len(phase35_prereg.seed_list())
-    _inputs(tmp_path / "empty", monkeypatch, {})
-    with pytest.raises(SystemExit) as refused:
-        phase35_prereg.fill("e2_S", s=most + 1, input_records=(_BUDGET,), derivation={})
-    assert "D-06" in str(refused.value) and "never extended" in str(refused.value)
-
-    paths = _inputs(tmp_path / "ok", monkeypatch, {_BUDGET: _budget_payload()})
     least = phase35_prereg.ENTRIES["e2_min_seeds"]["value"]
     assert least == 2
-    for s in (most, least):
-        assert phase35_prereg.fill("e2_S", s=s, input_records=paths, derivation=_measured(s, paths))
-        assert (
-            phase35_prereg.fill("e2_S", s=s, input_records=paths, derivation=_measured(s, paths))
-            == s
+
+    def e2(root, payload, derivation_value, **kwargs):
+        paths = _inputs(root, monkeypatch, {_BUDGET: payload})
+        return phase35_prereg.fill(
+            "e2_S", input_records=paths, derivation=_measured(derivation_value, paths), **kwargs
         )
-    for bad in (least - 1, True, float(most)):
+
+    with pytest.raises(SystemExit) as refused:  # D-06: a STOP, derived from the list's length
+        e2(tmp_path / "d06", _budget_payload(e2_seed_count=most + 1), most + 1)
+    assert "D-06" in str(refused.value) and "never extended" in str(refused.value)
+
+    for count in (most, least):  # S is READ from the budget record's e2_seed_count
+        assert e2(tmp_path / f"ok{count}", _budget_payload(e2_seed_count=count), count) == count
+        assert e2(tmp_path / f"eq{count}", _budget_payload(e2_seed_count=count), count, s=count)
+    with pytest.raises(SystemExit) as refused:  # a typed S that differs from the read one
+        e2(tmp_path / "typed", _budget_payload(e2_seed_count=least), least, s=most)
+    assert "read" in str(refused.value)
+    for name, payload, value, kwargs in (
+        ("below", _budget_payload(e2_seed_count=least - 1), least - 1, {}),
+        ("bool", _budget_payload(e2_seed_count=True), True, {}),
+        ("float", _budget_payload(e2_seed_count=float(least)), float(least), {}),
+        ("s_float", _budget_payload(), least, {"s": float(least)}),
+        ("derivation", _budget_payload(), most, {}),  # derivation value is not the read S
+        ("noe2", _budget_payload(E2=0.0), least, {}),
+    ):
+        with pytest.raises(SystemExit):
+            e2(tmp_path / name, payload, value, **kwargs)
+
+
+def test_budget_record_is_revalidated_by_every_consumer(tmp_path, monkeypatch):
+    """Review WR-03: a published budget record that breaks the budget rule funds nothing, and a
+    malformed one is a _prove refusal, never a TypeError."""
+    least = phase35_prereg.ENTRIES["e2_min_seeds"]["value"]
+    good = _budget_payload()
+    assert phase35_prereg._budget_record({_BUDGET: good}) == good
+    assert phase35_prereg._budget_front_hours({_BUDGET: good}, "E2") == good["front_hours"]["E2"]
+    huge = {f: 1e6 for f in phase35_prereg.V6_MPS_FRONTS}
+    for name, payload in (
+        ("ceiling", {**good, "front_hours": huge, "total_hours": 8e6, "stop_line_hours": 9e9}),
+        ("strings", {**good, "front_hours": {f: "5" for f in phase35_prereg.V6_MPS_FRONTS}}),
+        ("total", {**good, "total_hours": good["total_hours"] + 1}),
+        ("fronts", {**good, "front_hours": {"E2": 5.0}}),
+        ("count", {k: v for k, v in good.items() if k != "e2_seed_count"}),
+    ):
+        with pytest.raises(SystemExit):
+            phase35_prereg._budget_record({_BUDGET: payload})
+        paths = _inputs(tmp_path / name, monkeypatch, {_BUDGET: payload})
+        with pytest.raises(SystemExit):
+            phase35_prereg.fill("e2_S", input_records=paths, derivation=_measured(least, paths))
         with pytest.raises(SystemExit):
             phase35_prereg.fill(
-                "e2_S", s=bad, input_records=paths, derivation=_measured(bad, paths)
+                "e1_checkpoint_grid",
+                checkpoints=_CHECKPOINTS,
+                input_records=paths,
+                derivation=_measured(_CHECKPOINTS, paths),
             )
-
-    paths = _inputs(tmp_path / "noe2", monkeypatch, {_BUDGET: _budget_payload(E2=0.0)})
-    with pytest.raises(SystemExit):
-        phase35_prereg.fill(
-            "e2_S", s=least, input_records=paths, derivation=_measured(least, paths)
-        )
 
 
 def _v4_recipe():
@@ -1116,6 +1152,7 @@ def test_e3_grid_is_four_recipes_by_three_sigmas(tmp_path, monkeypatch):
         ("five_no_fifth", [_v4_recipe(), *_others(4)], record_seed, {"list_v4": True}),
         ("duplicate", [*_others(3), _others(1)[0]], seeds[0], {}),
         ("off_list_seed", _others(4), max(seeds) + 1, {}),
+        ("float_seed", _others(4), float(seeds[0]), {}),  # review IN-01
         ("four_plus_fifth", _others(4), seeds[0], {"fifth": fifth}),
     ):
         with pytest.raises(SystemExit):
@@ -1211,10 +1248,24 @@ def test_e3_grid_refuses_a_p22_crossing(tmp_path, monkeypatch):
     assert phase35_prereg.p22_onset_sigma(budget) < 0.07  # the rule reads the entry
 
 
-def _fill_threshold(root, monkeypatch, grid, controls):
+def _grid_keys(grid):
+    """The grid recipe keys (lr, steps, batch, seed) in grid order: the threshold's derivation
+    value (review WR-06)."""
+    return tuple(
+        dict.fromkeys(
+            (c["recipe"]["lr"], c["recipe"]["steps"], c["recipe"]["batch"], c["seed"])
+            for c in grid["cells"]
+        )
+    )
+
+
+def _fill_threshold(root, monkeypatch, grid, controls, value=None):
     paths = _inputs(root, monkeypatch, controls)
     return phase35_prereg.fill(
-        "e3_recall_threshold", grid=grid, input_records=paths, derivation=_measured(paths, paths)
+        "e3_recall_threshold",
+        grid=grid,
+        input_records=paths,
+        derivation=_measured(_grid_keys(grid) if value is None else value, paths),
     )
 
 
@@ -1295,7 +1346,8 @@ def test_e4_parameters_gate_on_the_reproduction(tmp_path, monkeypatch):
     paths = _inputs(tmp_path, monkeypatch, {"results/phase38_minting.json": {"m": 16}})
     delta = phase35_prereg.DELTA
 
-    def e4(m, k_plus, k_minus, inclusion=0.5, beta=0.05):
+    def e4(m, k_plus, k_minus, inclusion=0.5, beta=0.05, value=None):
+        chosen = {"m": m, "k_plus": k_plus, "k_minus": k_minus} if value is None else value
         return phase35_prereg.fill(
             "e4_parameters",
             m=m,
@@ -1304,13 +1356,15 @@ def test_e4_parameters_gate_on_the_reproduction(tmp_path, monkeypatch):
             k_minus=k_minus,
             beta=beta,
             input_records=paths,
-            derivation=_measured(m, paths),
+            derivation=_measured(chosen, paths),
         )
 
     assert phase35_prereg.ENTRIES["e4_inclusion_probability"]["value"] == 0.5
     small = e4(16, 8, 8)
     assert small["ceiling"] == phase35_prereg.eps_lower_one_run(16, 16, 16, delta, 0.05)
     assert small["runs"] is False
+    one_sided = e4(16, 4, 0)  # zero guesses on one side is a well-defined count (WR-01)
+    assert one_sided["ceiling"] == phase35_prereg.eps_lower_one_run(16, 4, 4, delta, 0.05)
     large = e4(184, 92, 92)
     assert large["runs"] is True
     assert large["ceiling"] > phase35_prereg.audit02_cut()
@@ -1320,6 +1374,15 @@ def test_e4_parameters_gate_on_the_reproduction(tmp_path, monkeypatch):
         ((16, 8, 8), {"beta": 0.1}),
         ((16, 8, 8), {"beta": True}),
         ((16, 8, 8), {"beta": math.nan}),
+        ((16, -1, 5), {}),  # review WR-01: a negative count, r = 4
+        ((16, 5, -1), {}),
+        ((16, True, 5), {}),
+        ((16, 5, False), {}),
+        ((0, 0, 0), {}),
+        ((-4, 1, 1), {}),
+        ((True, 1, 0), {}),
+        ((16, 0, 0), {}),  # r = 0: no guess
+        ((16, 8, 8), {"value": 16}),  # review WR-06: the derivation names m alone
     ):
         with pytest.raises(SystemExit):
             e4(*args, **kwargs)
@@ -1368,28 +1431,86 @@ def test_slot_e1_rules(tmp_path, monkeypatch):
             derivation=_measured((8, 8, 16), paths),
         )
 
-    off_seed = next(
-        s for s in phase35_prereg.seed_list() if s not in phase35_prereg.e1_teaching_seeds()
-    )
-
-    paths = _inputs(tmp_path / "band", monkeypatch, {"results/phase41_band_inputs_a.json": {}})
-    teaching = phase35_prereg.e1_teaching_seeds()[0]
-
-    def band_fill(seed):
-        band = {(seed, "greedy_loo"): {"control_gap": 1.0, "gap_noise_floor": 0.1}}
-        return phase35_prereg.fill(
-            "e1_condition_c_band_inputs",
-            band_inputs=band,
-            input_records=paths,
-            derivation=_measured(band, paths),
-        )
-
-    assert band_fill(teaching)[(teaching, "greedy_loo")] == mitigation_gate.dialogue_gap_band(
-        control_gap=1.0, gap_noise_floor=0.1
-    )
-    with pytest.raises(SystemExit):
-        band_fill(off_seed)
     assert phase35_prereg.fill("e1_alternative_ordering", ordering=_entry("x")) == _entry("x")
+
+
+# ERASE-09's band, READ from the band-input and noise-floor records (review CR-01, Rafael
+# 2026-10-01: the floors pattern). Records are planted under tmp_path only.
+
+_NOISE = "results/phase40_noise_floor.json"
+_BAND_ORDERING = "greedy_loo"
+
+
+def _band_record(seed, control_gap, ordering=_BAND_ORDERING):
+    return {"seed": seed, "ordering": ordering, "control_gap": control_gap}
+
+
+def _fill_band(root, monkeypatch, band_inputs, band_records, *, consumed=None, value=None):
+    records = {f"results/phase41_band_inputs_{i}.json": p for i, p in enumerate(band_records)}
+    planted = {**records, _NOISE: {"gap_noise_floor": 0.1}}
+    _inputs(root, monkeypatch, planted)
+    paths = tuple(planted) if consumed is None else consumed
+    return phase35_prereg.fill(
+        "e1_condition_c_band_inputs",
+        band_inputs=band_inputs,
+        input_records=paths,
+        derivation=_measured(tuple(band_inputs) if value is None else value, paths),
+    )
+
+
+def test_band_inputs_are_read_from_their_records(tmp_path, monkeypatch):
+    teaching = phase35_prereg.e1_teaching_seeds()
+    gaps = dict(zip(teaching, (1.0, 1.5), strict=True))
+    keys = [(seed, _BAND_ORDERING) for seed in teaching]
+    records = [_band_record(seed, gaps[seed]) for seed in teaching]
+    out = _fill_band(tmp_path / "ok", monkeypatch, dict.fromkeys(keys), records)
+    for seed, ordering in keys:
+        assert out[(seed, ordering)] == mitigation_gate.dialogue_gap_band(
+            control_gap=gaps[seed], gap_noise_floor=0.1
+        )
+    with pytest.raises(TypeError):
+        out[keys[0]] = None
+    same = {key: {"control_gap": gaps[key[0]], "gap_noise_floor": 0.1} for key in keys}
+    assert _fill_band(tmp_path / "same", monkeypatch, same, records) == out
+
+    band_paths = tuple(f"results/phase41_band_inputs_{i}.json" for i in range(len(records)))
+    off_seed = next(s for s in phase35_prereg.seed_list() if s not in teaching)
+    for name, band, planted, kwargs, expected in (
+        ("no_noise", dict.fromkeys(keys), records, {"consumed": band_paths}, "not consumed"),
+        ("no_band", dict.fromkeys(keys), records, {"consumed": (_NOISE,)}, "not consumed"),
+        (
+            "typed",
+            {
+                **dict.fromkeys(keys),
+                keys[0]: {"control_gap": gaps[teaching[0]], "gap_noise_floor": 99.0},
+            },
+            records,
+            {},
+            "they are read",
+        ),
+        ("duplicate", dict.fromkeys(keys), [*records, records[0]], {}, "two band-input records"),
+        (
+            "orphan",
+            dict.fromkeys(keys),
+            [*records, _band_record(teaching[0], 1.0, "other")],
+            {},
+            "serves no key",
+        ),
+        ("missing", dict.fromkeys(keys), records[:1], {}, "without a band-input record"),
+        ("one_seed", dict.fromkeys(keys[:1]), records[:1], {}, "every e1 teaching seed"),
+        (
+            "off_seed",
+            {**dict.fromkeys(keys), (off_seed, _BAND_ORDERING): None},
+            records,
+            {},
+            "seed",
+        ),
+        ("float_seed", {(float(teaching[0]), _BAND_ORDERING): None}, records, {}, "int"),
+        ("value", dict.fromkeys(keys), records, {"value": dict.fromkeys(keys)}, "chosen value"),
+    ):
+        with pytest.raises(SystemExit) as refused:
+            _fill_band(tmp_path / name, monkeypatch, band, planted, **kwargs)
+        assert expected in str(refused.value), (name, str(refused.value))
 
 
 # ERASE-07's NOT_REACHED outcome (Rafael's review, 2026-10-01).
@@ -1582,6 +1703,26 @@ def test_e1_floors_refuse_a_typed_floor_or_a_mismatched_record(tmp_path, monkeyp
             "serving no floor",
         ),
         ("target", dict.fromkeys(keys), [{**one[0], "target": targets[0]}], "target field"),
+        (  # review WR-02: each ordering covers only some targets
+            "per_cell",
+            dict.fromkeys(
+                [(t, _ORDERING) for t in targets[:2]] + [(t, "alt") for t in targets[2:]]
+            ),
+            [*one, _calibration_payload(("alt",), draws)],
+            "every e1 target",
+        ),
+        (  # review WR-02: one ordering with seeded and unseeded keys
+            "arity",
+            dict.fromkeys([*keys, *_target_keys(_ORDERING, seeds[0])]),
+            [*one, _calibration_payload((_ORDERING, seeds[0]), draws)],
+            "mixes seeded and unseeded",
+        ),
+        (  # review IN-01: a float seed equal to a teaching seed
+            "float_seed",
+            dict.fromkeys(_target_keys(_ORDERING, float(seeds[0]))),
+            [_calibration_payload((_ORDERING, seeds[0]), draws)],
+            "int",
+        ),
         ("family", dict.fromkeys(keys), [_calibration_payload((_ORDERING,), draws, "A0")], "A2"),
     ):
         with pytest.raises(SystemExit) as refused:
@@ -1608,6 +1749,14 @@ def test_e1_floors_corpus_is_a_declared_consumed_input(tmp_path, monkeypatch):
 
     with pytest.raises(SystemExit) as refused:  # the record's corpus is not in input_records
         _fill_floors(tmp_path / "unconsumed", monkeypatch, keys, one, consumed=(record,))
+    assert "was not consumed" in str(refused.value)
+    with pytest.raises(SystemExit) as refused:  # the declared corpus consumed, another one named
+        _fill_floors(
+            tmp_path / "other_named",
+            monkeypatch,
+            keys,
+            [_calibration_payload((_ORDERING,), _cal_draws(), corpus="results/phase19_b.json")],
+        )
     assert "not a consumed input" in str(refused.value)
     with pytest.raises(SystemExit) as refused:  # the derivation's source omits the corpus
         _fill_floors(tmp_path / "unnamed", monkeypatch, keys, one, named=(record,))
@@ -1732,18 +1881,31 @@ def test_slot_budget_halts_above_the_ceiling(tmp_path, monkeypatch):
     paths = _inputs(tmp_path, monkeypatch, {"results/phase36_probe_a.json": {}})
     fronts = {f: 5.0 for f in phase35_prereg.V6_MPS_FRONTS}
 
-    def budget(front_hours, stop_line_hours):
+    least = phase35_prereg.ENTRIES["e2_min_seeds"]["value"]
+
+    def budget(front_hours, stop_line_hours, count=least, value=None):
+        chosen = {
+            "front_hours": dict(front_hours),
+            "stop_line_hours": stop_line_hours,
+            "e2_seed_count": count,
+        }
         return phase35_prereg.fill(
             "v6_budget_and_stop_line",
             front_hours=front_hours,
             stop_line_hours=stop_line_hours,
+            e2_seed_count=count,
             input_records=paths,
-            derivation=_measured(front_hours, paths),
+            derivation=_measured(chosen if value is None else value, paths),
         )
 
     out = budget(fronts, 60.0)
     assert out["total_hours"] == 40.0 and out["stop_line_hours"] == 60.0
+    assert out["e2_seed_count"] == least
     assert dict(out["front_hours"]) == fronts
+    most = len(phase35_prereg.seed_list())
+    for kwargs in ({"value": fronts}, {"count": most + 1}, {"count": least - 1}):
+        with pytest.raises(SystemExit):  # derivation of front_hours only; D-06; below the floor
+            budget(fronts, 60.0, **kwargs)
     missing = {f: h for f, h in fronts.items() if f != "E6"}
     for front_hours, stop in ((missing, 60.0), (fronts, 30.0)):
         with pytest.raises(SystemExit):
@@ -1797,6 +1959,85 @@ _DESIGN_SLOTS = {
 }
 
 
+def test_design_slots_return_read_only_copies():
+    """Review WR-04: a design rule's result neither follows the caller's later edits nor takes an
+    assignment, and a mapping value is frozen too."""
+    for slot, kwargs in _DESIGN_SLOTS.items():
+        entry = _entry({"rule": "text"})
+        out = phase35_prereg.fill(slot, **kwargs(entry))
+        entry["proposer"] = "planted"
+        entry["value"]["rule"] = "edited"
+        frozen = [out[k] for k in ("replicated_definition", "moves", "collapses") if k in out]
+        for got in frozen or [out]:
+            assert "proposer" not in got and got["value"]["rule"] == "text", slot
+            with pytest.raises(TypeError):
+                got["proposer"] = "planted"
+            with pytest.raises(TypeError):
+                got["value"]["rule"] = "edited"
+    ordering = _entry("ordering text")
+    out = phase35_prereg.fill("e1_alternative_ordering", ordering=ordering)
+    ordering["value"] = ""
+    assert out["value"] == "ordering text"
+    with pytest.raises(TypeError):
+        out["value"] = ""
+    assert phase35_prereg._frozen_entry("x", _entry(1))["value"] == 1
+
+
+def test_every_declared_input_pattern_is_consumed_unless_optional(tmp_path, monkeypatch):
+    """The root cause CR-01 names: a declared pattern no consumed path matches is refused unless
+    the rule passes it as optional (only e3's reused v4.0 control is)."""
+    band = "results/phase41_band_inputs_a.json"
+    paths = _inputs(tmp_path, monkeypatch, {band: {}, _NOISE: {}})
+    consume = phase35_prereg._consume_inputs
+    slot = "e1_condition_c_band_inputs"
+    assert set(consume(slot, 1, paths, _measured(1, paths))) == set(paths)
+    with pytest.raises(SystemExit) as refused:  # planted RED: the Phase 40 record left out
+        consume(slot, 1, (band,), _measured(1, (band,)))
+    assert "was not consumed" in str(refused.value)
+    assert consume(slot, 1, (band,), _measured(1, (band,)), optional=(_NOISE,))
+    with pytest.raises(SystemExit):  # optional must name a declared pattern
+        consume(slot, 1, paths, _measured(1, paths), optional=("results/phase40_other.json",))
+    for name in ("e3_grid_subset", "e3_recall_threshold"):
+        source = inspect.getsource(phase35_prereg.SLOTS[name]["rule"])
+        assert "optional=(_V4_CONTROL_RECORD,)" in source, name
+    rules = [
+        n
+        for n in ast.parse((_ROOT / PREREG).read_text(encoding="utf-8")).body
+        if isinstance(n, ast.FunctionDef) and n.name.startswith("_rule_")
+    ]
+    optional = {
+        rule.name
+        for rule in rules
+        for node in ast.walk(rule)
+        if isinstance(node, ast.keyword) and node.arg == "optional"
+    }
+    assert optional == {"_rule_e3_grid_subset", "_rule_e3_recall_threshold"}
+
+
+def test_grids_must_be_fill_results(tmp_path, monkeypatch):
+    """Review IN-04: e1_stop and e3_recall_threshold refuse a hand-built grid with the right
+    keys."""
+    grid, _ = _fill_checkpoint_grid(tmp_path / "e1", monkeypatch)
+    assert isinstance(grid, phase35_prereg._Filled)
+    readings = _readings(_CHECKPOINTS[0], confirmed=(_CHECKPOINTS[0],))
+    assert phase35_prereg.e1_stop(grid=grid, readings=readings)["judged"] is True
+    with pytest.raises(SystemExit):
+        phase35_prereg.e1_stop(grid=dict(grid), readings=readings)
+
+    seed = phase35_prereg.seed_list()[0]
+    recipes = _others(4)
+    e3 = _fill_grid(tmp_path / "e3", monkeypatch, recipes, seed)
+    controls = {
+        f"results/phase42_control_{i}.json": _control_payload(r, seed, (40, 48), (20, 40))
+        for i, r in enumerate(recipes)
+    }
+    assert len(_fill_threshold(tmp_path / "real", monkeypatch, e3, controls)) == 4
+    with pytest.raises(SystemExit):
+        _fill_threshold(tmp_path / "hand", monkeypatch, dict(e3), controls)
+    with pytest.raises(SystemExit):  # review WR-06: the derivation value is the grid's keys
+        _fill_threshold(tmp_path / "paths", monkeypatch, e3, controls, value=tuple(controls))
+
+
 @pytest.mark.parametrize("slot", sorted(_DESIGN_SLOTS))
 def test_slot_design_entries_refuse_a_proposer(slot):
     kwargs = _DESIGN_SLOTS[slot]
@@ -1823,8 +2064,10 @@ def _fill_calls(source):
 
 
 def _scanned_sources(root):
-    """``(posix relpath, source)`` for scripts/*.py (minus the prereg itself) and src/**/*.py."""
-    paths = [p for p in (root / "scripts").glob("*.py") if p.name != "phase35_prereg.py"]
+    """``(posix relpath, source)`` for scripts/**/*.py (minus the prereg itself) and src/**/*.py,
+    recursively: owner_prereg_glob's ``*`` crosses ``/`` (review WR-05)."""
+    prereg = root / PREREG
+    paths = [p for p in (root / "scripts").rglob("*.py") if p != prereg]
     paths += (root / "src").rglob("*.py")
     return sorted((p.relative_to(root).as_posix(), p.read_text(encoding="utf-8")) for p in paths)
 
@@ -1898,13 +2141,32 @@ def _slot_census_failures(sources):
                 and _reaches_slots(node)
             ):
                 failures.append(f"{where}: registry write to phase35_prereg.SLOTS")
+            if isinstance(node, ast.Attribute) and node.attr.startswith("_rule_"):
+                failures.append(f"{where}: _rule_ reference .{node.attr}")
+            if isinstance(node, ast.Call) and _reaches_slots(node.func):
+                failures.append(f"{where}: registry call through phase35_prereg.SLOTS")
             if (
-                isinstance(node, ast.Attribute)
-                and node.attr.startswith("_rule_")
-                and isinstance(node.value, ast.Name)
-                and node.value.id == "phase35_prereg"
+                isinstance(node, ast.Subscript)
+                and _reaches_slots(node)
+                and isinstance(node.slice, ast.Constant)
+                and node.slice.value == "rule"
             ):
-                failures.append(f"{where}: _rule_ reference phase35_prereg.{node.attr}")
+                failures.append(f"{where}: registry rule access phase35_prereg.SLOTS[...]['rule']")
+            if isinstance(node, ast.Call) and node.args:
+                func = getattr(node.func, "attr", getattr(node.func, "id", None))
+                first = node.args[0]
+                if (
+                    func == "getattr"
+                    and isinstance(first, ast.Name)
+                    and first.id == "phase35_prereg"
+                ):
+                    failures.append(f"{where}: dynamic access getattr(phase35_prereg, ...)")
+                if (
+                    func in ("import_module", "__import__")
+                    and isinstance(first, ast.Constant)
+                    and first.value == "phase35_prereg"
+                ):
+                    failures.append(f"{where}: dynamic import of phase35_prereg")
             if isinstance(node, ast.Import):
                 failures += [
                     f"{where}: alias: import phase35_prereg as {a.asname}"
@@ -1925,6 +2187,21 @@ def _slot_census_failures(sources):
         if len(where) > 1
     ]
     return failures
+
+
+def test_slot_census_scans_scripts_recursively(tmp_path):
+    """Review WR-05: a file under scripts/<sub>/ matches owner_prereg_glob and is scanned."""
+    (tmp_path / "scripts" / "sub").mkdir(parents=True)
+    (tmp_path / "src").mkdir()
+    nested = tmp_path / "scripts" / "sub" / "x.py"
+    nested.write_text(
+        "import phase35_prereg\nS = phase35_prereg.SLOTS['e2_S']['rule'](s=5)\n", encoding="utf-8"
+    )
+    (tmp_path / PREREG).write_text("ignored = 1\n", encoding="utf-8")
+    sources = _scanned_sources(tmp_path)
+    assert [path for path, _ in sources] == ["scripts/sub/x.py"]
+    assert any("registry call" in f for f in _slot_census_failures(sources))
+    assert fnmatch.fnmatch("scripts/phase40_sub/x_prereg.py", "scripts/phase40_*prereg.py")
 
 
 def test_slot_census_is_green_on_the_real_tree():
@@ -1976,6 +2253,19 @@ def test_slot_census_reds_on_planted_owner_files(tmp_path):
         ("different rule", [(p40, _E2_S_FILL.replace("E2_S =", "S ="))]),
         ("registry write", [(p40, 'phase35_prereg.SLOTS["e2_S"] = None')]),
         ("alias", [(p40, "from phase35_prereg import fill", 'E2_S = fill("e2_S", s=5)')]),
+        # review WR-05: reaching a rule without fill, under any name, from any file.
+        (
+            "registry call",
+            [("scripts/phase37_driver.py", 'S = phase35_prereg.SLOTS["e2_S"]["rule"](s=5)')],
+        ),
+        ("registry rule access", [(p40, 'R = phase35_prereg.SLOTS["e2_S"]["rule"]')]),
+        ("getattr", [(p40, 'S = getattr(phase35_prereg, "fill")("e2_S", s=5)')]),
+        (
+            "dynamic import",
+            [(p40, "import importlib", 'M = importlib.import_module("phase35_prereg")')],
+        ),
+        ("dynamic import", [(p40, 'M = __import__("phase35_prereg")')]),
+        ("_rule_ reference", [(p40, "M = phase35_prereg", "S = M._rule_e2_S(s=5)")]),
     ):
         failures = _slot_census_failures(sources(*files))
         assert any(expected in f for f in failures), (expected, files, failures)
@@ -2030,11 +2320,33 @@ def test_slot_fill_dispatches_only_the_declared_rule(tmp_path):
 # =================================================================================================
 
 
+def _is_fill_file(path):
+    """The SAME predicate the census applies: ``path`` matches some slot's owner_prereg_glob
+    (review IN-03; the ordering legs once used a narrower regex)."""
+    globs = {phase35_prereg.owner_prereg_glob(slot) for slot in phase35_prereg.SLOTS}
+    return any(fnmatch.fnmatch(path, glob) for glob in globs)
+
+
+def test_fill_file_predicate_agrees_with_owner_prereg_glob():
+    globs = {phase35_prereg.owner_prereg_glob(slot) for slot in phase35_prereg.SLOTS}
+    for name, expected in (
+        ("scripts/phase40_prereg.py", True),
+        ("scripts/phase40_seeds_prereg.py", True),
+        ("scripts/phase40_seeds-prereg.py", True),
+        ("scripts/phase41_sub/floors_prereg.py", True),
+        ("scripts/phase40_driver.py", False),
+        ("scripts/phase35_prereg.py", False),
+        ("scripts/phase46_prereg.py", False),
+    ):
+        assert _is_fill_file(name) is expected, name
+        assert any(fnmatch.fnmatch(name, g) for g in globs) is expected, name
+
+
 def _fill_sites(run):
     """``{fill file: frozenset(declared slots it fills)}`` for the tracked fill files at HEAD."""
     sites = {}
     for path in run("ls-files", "scripts").stdout.split():
-        if re.fullmatch(r"scripts/phase(3[6-9]|4[0-5])_[A-Za-z0-9_]*prereg\.py", path):
+        if _is_fill_file(path):
             source = run("show", f"HEAD:{path}").stdout
             slots = frozenset(s for s, _ in _fill_calls(source) if s in phase35_prereg.SLOTS)
             if slots:
@@ -2293,11 +2605,12 @@ def test_every_slot_input_is_a_v6_path_or_a_v5_record():
 
 
 def _untested_functions(prereg_source, test_source):
-    """Module-level defs of the prereg that the test source never names. A ``_rule_<slot>``
-    counts as tested through a ``phase35_prereg.fill("<slot>", ...)`` call."""
-    test_tree = ast.parse(test_source)
-    named = {n.id for n in ast.walk(test_tree) if isinstance(n, ast.Name)}
-    named |= {n.attr for n in ast.walk(test_tree) if isinstance(n, ast.Attribute)}
+    """Module-level defs of the prereg that the test source never CALLS (review IN-05: a bare
+    mention, e.g. an ``is`` assert, is not a test). A ``_rule_<slot>`` counts as tested through a
+    ``phase35_prereg.fill("<slot>", ...)`` call."""
+    calls = [n.func for n in ast.walk(ast.parse(test_source)) if isinstance(n, ast.Call)]
+    named = {f.id for f in calls if isinstance(f, ast.Name)}
+    named |= {f.attr for f in calls if isinstance(f, ast.Attribute)}
     named |= {"_rule_" + slot for slot, _ in _fill_calls(test_source) if slot is not None}
     defs = [n.name for n in ast.parse(prereg_source).body if isinstance(n, ast.FunctionDef)]
     return sorted(name for name in defs if name not in named)
@@ -2329,6 +2642,19 @@ def test_prereg_helpers_behave(monkeypatch):
     )
     assert phase35_prereg._prove_entries() is None
     assert phase35_prereg._prove_slots() is None
+    assert phase35_prereg._prove_derivation_value("x", _entry(1), 1) is None
+    with pytest.raises(SystemExit):
+        phase35_prereg._prove_derivation_value("x", _entry(1), 2)
+    fronts = {f: 5.0 for f in phase35_prereg.V6_MPS_FRONTS}
+    least = phase35_prereg.ENTRIES["e2_min_seeds"]["value"]
+    assert phase35_prereg._prove_budget(fronts, 60.0, least) == 40.0
+    for args in ((fronts, 91.0, least), (fronts, 30.0, least), ({**fronts, "E1": "5"}, 60.0, 2)):
+        with pytest.raises(SystemExit):
+            phase35_prereg._prove_budget(*args)
+    targets = phase35_prereg.e1_targets()
+    assert phase35_prereg._prove_cells_cover_targets("x", {(t, "o"): None for t in targets}) is None
+    with pytest.raises(SystemExit):
+        phase35_prereg._prove_cells_cover_targets("x", {(targets[0], "o"): None})
     bad_entries = {**phase35_prereg.ENTRIES, "x": {**_good_entry(), "kind": "guess"}}
     monkeypatch.setattr(phase35_prereg, "ENTRIES", bad_entries)
     with pytest.raises(SystemExit):
@@ -2360,5 +2686,13 @@ def test_every_rule_has_a_cpu_test(tmp_path):
     planted = source + '\n\ndef _rule_planted_untested(*, entry):\n    """Planted."""\n'
     copied = _planted(tmp_path, source, planted, "untested.py")
     assert _untested_functions(copied, test_source) == ["_rule_planted_untested"]
+
+    # Review IN-05: a bare mention is not a test; only a call is.
+    planted = source + '\n\ndef planted_helper():\n    """Planted."""\n'
+    copied = _planted(tmp_path, source, planted, "mentioned.py")
+    mentioned = test_source + "\nassert phase35_prereg.planted_helper is not None\n"
+    assert _untested_functions(copied, mentioned) == ["planted_helper"]
+    called = test_source + "\nphase35_prereg.planted_helper()\n"
+    assert _untested_functions(copied, called) == []
 
     assert real.read_bytes() == before
