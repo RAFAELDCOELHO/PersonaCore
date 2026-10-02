@@ -1707,3 +1707,443 @@ def test_plist_mirrors_the_phase31_probe_agent():
     # main() parses exactly these arguments into a run over the default RUN_ORDER.
     parsed = probe.build_parser().parse_args(args[4:])
     assert parsed.mode == "run" and tuple(parsed.front) == probe.RUN_ORDER
+
+
+# =================================================================================================
+# Plan 36-05 Task 1 — E3 (D-05, D-19): the published sigma point at both step counts, light
+# =================================================================================================
+
+
+def test_loop_timer_sums_counts_and_restores():
+    import types
+
+    def loop(**kwargs):
+        if kwargs.get("boom"):
+            raise RuntimeError("loop died")
+        return "trained"
+
+    fake = types.SimpleNamespace(train=loop)
+    with probe.loop_timer(fake) as box:
+        assert fake.train is not loop
+        assert fake.train(steps=2) == "trained"
+    assert fake.train is loop and box["calls"] == 1 and box["seconds"] >= 0
+    with pytest.raises(RuntimeError, match="loop died"), probe.loop_timer(fake) as box:
+        fake.train(boom=True)
+    assert fake.train is loop and box["calls"] == 1
+
+
+def test_e3_plan_rekeys_the_published_point():
+    import phase25_points
+
+    published = phase25_points.point_plan(phase36_prereg.E3_PROBE_POINT_KEY)
+    assert probe.e3_steps() == tuple(phase36_prereg.ENTRIES["e3_probe_steps"]["value"])
+    for steps in probe.e3_steps():
+        plan = probe.e3_plan(steps)
+        assert plan["point_key"] == f"probe36_e3_t{steps}"
+        assert plan["prefix"] == f"probe36_t{steps}"
+        assert plan["pinned_mechanism"] == dict(published["pinned_mechanism"], composed_steps=steps)
+        changed = {"point_key", "prefix", "pinned_mechanism"}
+        assert {k: v for k, v in plan.items() if k not in changed} == {
+            k: v for k, v in published.items() if k not in changed
+        }
+        assert plan["arm"] == "dp_n8" and plan["dp_sigma"] == 0.5 and plan["seed"] == 1337
+        for label in (plan["point_key"], plan["prefix"]):
+            assert probe.prove_isolated_label(label) == label
+
+
+def _e3_light(tmp_path, monkeypatch, *, crash_on=None, resumed=0, composed_offset=0, draws=None):
+    """stage_e3 with train_stage and score_arm faked and recorded; no model, no training."""
+    import phase14_recall
+    import phase25_points
+    import teach_persona as tp
+
+    monkeypatch.setattr(probe, "_ROOT", tmp_path)
+    monkeypatch.setattr(phase25_points, "_ROOT", tmp_path)
+    monkeypatch.setattr(tp, "_REPO_ROOT", tmp_path)
+    monkeypatch.setattr(phase25_run, "_DEVICE", "cpu")
+    (tmp_path / "checkpoints").mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(tp, "train", lambda **kw: "the fake loop")
+    monkeypatch.setattr(phase14_recall, "_complete", lambda *a, **kw: ([3, 3], True))
+    per_question = 1 + phase14_recall.N_SEEDED_SAMPLES
+    calls = {"train": [], "score": [], "loop": tp.train, "max_steps": tp.MAX_STEPS}
+
+    def train_stage(plan):
+        calls["train"].append((plan, tp.MAX_STEPS))
+        if crash_on == len(calls["train"]):
+            raise RuntimeError("training died")
+        tp.train()
+        adapter = tp.arm_outputs(plan["arm"], prefix=plan["prefix"])["adapter"]
+        adapter.write_bytes(plan["point_key"].encode())
+        return {
+            "seconds": 2.5,
+            "adapter_sha256": hashlib.sha256(adapter.read_bytes()).hexdigest(),
+            "resumed_from_step": resumed,
+            "live_mechanism": {"composed_steps": tp.MAX_STEPS + composed_offset},
+            "final_train_loss": 1.0,
+        }
+
+    def score_arm(arm, facts, adapter_path, device):
+        calls["score"].append((arm, facts, adapter_path, device))
+        for _ in range(2 * per_question if draws is None else draws):
+            phase14_recall._complete(None, [0], device, None)
+        print("taught ON: 3/4 = 0.75, per-family gain")
+        return {"on_taught": {"rate": 0.75}}
+
+    monkeypatch.setattr(phase25_points, "train_stage", train_stage)
+    monkeypatch.setattr(tp, "score_arm", score_arm)
+    return calls
+
+
+def test_stage_e3_light_trains_both_runs_and_scores_only_the_step_budget_run(
+    tmp_path, monkeypatch, capsys
+):
+    import phase14_factset
+    import phase14_recall
+    import teach_persona as tp
+
+    calls = _e3_light(tmp_path, monkeypatch)
+    state = {"point": "x", "stage": "start", "shape": None, "draw_index": None}
+    out = probe.stage_e3(state)
+    assert capsys.readouterr().out == ""
+    short, longest = probe.e3_steps()
+    assert [(plan["point_key"], seen) for plan, seen in calls["train"]] == [
+        (f"probe36_e3_t{short}", short),
+        (f"probe36_e3_t{longest}", longest),
+    ]
+    assert tp.MAX_STEPS == calls["max_steps"] and tp.train is calls["loop"]  # restored
+    ((arm, facts, adapter, device),) = calls["score"]
+    assert arm == "dp_n8" and facts is phase14_factset.LOCKED_FACTS and device == "cpu"
+    assert adapter == tp.arm_outputs("dp_n8", prefix=f"probe36_t{short}")["adapter"]
+    per_question = 1 + phase14_recall.N_SEEDED_SAMPLES
+    budget, longest_run = out["t_step_budget"], out["t_max_steps"]
+    assert budget["steps"] == short and longest_run["steps"] == longest
+    assert budget["score_draws"] == 2 * per_question == len(budget["score_draw_seconds"])
+    assert budget["score_draws_per_question"] == per_question
+    assert all(type(s) is float for s in budget["score_draw_seconds"])
+    assert budget["score_fixed_seconds"] == pytest.approx(
+        budget["score_seconds"] - sum(budget["score_draw_seconds"])
+    )
+    for run in (budget, longest_run):
+        assert run["train_seconds"] == 2.5
+        assert run["overhead_seconds"] == run["train_seconds"] - run["loop_seconds"]
+    assert set(longest_run) == {"train_seconds", "loop_seconds", "overhead_seconds", "steps"}
+    config = out["configuration"]
+    assert config["point_key"] == phase36_prereg.E3_PROBE_POINT_KEY
+    assert (config["arm"], config["sigma"], config["lr"], config["seed"]) == (
+        "dp_n8",
+        0.5,
+        3e-4,
+        1337,
+    )
+    assert config["batch"] == tp.BATCH_SIZE and config["steps"] == [short, longest]
+    assert out["reused"] == {"e3": False} and state["stage"] == f"e3_t{longest}"
+    run = {"front": "e3", "run_id": "v6/36/probes/e3", "reused": out.pop("reused"), "stages": out}
+    record = probe.build_record("e3", run)
+    assert set(record["stages"]) == {"t_step_budget", "t_max_steps"}
+    assert record["repetitions"] == 2
+    assert "0.75" not in json.dumps(record)
+    assert probe._e3_stages(out) == (record["stages"], 2)
+    out["t_max_steps"]["score_seconds"] = 1.0
+    with pytest.raises(SystemExit, match="training only"):
+        probe._e3_stages(out)
+
+
+@pytest.mark.parametrize("crash_on", [1, 2])
+def test_stage_e3_restores_max_steps_and_train_after_a_crash(tmp_path, monkeypatch, crash_on):
+    import teach_persona as tp
+
+    calls = _e3_light(tmp_path, monkeypatch, crash_on=crash_on)
+    with pytest.raises(RuntimeError, match="training died"):
+        probe.stage_e3({})
+    assert len(calls["train"]) == crash_on
+    assert tp.MAX_STEPS == calls["max_steps"] and tp.train is calls["loop"]
+
+
+@pytest.mark.parametrize("which", ["sidecar", "adapter", "checkpoint"])
+@pytest.mark.parametrize("run_index", [0, 1])
+def test_stage_e3_refuses_a_reused_or_resumable_output(tmp_path, monkeypatch, which, run_index):
+    import phase25_points
+    import teach_persona as tp
+
+    calls = _e3_light(tmp_path, monkeypatch)
+    plan = probe.e3_plan(probe.e3_steps()[run_index])
+    outputs = tp.arm_outputs(plan["arm"], prefix=plan["prefix"])
+    path = {
+        "sidecar": phase25_points.training_sidecar(plan["point_key"]),
+        "adapter": outputs["adapter"],
+        "checkpoint": outputs["checkpoint"],
+    }[which]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("{}", encoding="utf-8")
+    with pytest.raises(SystemExit, match="Pitfall 5"):
+        probe.stage_e3({})
+    assert calls["train"] == []  # refused before any training
+
+
+def test_stage_e3_refuses_a_resumed_run_and_a_short_composition(tmp_path, monkeypatch):
+    _e3_light(tmp_path, monkeypatch, resumed=3)
+    with pytest.raises(SystemExit, match="W2"):
+        probe.stage_e3({})
+    _e3_light(tmp_path / "short", monkeypatch, composed_offset=-1)
+    with pytest.raises(SystemExit, match="seam composed"):
+        probe.stage_e3({})
+
+
+def test_stage_e3_refuses_a_score_draw_count_off_the_question_grid(tmp_path, monkeypatch):
+    _e3_light(tmp_path, monkeypatch, draws=5)
+    with pytest.raises(SystemExit, match="draws per question"):
+        probe.stage_e3({})
+
+
+def test_e3_p22_runs_before_any_training_and_the_score_is_never_bound():
+    tree = ast.parse(MODULE.read_text(encoding="utf-8"))
+    (stage,) = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "stage_e3"]
+    calls = [n for n in ast.walk(stage) if isinstance(n, ast.Call)]
+    first_train = min(n.lineno for n in calls if getattr(n.func, "attr", None) == "train_stage")
+    p22 = [n for n in calls if getattr(n.func, "attr", None) == "prove_p22"]
+    assert len(p22) == 1 and p22[0].lineno < first_train
+    assert "e3_max_steps" in ast.unparse(p22[0])  # the REAL cap, never e3_steps()
+    (score,), parents = _stage_calls("stage_e3", "score_arm")
+    assert isinstance(parents[score], ast.Expr)
+    assert {"silenced()", "DrawTimer()"} <= set(_with_items(score, parents))
+    (train,), parents = _stage_calls("stage_e3", "train_stage")
+    assert {"silenced()", "loop_timer(tp)"} <= set(_with_items(train, parents))
+
+
+# =================================================================================================
+# Plan 36-05 — the CPU live path of the training fronts: main -> run_all -> run_front -> stage
+# =================================================================================================
+
+
+def _live_env(root, mp, spies):
+    """Every patch a CPU live run of ANY front needs, on ``mp`` (a MonkeyPatch.context, W1).
+
+    The SHAPE is scaled, never the instrument: _e2e_env's two-step recipe, 4-token generation, a
+    3 x 4 A2 pass, and E3 at (MAX_STEPS, 2 x MAX_STEPS) — a documented substitution for the
+    pre-registered (200, 800); prove_p22 still runs on the REAL e3_max_steps (stage_e3 reads the
+    entry, not e3_steps). Gitignored inputs are redirected, never skipped (the ubuntu skip pin):
+    persona_adapter.pt -> a fixture adapter and its published sha, convbase_slim.pt -> the
+    fixture slim base. The two pin entry points the fixture base cannot carry are stand-ins bound
+    against the REAL signatures: run_erasure_arm (draws through the REAL draw_all, so DrawTimer
+    times real _complete calls) and adapted_model (the 78 real components address a full-size
+    adapter; Phase 19's own tests cover the ablation).
+    """
+    import phase14_factset_gate
+    import phase14_recall
+    import phase16_persistence
+    import phase17_persona_gate
+    import phase19_erasure
+    import phase25_points
+    import teach_persona as tp
+
+    from personacore.checkpoint import export_slim
+    from personacore.config import ModelConfig
+    from personacore.tokenizer import from_json
+    from test_phase22_wiring import _e2e_env
+
+    real_components = probe.e1_components()  # B1: the committed JSON, before any patch
+    pin_signature = inspect.signature(phase19_erasure.run_erasure_arm)
+    adapter_signature = inspect.signature(probe.adapted_model)
+    entries = phase36_prereg.phase35_prereg.a2_corpus_entries()[:LIVE_QUESTIONS]
+    mp.setattr(phase25_run, "_DEVICE", "cpu")
+    _e2e_env(root, mp)
+    slim = root / "convbase_slim.pt"
+    export_slim(root / "convbase.pt", slim)
+    mp.setattr(phase14_recall, "CONVBASE_SLIM", slim)
+    mp.setattr(phase17_persona_gate, "CONVBASE_SLIM", slim)
+    mp.setattr(phase14_recall, "RECALL_MAX_NEW_TOKENS", 4)
+    mp.setattr(phase14_factset_gate, "PROBE_MAX_NEW_TOKENS", 4)
+    mp.setattr(probe, "_ROOT", root)
+    mp.setattr(phase25_points, "_ROOT", root)
+    mp.setattr(probe, "refuse_if_dirty", lambda **kw: "")
+    mp.setattr(phase25_run, "disk_precheck", lambda target=None: None)
+    adapter = root / "checkpoints" / "fixture_adapter.pt"
+    adapter.write_bytes(b"fixture adapter bytes")
+    sha = hashlib.sha256(adapter.read_bytes()).hexdigest()
+    mp.setattr(phase14_recall, "ADAPTER_PATH", adapter)
+    mp.setattr(probe, "published_adapter_sha256", lambda: sha)
+    mp.setattr(probe, "e1_shape", lambda: (LIVE_QUESTIONS, LIVE_K))
+    mp.setattr(probe, "e1_components", lambda: real_components)
+    fixture_steps = (tp.MAX_STEPS, 2 * tp.MAX_STEPS)
+    mp.setattr(probe, "e3_steps", lambda: fixture_steps)
+    real_sha256 = probe._sha256
+    mp.setattr(
+        probe,
+        "_sha256",
+        lambda path: spies["hashed"].append(pathlib.Path(path)) or real_sha256(path),
+    )
+    # The random-weight base emits lone continuation bytes the strict decode refuses (36-04).
+    real_forbid = phase16_persistence.resolve_forbid
+
+    def fixture_forbid(tok, vocab_size):
+        mask, digest = real_forbid(tok, vocab_size)
+        mask = mask.clone()
+        for idx in (~mask[0]).nonzero().flatten().tolist():
+            try:
+                tok.decode([idx])
+            except UnicodeDecodeError:
+                mask[0, idx] = True
+        return mask, digest
+
+    mp.setattr(phase16_persistence, "resolve_forbid", fixture_forbid)
+
+    def base(device):
+        model, _cfg, _ckpt = phase17_persona_gate.build_unadapted_base(device)
+        tok = from_json(phase14_recall.TOKENIZER_PATH)
+        return model, tok, phase16_persistence.resolve_forbid(tok, ModelConfig.vocab_size)[0]
+
+    def adapted(*args, **kwargs):
+        arguments = adapter_signature.bind(*args, **kwargs).arguments
+        assert arguments["k"] in (0, len(real_components))
+        probe.prove_published_adapter()  # the real adapted_model's first line
+        return base(arguments["device"])
+
+    mp.setattr(probe, "adapted_model", adapted)
+
+    def pin(*args, **kwargs):
+        arguments = pin_signature.bind(*args, **kwargs).arguments
+        if arguments["arm"] == "erased":
+            assert arguments["components"] == real_components
+        else:
+            assert arguments["arm"] == "retrain"
+            m2 = tp.arm_outputs(probe.E2_ARMS[0], prefix=probe.PROBE_PREFIX)["adapter"]
+            assert pathlib.Path(arguments["adapter_path"]) == m2 and m2.exists()
+        record_path = pathlib.Path(arguments["record_path"])
+        assert record_path.parent == root / "data" and record_path.name.startswith("probe36_e")
+        spies["pin_calls"].append(dict(arguments))
+        model, tok, forbid = base(arguments["device"])
+        for entry in entries:
+            phase14_recall.draw_all(
+                model,
+                tok,
+                entry["prompt_ids"],
+                arguments["device"],
+                forbid,
+                entry["seed_index"] * LIVE_K,
+                n_samples=LIVE_K - 1,
+            )
+        record_path.write_text(json.dumps({"completions": ["Biscuit"]}), encoding="utf-8")
+        print("taught ON: 3/4 = 0.75 per_fact hits")
+        return {"per_fact": [{"hits": 3}]}
+
+    mp.setattr(phase19_erasure, "run_erasure_arm", pin)
+
+    def forward(module, name, key):
+        real = getattr(module, name)
+
+        def spy(*args, **kwargs):
+            out = real(*args, **kwargs)
+            spies[key].append((args, kwargs, out))
+            return out
+
+        mp.setattr(module, name, spy)
+
+    forward(phase25_points, "train_stage", "train_stage")
+    forward(tp, "score_arm", "score_arm")
+    forward(phase36_prereg, "prove_p22", "p22")
+    return fixture_steps
+
+
+def _spies():
+    keys = ("hashed", "pin_calls", "train_stage", "score_arm", "p22", "stages")
+    return {key: [] for key in keys}
+
+
+def _live_run(root, fronts, *, wrap_stages=False):
+    """ONE CPU run of ``fronts`` through main(['run']), then the REAL emit of each (W10)."""
+    import teach_persona as tp
+
+    strays_before = _real_probe36_strays()
+    spies, buf = _spies(), io.StringIO()
+    heartbeat, ledger = root / "heartbeat.jsonl", root / "ledger" / "v6_mps_ledger.jsonl"
+    with pytest.MonkeyPatch.context() as mp:
+        fixture_steps = _live_env(root, mp, spies)
+        fixture_max_steps = tp.MAX_STEPS
+        if wrap_stages:  # Pitfall 9: bind (state,) against each REAL stage, then forward to it
+            for front in probe.RUN_ORDER:
+                real = probe.STAGES[front]
+
+                def recorder(*args, _front=front, _real=real, **kwargs):
+                    inspect.signature(_real).bind(*args, **kwargs)
+                    spies["stages"].append(_front)
+                    return _real(*args, **kwargs)
+
+                mp.setitem(probe.STAGES, front, recorder)
+        argv = ["run", "--heartbeat", str(heartbeat), "--ledger", str(ledger)]
+        if fronts is not None:
+            argv += ["--front", *fronts]
+        with contextlib.redirect_stdout(buf):
+            assert probe.main(argv) == 0
+        ran = probe.RUN_ORDER if fronts is None else tuple(fronts)
+        max_steps_after = tp.MAX_STEPS
+        sidecars = {f: json.loads(probe.run_sidecar(f).read_text(encoding="utf-8")) for f in ran}
+        records = {}
+        for front in ran:
+            out = root / "emitted" / f"phase36_probe_{front}.json"
+            probe.emit(front, out_path=out)  # the REAL _emit_target -> _write_record
+            records[front] = json.loads(out.read_text(encoding="utf-8"))
+    return {
+        "root": root,
+        "sidecars": sidecars,
+        "records": records,
+        "spies": spies,
+        "strays": (strays_before, _real_probe36_strays()),
+        "stdout": buf.getvalue(),
+        "ledger": ledger,
+        "fixture_steps": fixture_steps,
+        "max_steps": (fixture_max_steps, max_steps_after),
+    }
+
+
+@pytest.fixture(scope="module")
+def e3_live(tmp_path_factory):
+    return _live_run(tmp_path_factory.mktemp("e3_live"), ("e3",))
+
+
+def test_live_e3_trains_both_step_counts_through_the_real_train_stage(e3_live):
+    blobs = [out for _args, _kw, out in e3_live["spies"]["train_stage"]]
+    steps = e3_live["fixture_steps"]
+    assert [b["live_mechanism"]["composed_steps"] for b in blobs] == list(steps)
+    assert [b["resumed_from_step"] for b in blobs] == [0, 0]
+    assert [b["point_key"] for b in blobs] == [f"probe36_e3_t{s}" for s in steps]
+    assert len(e3_live["spies"]["score_arm"]) == 1
+    ((args, _kw, _out),) = e3_live["spies"]["score_arm"]
+    assert (
+        args[0] == "dp_n8" and pathlib.Path(args[2]).name == f"probe36_t{steps[0]}_dp_n8_adapter.pt"
+    )
+    before, after = e3_live["max_steps"]
+    assert before == after  # tp.MAX_STEPS restored after both runs
+    # RECIPE-04 ran on the REAL cap even though the fixture trains at fixture steps.
+    assert [args for args, _kw, _out in e3_live["spies"]["p22"]][0] == (
+        phase36_prereg.ENTRIES["e3_max_steps"]["value"],
+    )
+
+
+def test_live_e3_record_shape_and_gate(e3_live):
+    record = e3_live["records"]["e3"]
+    probe.prove_no_reading(record)
+    assert record["provenance"]["run"]["device"] == "cpu" and record["repetitions"] == 2
+    budget, longest = record["stages"]["t_step_budget"], record["stages"]["t_max_steps"]
+    assert (budget["steps"], longest["steps"]) == e3_live["fixture_steps"]
+    assert budget["score_draws"] == len(budget["score_draw_seconds"]) > 0
+    assert budget["score_draws"] % budget["score_draws_per_question"] == 0
+    assert all(type(s) is float for s in budget["score_draw_seconds"])
+    assert set(longest) == {"train_seconds", "loop_seconds", "overhead_seconds", "steps"}
+    for run in (budget, longest):
+        assert 0 < run["loop_seconds"] < run["train_seconds"]
+    assert e3_live["sidecars"]["e3"]["reused"] == {"e3": False}
+
+
+def test_live_e3_stdout_holds_no_reading(e3_live):
+    text = e3_live["stdout"]
+    assert re.search(r"^\[phase36_probe\] e3 \d+\.\d s$", text, re.MULTILINE), text
+    assert "gain" not in text and not re.search(r"\d+/\d+ = ", text), text
+
+
+def test_live_e3_writes_nothing_in_the_real_tree(e3_live):
+    root = e3_live["root"]
+    assert not any((root / "results").iterdir())  # train_stage moved its csv under data/
+    before, after = e3_live["strays"]
+    assert before == after
+    hashed = e3_live["spies"]["hashed"]
+    assert hashed and not [p for p in hashed if p.is_relative_to(probe._GIT_ROOT / "checkpoints")]

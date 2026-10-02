@@ -62,6 +62,17 @@ RUN_ORDER = ("e5", "e6", "e3", "e2", "e1")
 # "configuration", its own numbers, and "reused" ({front: bool}); run_front moves "reused" to the
 # sidecar's top level. Plans 36-04/36-05 register e5, e6, e3, e2.
 STAGES = {}
+# E2's two M2 repetitions (H1, D-02). Never "real": that arm's adapter IS persona_adapter.pt.
+E2_ARMS = ("probe36_m2_a", "probe36_m2_b")
+# Every probe36 path a stage leaves on disk outside results/ (preflight's stray scan, W3). Anything
+# under results/probe36_* belongs to no front: the stages move their csv out in-process (WR-01).
+STRAY_GLOBS = (
+    "data/probe36_*",
+    "checkpoints/probe36_*",
+    "data/phase25_probe36_*",
+    "data/persona_probe36_*",
+)
+RESULTS_STRAY_GLOB = "results/probe36_*"
 # front -> builder(stages) -> (record stages, repetitions). Filled beside each stage.
 RECORD_BUILDERS = {}
 
@@ -791,6 +802,164 @@ STAGES["e6"] = stage_e6
 RECORD_BUILDERS["e6"] = _e6_stages
 STAGES["e5"] = stage_e5
 RECORD_BUILDERS["e5"] = _e5_stages
+
+
+# =================================================================================================
+# E3 (D-05, D-19): the published v4.0 sigma point, trained at T = STEP_BUDGET and T = e3_max_steps
+# =================================================================================================
+
+
+@contextlib.contextmanager
+def loop_timer(tp):
+    """Sum the seconds spent inside ``tp.train`` (the training loop) and count its calls.
+
+    The teaching driver resolves ``train`` from its module globals at call time, so swapping the
+    attribute times the loop with no file edited (scripts/phase31_probe.py's wrap). Restored on
+    exit, exception or not."""
+    real, box = tp.train, {"seconds": 0.0, "calls": 0}
+
+    def timed(*args, **kwargs):
+        started = time.monotonic()
+        try:
+            return real(*args, **kwargs)
+        finally:
+            box["seconds"] += time.monotonic() - started
+            box["calls"] += 1
+
+    tp.train = timed
+    try:
+        yield box
+    finally:
+        tp.train = real
+
+
+def e3_steps():
+    """``(STEP_BUDGET run, e3_max_steps run)``: the pre-registered E3 probe step counts (D-05)."""
+    short, longest = phase36_prereg.ENTRIES["e3_probe_steps"]["value"]
+    return short, longest
+
+
+def e3_plan(steps):
+    """The published point re-keyed to probe36 labels, its pinned step count set to ``steps``."""
+    plan = phase25_points.point_plan(phase36_prereg.E3_PROBE_POINT_KEY)
+    _prove(
+        plan["arm"] == f"dp_n{phase35_prereg.E3_N}"
+        and plan["dp_sigma"] == phase35_prereg.E3_SIGMAS[1],
+        f"{phase36_prereg.E3_PROBE_POINT_KEY} plans arm {plan['arm']!r} at sigma "
+        f"{plan['dp_sigma']!r}, not the dp_n{phase35_prereg.E3_N} sigma "
+        f"{phase35_prereg.E3_SIGMAS[1]} point (D-05)",
+    )
+    return dict(
+        plan,
+        point_key=prove_isolated_label(f"{PROBE_PREFIX}_e3_t{steps}"),
+        prefix=prove_isolated_label(f"{PROBE_PREFIX}_t{steps}"),
+        pinned_mechanism=dict(plan["pinned_mechanism"], composed_steps=steps),
+    )
+
+
+def stage_e3(state):
+    """D-05 / D-19: train the point at both step counts; score taught recall at STEP_BUDGET only."""
+    import phase14_factset as fs  # lazy: fact material
+    import phase14_recall  # torch at import: lazy
+    import teach_persona as tp  # same
+
+    # RECIPE-04 FIRST, on the REAL cap — never the fixture's step counts.
+    phase36_prereg.prove_p22(phase36_prereg.ENTRIES["e3_max_steps"]["value"])
+    plans = [e3_plan(steps) for steps in e3_steps()]
+    # Pitfall 5 / W2: train_stage REUSES a sidecar (0 s) and RESUMES a _latest.pt (partial seconds).
+    for plan in plans:
+        outputs = tp.arm_outputs(plan["arm"], prefix=plan["prefix"])
+        for path in (
+            phase25_points.training_sidecar(plan["point_key"]),
+            outputs["adapter"],
+            outputs["checkpoint"],
+        ):
+            _prove(
+                not path.exists(),
+                f"{_rel(path)} exists: train_stage would reuse or resume it and price 0 s or "
+                "partial seconds (Pitfall 5, W2). Delete it in a reviewed step, then rerun",
+            )
+    device = phase25_run.device()
+    runs = []
+    for index, plan in enumerate(plans):
+        steps = plan["pinned_mechanism"]["composed_steps"]
+        state.update(stage=f"e3_t{steps}", shape=None, draw_index=None)
+        real_steps = tp.MAX_STEPS
+        tp.MAX_STEPS = steps
+        try:
+            with loop_timer(tp) as loop, silenced():
+                blob = phase25_points.train_stage(plan)
+        finally:
+            tp.MAX_STEPS = real_steps
+        _prove(loop["calls"] == 1, f"the training loop ran {loop['calls']} times, not once")
+        composed = blob["live_mechanism"]["composed_steps"]  # W8: nested, never top-level
+        _prove(composed == steps, f"the seam composed {composed} steps, not {steps}")
+        _prove(
+            blob["resumed_from_step"] == 0,
+            f"the T = {steps} run resumed from step {blob['resumed_from_step']}: its seconds "
+            "cover only the remaining steps (W2)",
+        )
+        run = {
+            "train_seconds": blob["seconds"],  # the v4.0 comparator's training.seconds field
+            "loop_seconds": loop["seconds"],
+            "overhead_seconds": blob["seconds"] - loop["seconds"],
+            "steps": steps,
+        }
+        if index == 0:
+            adapter = tp.arm_outputs(plan["arm"], prefix=plan["prefix"])["adapter"]
+            _prove(
+                _sha256(adapter) == blob["adapter_sha256"],
+                f"{_rel(adapter)} is not the adapter the T = {steps} run trained",
+            )
+            state.update(stage="e3_score", shape=None, draw_index=None)
+            with DrawTimer() as timer, silenced():
+                started = time.monotonic()
+                tp.score_arm(plan["arm"], fs.LOCKED_FACTS, adapter, device)
+                score_seconds = time.monotonic() - started
+            draw_seconds = [float(row["seconds"]) for row in timer.rows]
+            per_question = 1 + phase14_recall.N_SEEDED_SAMPLES
+            _prove(
+                draw_seconds and len(draw_seconds) % per_question == 0,
+                f"score_arm drew {len(draw_seconds)} times, not a multiple of the {per_question} "
+                "draws per question (greedy + N_SEEDED_SAMPLES)",
+            )
+            run.update(
+                score_seconds=score_seconds,
+                score_draws=len(draw_seconds),
+                score_draws_per_question=per_question,
+                score_fixed_seconds=score_seconds - math.fsum(draw_seconds),
+                score_draw_seconds=draw_seconds,
+            )
+        runs.append(run)
+    configuration = {
+        "point_key": phase36_prereg.E3_PROBE_POINT_KEY,
+        "arm": plans[0]["arm"],
+        "sigma": plans[0]["dp_sigma"],
+        "lr": tp.LR,
+        "batch": tp.BATCH_SIZE,
+        "seed": plans[0]["seed"],
+        "steps": [run["steps"] for run in runs],
+        "scoring_instrument": "teach_persona.score_arm (D-19: no attack draws, no canary scoring)",
+    }
+    # Fixed ROLE keys: the first run is the STEP_BUDGET run, the second the e3_max_steps run.
+    return {
+        "configuration": configuration,
+        "t_step_budget": runs[0],
+        "t_max_steps": runs[1],
+        "reused": {"e3": False},
+    }
+
+
+def _e3_stages(stages):
+    """The two runs as measured; two training runs of the same per-step unit (H1)."""
+    out = {key: value for key, value in stages.items() if key != "configuration"}
+    _prove(set(out) == {"t_step_budget", "t_max_steps"}, f"E3 holds {sorted(out)}")
+    _prove("score_seconds" not in out["t_max_steps"], "the e3_max_steps run is training only")
+    return out, len(out)
+
+
+STAGES["e3"] = stage_e3
+RECORD_BUILDERS["e3"] = _e3_stages
 
 
 # =================================================================================================
