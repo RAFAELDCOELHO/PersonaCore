@@ -2491,6 +2491,11 @@ def _preflight_env(tmp_path, monkeypatch):
     for module in (probe, phase25_points, phase36_ledger):
         monkeypatch.setattr(module, "_ROOT", root)
     monkeypatch.setattr(tp, "_REPO_ROOT", root)
+    # The tmp tree has no committed ledger: once the real one is tracked (36-07), the real
+    # index must not leak in, or WR-04's append-only proof looks for its blob in the tmp tree.
+    real = probe.phase36_caps.tracked_files()
+    tracked = [p for p in real if p != phase36_ledger.LEDGER_PATH]
+    monkeypatch.setattr(probe.phase36_caps, "tracked_files", lambda: tracked)
     monkeypatch.setattr(phase25_run, "_DEVICE", "mps")  # a string; nothing here builds a device
     monkeypatch.setattr(phase25_run, "disk_precheck", lambda target=None: None)
     inputs = {
