@@ -267,3 +267,43 @@ All decisions below were decided by Rafael in discuss-phase 36 (2026-10-02).
 
 *Phase: 36-mps-cost-probes-and-budget-commitment*
 *Context gathered: 2026-10-02*
+
+## Addendum — plan-phase decisions (2026-10-02)
+
+Rafael ruled the first two open questions from 36-RESEARCH.md during `/gsd-plan-phase 36`, in his own
+words (Portuguese, translated faithfully here). The remaining four are Claude's discretion,
+defaulted to the research recommendation, and are surfaced in the plan for his review.
+
+- **D-18 (E1 at K = 16 and K = 48; research Open Question 1), Rafael:** two pin runs at K = 48
+  through `phase19_erasure.run_erasure_arm("erased", ..., components=ordered_prefix[:78])`, with a
+  runtime per-draw timer (no file edited). K = 16 cost = fixed cost + the first 16 draws of each
+  question (prefix stability, `tests/test_phase18_draws.py:118`).
+  - Both runs record ONLY times and counts (per draw, per question, fixed cost) in the probe record.
+  - The draws and any hit/success count are discarded. They go into NO record and NOT into the log.
+    No `results/phase19_*` or `results/phase37_*` file is written.
+  - "R1b reading" here means only the wall-clock compared with the 68.584 min of
+    `results/phase19_arm_erased.json::config.wall_clock_min`.
+  - The two fixed-cost samples are recorded SEPARATELY (not averaged), so Rafael can see whether the
+    first one includes warm-up.
+- **D-19 (E3 / E4 scoring; research Open Question 2), Rafael:** the E3 probe at T = 200 times
+  training plus taught recall (`teach_persona.score_arm`) only. E4's canary-scoring stage is priced
+  from `results/phase26_canary_sources.json` (5556.24 s per point, used as the high bound), and the
+  derivation states that it was NOT re-measured. E4 per point = T = 200 training (from the E3 probe)
+  + 5556.24 s canary scoring, × 3 points (D-06).
+  - Obligation carried to Phase 43, pre-registered in Phase 36 as a four-field entry: if E4 runs, its
+    first point is timed and compared with the reserve's per-point price before the rest launch; a
+    divergence above 25% pauses and goes back to Rafael.
+
+### Claude's Discretion (defaulted at plan time; Rafael may overrule at the budget checkpoint)
+- **Q3 ledger location:** raw 60-s beats in gitignored `data/`; a compact, append-only,
+  script-written launch ledger (start/end lines per run) is COMMITTED at a path outside `results/`,
+  chosen so it trips neither `refuse_if_dirty` nor any clean-tree probe.
+- **Q4 fill timing:** the fill file (`V6_BUDGET_AND_STOP_LINE = phase35_prereg.fill(...)`) and
+  `results/phase36_budget.json` are both committed only after Rafael writes approved, in two
+  consecutive commits (leg (a) requires them separate). Before approval, the numbers are shown from
+  a dry computation that writes nothing under `results/phase36_*`.
+- **Q5 E1 ordering:** each cell's ordering cost is priced from
+  `results/phase19_collateral_curve.json::wall_clock_min` (6.959 min); the derivation says it was
+  not re-measured (the same pattern Rafael chose for E4 in D-19).
+- **Q6 E2 units:** price the full 2 adapters × S retrain set; any reuse of existing seed adapters by
+  Phase 40 is savings, not a cut.
