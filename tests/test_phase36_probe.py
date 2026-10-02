@@ -31,6 +31,7 @@ if _TESTS not in sys.path:
     sys.path.insert(0, _TESTS)
 
 import phase25_run  # noqa: E402  (scripts/ is not a package)
+import phase25_watch  # noqa: E402  (same)
 import phase36_ledger  # noqa: E402  (same)
 import phase36_prereg  # noqa: E402  (same)
 import phase36_probe as probe  # noqa: E402  (same)
@@ -43,6 +44,7 @@ from test_phase25_driver import (  # noqa: E402
 from test_phase36_prereg import _untested_functions  # noqa: E402
 
 MODULE = _SCRIPTS / "phase36_probe.py"
+REAL_RECONCILE = phase36_ledger.reconcile
 
 
 @pytest.fixture(autouse=True)
@@ -592,6 +594,34 @@ def test_emit_all_resumes_after_abort(monkeypatch):
     _emit_all_env(monkeypatch, states)
     with pytest.raises(SystemExit, match="write-once"):
         probe.emit_all()
+
+
+def test_emit_all_never_closes_a_live_attempt(tmp_path, monkeypatch):
+    """WR-03: an open attempt with a beat inside phase25_watch's stall window is a live run;
+    emit_all refuses naming it, before reconcile could close it at "seconds so far"."""
+    ledger, beats = tmp_path / "ledger.jsonl", tmp_path / "hb.jsonl"
+    monkeypatch.setattr(phase36_ledger, "LEDGER_PATH", str(ledger))
+    monkeypatch.setattr(phase36_ledger, "HEARTBEAT_PATH", beats)
+    states = _absent_states()
+    calls = _emit_all_env(monkeypatch, states)
+    monkeypatch.setattr(phase36_ledger, "reconcile", REAL_RECONCILE)
+    now = datetime.datetime.now(datetime.timezone.utc)
+    window = datetime.timedelta(minutes=phase25_watch.STALL_THRESHOLD_MINUTES)
+    rid = phase36_ledger.run_id(36, "probes", "e1")
+    monkeypatch.setattr(phase36_ledger, "_utc_now", lambda: now - window * 2)
+    phase36_ledger.append("start", run_id=rid, phase=36, front="probes", ledger_path=ledger)
+    phase25_run.beat(beats, point=rid, stage="e1", shape=None, draw_index=None)  # alive now
+    with pytest.raises(SystemExit, match=f"run {rid} is alive"):
+        probe.emit_all()
+    assert set(phase36_ledger.open_runs(phase36_ledger.read_ledger(ledger))) == {rid}
+    assert calls == []
+    # Silent past the stall window: dead, so reconcile closes it and emit_all proceeds.
+    stale = dict.fromkeys(phase25_run.HEARTBEAT_FIELDS)
+    stale.update(utc=(now - window - datetime.timedelta(seconds=1)).isoformat(), point=rid)
+    beats.write_text(json.dumps(stale) + "\n", encoding="utf-8")
+    probe.emit_all()
+    assert phase36_ledger.open_runs(phase36_ledger.read_ledger(ledger)) == {}
+    assert set(states.values()) == {"committed"}
 
 
 def test_emit_all_refuses_an_absent_ledger(monkeypatch):

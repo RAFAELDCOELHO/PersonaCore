@@ -42,6 +42,7 @@ if _SRC not in sys.path:
 
 import phase25_points  # noqa: E402  (scripts/ is not a package; torch-free)
 import phase25_run  # noqa: E402  (same)
+import phase25_watch  # noqa: E402  (same; stdlib only)
 import phase30_points  # noqa: E402  (same)
 import phase35_prereg  # noqa: E402  (same)
 import phase36_caps  # noqa: E402  (same)
@@ -1303,6 +1304,17 @@ def _path_state(relative):
 
 def emit_all():
     """Reconcile, commit the ledger FIRST (W9), then each record in RUN_ORDER; resumable (W4)."""
+    # WR-03: reconcile closes every open attempt; never one whose run still beats. Live = a beat
+    # since its start within phase25_watch's stall window (the watcher's own rule).
+    now = datetime.datetime.now(datetime.timezone.utc)
+    window = datetime.timedelta(minutes=phase25_watch.STALL_THRESHOLD_MINUTES)
+    for rid, start in phase36_ledger.open_runs(phase36_ledger.read_ledger()).items():
+        beat = phase36_ledger.last_beat_since(rid, datetime.datetime.fromisoformat(start["utc"]))
+        _prove(
+            beat is None or now - beat >= window,
+            f"run {rid} is alive (last beat {beat.isoformat() if beat else None}): emit-all "
+            "would close it as lost. Wait for its end line, or for the run to die",
+        )
     phase36_ledger.reconcile()
     ledger = phase36_ledger.LEDGER_PATH
     state = _path_state(ledger)
