@@ -1083,3 +1083,213 @@ def test_live_e1_never_hashed_the_gitignored_adapter(e1_live):
     hashed = e1_live["spies"]["hashed"]
     assert e1_live["root"] / "checkpoints" / "fixture_adapter.pt" in hashed  # non-vacuous
     assert not [p for p in hashed if p.is_relative_to(probe._GIT_ROOT / "checkpoints")]
+
+
+# =================================================================================================
+# Plan 36-04 Task 1 — adapted_model, stage_e6 and the E6 record (D-07, B2), light (no model)
+# =================================================================================================
+
+
+def test_adapted_model_checks_the_adapter_first_and_ablates_only_when_k_positive(monkeypatch):
+    import phase14_recall
+    import phase19_erasure
+
+    import personacore.lora
+
+    calls = []
+    monkeypatch.setattr(probe, "prove_published_adapter", lambda: calls.append(("identity",)))
+    artifact = {"adapter": {}, "lora_config": {}}
+    monkeypatch.setattr(
+        phase14_recall,
+        "load_adapted_model",
+        lambda device: (
+            calls.append(("load", device)) or ("model", "cfg", "tok", "forbid", artifact)
+        ),
+    )
+    monkeypatch.setattr(
+        phase19_erasure,
+        "ablate_components",
+        lambda art, components: calls.append(("ablate", art, components)) or "ablated",
+    )
+    monkeypatch.setattr(
+        personacore.lora,
+        "load_adapter_weights",
+        lambda model, art: calls.append(("apply", model, art)),
+    )
+    assert probe.adapted_model("cpu", 0) == ("model", "tok", "forbid")
+    assert calls == [("identity",), ("load", "cpu")]
+    calls.clear()
+    components = probe.e1_components()
+    assert probe.adapted_model("cpu", 3) == ("model", "tok", "forbid")
+    assert calls == [
+        ("identity",),
+        ("load", "cpu"),
+        ("ablate", artifact, components[:3]),
+        ("apply", "model", "ablated"),
+    ]
+
+
+def _e6_light(monkeypatch):
+    """stage_e6 on the REAL tokenizer and the REAL draw_all over a fake _complete; no model."""
+    import phase14_recall
+
+    from personacore.tokenizer import from_json
+
+    tok = from_json(phase14_recall.TOKENIZER_PATH)
+    monkeypatch.setattr(phase25_run, "_DEVICE", "cpu")
+    monkeypatch.setattr(probe, "adapted_model", lambda device, k: (None, tok, None))
+    monkeypatch.setattr(
+        phase14_recall, "_complete", lambda *a, **kw: ([5, 5, 5], not kw.get("greedy"))
+    )
+    log = []
+    real_assert, real_draw = phase14_recall.assert_no_value_in_prompt, phase14_recall.draw_all
+
+    def asserted(tok, question, values, *, prompt_ids=None):
+        log.append(("assert", list(prompt_ids), tuple(values)))
+        return real_assert(tok, question, values, prompt_ids=prompt_ids)
+
+    def drawn(model, tok, prompt_ids, device, forbid, index, **kw):
+        log.append(("draw", list(prompt_ids), index, kw["n_samples"]))
+        return real_draw(model, tok, prompt_ids, device, forbid, index, **kw)
+
+    monkeypatch.setattr(phase14_recall, "assert_no_value_in_prompt", asserted)
+    monkeypatch.setattr(phase14_recall, "draw_all", drawn)
+    return log
+
+
+def test_stage_e6_light_asserts_each_anchor_before_its_draw(monkeypatch, capsys):
+    import phase14_factset
+
+    log = _e6_light(monkeypatch)
+    state = {"point": "x", "stage": "start", "shape": None, "draw_index": None}
+    out = probe.stage_e6(state)
+    assert capsys.readouterr().out == ""
+    slots = [f.slot for f in phase14_factset.LOCKED_FACTS]
+    K = phase36_prereg.phase35_prereg.FULL_FIDELITY_K
+    values = tuple(f.value for f in phase14_factset.LOCKED_FACTS + phase14_factset.SOFT_TIER_FACTS)
+    # B2: one assertion per anchor slot, each immediately before that slot's draw, same ids.
+    assert [entry[0] for entry in log] == ["assert", "draw"] * len(slots)
+    for i in range(len(slots)):
+        checked, drew = log[2 * i], log[2 * i + 1]
+        assert checked[1] == drew[1] and checked[2] == values
+        assert drew[2] == i * K and drew[3] == K - 1
+    assert len({tuple(entry[1]) for entry in log}) == len(slots)
+    assert out["draws"] == len(slots) * K
+    assert out["at_cap_draws"] == len(slots)  # the fake leaves only the greedy draw at the cap
+    assert len(out["per_slot_draw_seconds_mean"]) == len(slots)
+    assert out["draw_seconds_spread"]["n"] == out["draws"]
+    assert out["total_seconds"] >= out["setup_seconds"] >= 0
+    config = out["configuration"]
+    assert (config["k"], config["K"]) == (len(probe.e1_components()), K)
+    assert config["anchor_slots"] == len(slots) and config["seed"] == 1337
+    assert out["reused"] == {"e6": False} and state["stage"] == "e6_anchor"
+
+
+def test_stage_e6_refuses_a_short_draw_count(monkeypatch):
+    import phase14_recall
+
+    _e6_light(monkeypatch)
+    real = phase14_recall.draw_all
+    monkeypatch.setattr(
+        phase14_recall, "draw_all", lambda *a, **kw: real(*a, **dict(kw, n_samples=1))
+    )
+    with pytest.raises(SystemExit, match="draw timer counted"):
+        probe.stage_e6({})
+
+
+def _stage_calls(name, attr):
+    tree = ast.parse(MODULE.read_text(encoding="utf-8"))
+    (stage,) = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == name]
+    parents = {child: node for node in ast.walk(stage) for child in ast.iter_child_nodes(node)}
+    calls = [
+        n
+        for n in ast.walk(stage)
+        if isinstance(n, ast.Call) and getattr(n.func, "attr", None) == attr
+    ]
+    return calls, parents
+
+
+def _with_items(node, parents):
+    items = []
+    while node in parents:
+        node = parents[node]
+        if isinstance(node, ast.With):
+            items += [ast.unparse(item.context_expr) for item in node.items]
+    return items
+
+
+def test_e6_draw_is_unbound_silenced_and_asserted_first():
+    (draw,), parents = _stage_calls("stage_e6", "draw_all")
+    assert isinstance(parents[draw], ast.Expr)
+    assert "silenced()" in _with_items(draw, parents)
+    assert "DrawTimer()" in _with_items(draw, parents)
+    (check,), check_parents = _stage_calls("stage_e6", "assert_no_value_in_prompt")
+    loop = parents[parents[draw]]
+    assert isinstance(loop, ast.For)
+    assert check_parents[check_parents[check]].lineno == loop.lineno  # the same loop body
+    assert check.lineno < draw.lineno
+    assert ast.unparse(check.args[2]) == "values"
+
+
+def _planted_e6_stage(state):
+    return {
+        "configuration": {"arm": "erased", "K": 4, "anchor_slots": 2},
+        "setup_seconds": 1.5,
+        "per_slot_draw_seconds_mean": [0.25, 0.5],
+        "draws": 8,
+        "at_cap_draws": 3,
+        "draw_seconds_spread": {"n": 8, "min": 0.1, "median": 0.3, "max": 0.7},
+        "total_seconds": 6.0,
+        "reused": {"e6": False},
+    }
+
+
+def _planted_e1_sidecar():
+    runs = [
+        {"per_question_k48_seconds": [2.0, 4.0]},
+        {"per_question_k48_seconds": [5.0, 3.0, 4.0]},
+    ]
+    sidecar = probe.run_sidecar("e1")
+    sidecar.parent.mkdir(parents=True, exist_ok=True)
+    sidecar.write_text(json.dumps({"front": "e1", "stages": {"runs": runs}}), encoding="utf-8")
+    return sidecar
+
+
+def test_e6_record_and_the_a2_context_beside(tmp_path, monkeypatch):
+    monkeypatch.setattr(probe, "_ROOT", tmp_path)
+    monkeypatch.setattr(phase25_run, "_DEVICE", "cpu")
+    monkeypatch.setitem(probe.STAGES, "e6", _planted_e6_stage)
+    paths = {"heartbeat_path": tmp_path / "hb.jsonl", "ledger_path": tmp_path / "ledger.jsonl"}
+    probe.run_front("e6", **paths)
+    out = tmp_path / "emitted" / "phase36_probe_e6.json"
+    # D-07: the A2-context unit comes from the E1 probe, so E6 cannot emit before it.
+    with pytest.raises(SystemExit, match="comes from the E1 probe"):
+        probe.emit("e6", out_path=out)
+    assert not out.exists()
+    sidecar = _planted_e1_sidecar()
+    beside = probe.e6_a2_context_beside()
+    assert beside == {
+        "a2_context_from_e1": {
+            "a2_context_question_k48_seconds_high": 4.0,  # max(mean(2, 4), mean(5, 3, 4))
+            "path": "data/probe36_e1_run.json",
+        }
+    }
+    record = probe.emit("e6", out_path=out)
+    assert record["a2_context_from_e1"] == beside["a2_context_from_e1"]
+    stages = record["stages"]
+    assert set(stages) == {
+        "setup_seconds",
+        "per_slot_draw_seconds_mean",
+        "draws",
+        "at_cap_draws",
+        "draw_seconds_spread",
+        "total_seconds",
+    }
+    assert record["repetitions"] == 2 and record["configuration"]["anchor_slots"] == 2
+    probe.prove_no_reading(json.loads(out.read_text(encoding="utf-8")))
+    planted = probe.STAGES["e6"]({})
+    planted.pop("reused")  # run_front moves it to the sidecar's top level
+    assert probe._e6_stages(planted) == (stages, 2)
+    sidecar.write_text(json.dumps({"stages": {"runs": [{}]}}), encoding="utf-8")
+    with pytest.raises(SystemExit, match="not 2"):
+        probe.e6_a2_context_beside()

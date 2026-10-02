@@ -556,6 +556,117 @@ RECORD_BUILDERS["e1"] = _e1_stages
 
 
 # =================================================================================================
+# E6 (D-07) and E5 (D-08): inference only, on the published adapter and the published clearance
+# =================================================================================================
+
+
+def adapted_model(device, k):
+    """``(model, tok, forbid)``: the published adapter, its first ``k`` curve components ablated.
+
+    The pin's own two lines (phase19_erasure.run_erasure_arm): ``load_adapted_model`` then
+    ``load_adapter_weights(ablate_components(...))`` — never ``inject_lora`` (ISO-06)."""
+    import phase14_recall  # torch at import: lazy
+    import phase19_erasure  # same
+
+    from personacore.lora import load_adapter_weights
+
+    prove_published_adapter()  # B1: the one adapter identity check
+    model, _cfg, tok, forbid, artifact = phase14_recall.load_adapted_model(device)
+    if k > 0:
+        load_adapter_weights(
+            model, phase19_erasure.ablate_components(artifact, e1_components()[:k])
+        )
+    return model, tok, forbid
+
+
+def stage_e6(state):
+    """D-07: anchor-context generation on the k = 78 adapter, K draws per locked slot; time only."""
+    import phase14_factset  # torch-free, but lazy like every fact-set read
+    import phase14_recall  # torch at import: lazy
+    import phase18_extraction  # same
+
+    from personacore.dialogue import ASSISTANT_ID
+
+    k = len(e1_components())
+    K = phase35_prereg.FULL_FIDELITY_K
+    slots = [f.slot for f in phase14_factset.LOCKED_FACTS]
+    frame = phase18_extraction.ADMISSIBLE_NLL_FRAME
+    device = phase25_run.device()
+    state.update(stage="e6_setup", shape=None, draw_index=None)
+    started = time.monotonic()
+    model, tok, forbid = adapted_model(device, k)
+    setup_seconds = time.monotonic() - started
+    values = [f.value for f in phase14_factset.LOCKED_FACTS + phase14_factset.SOFT_TIER_FACTS]
+    with DrawTimer() as timer, silenced():
+        for i, slot in enumerate(slots):
+            state.update(stage="e6_anchor", shape=slot, draw_index=i)
+            forms = phase14_factset.SLOT_FORMS[slot]
+            ids = [ASSISTANT_ID] + list(
+                tok.encode(phase18_extraction._frame_preamble(forms, frame))
+            )
+            # B2 / PERS-06: nothing draws unchecked, on the ids actually dispatched.
+            phase14_recall.assert_no_value_in_prompt(tok, tok.decode(ids), values, prompt_ids=ids)
+            # i * K: the disjoint seed windows draw_all's docstring leaves to the caller (D-06).
+            phase14_recall.draw_all(model, tok, ids, device, forbid, i * K, n_samples=K - 1)
+    total = time.monotonic() - started
+    rows = timer.rows
+    _prove(
+        len(rows) == len(slots) * K,
+        f"the draw timer counted {len(rows)} draws, not {len(slots)} x {K} (D-07)",
+    )
+    seconds = [float(r["seconds"]) for r in rows]
+    configuration = {
+        "arm": "erased",
+        "k": k,
+        "K": K,
+        "anchor_slots": len(slots),
+        "frame": frame,
+        "seed": phase14_recall.SEED,
+        "context": (
+            "[ASSISTANT_ID] + the frame preamble (phase18_extraction.value_span_nll's anchor) — an "
+            "unpublished configuration ruled timing-only by Rafael (D-07)"
+        ),
+    }
+    return {
+        "configuration": configuration,
+        "setup_seconds": setup_seconds,
+        "per_slot_draw_seconds_mean": [
+            statistics.fmean(seconds[i * K : (i + 1) * K]) for i in range(len(slots))
+        ],
+        "draws": len(rows),
+        "at_cap_draws": sum(bool(r["at_cap"]) for r in rows),
+        "draw_seconds_spread": _spread(seconds),
+        "total_seconds": total,
+        "reused": {"e6": False},
+    }
+
+
+def _e6_stages(stages):
+    """The stage numbers as measured; one H3 block per anchor slot."""
+    out = {key: value for key, value in stages.items() if key != "configuration"}
+    return out, len(out["per_slot_draw_seconds_mean"])
+
+
+def e6_a2_context_beside():
+    """D-07: the A2-context per-question unit, read from the E1 probe's sidecar — no extra run."""
+    sidecar = run_sidecar("e1")
+    _prove(
+        sidecar.exists(),
+        f"{_rel(sidecar)} is missing: E6's A2-context unit comes from the E1 probe (D-07)",
+    )
+    runs = json.loads(sidecar.read_text(encoding="utf-8"))["stages"]["runs"]
+    _prove(len(runs) == 2, f"the E1 sidecar holds {len(runs)} runs, not 2")
+    high = max(statistics.fmean(r["per_question_k48_seconds"]) for r in runs)
+    return {
+        "a2_context_from_e1": {"a2_context_question_k48_seconds_high": high, "path": _rel(sidecar)}
+    }
+
+
+STAGES["e6"] = stage_e6
+RECORD_BUILDERS["e6"] = _e6_stages
+
+
+# =================================================================================================
 # THE RECORD (D-01): pure, then gated
 # =================================================================================================
 
@@ -655,7 +766,7 @@ def emit(front, out_path=None):
     sidecar = run_sidecar(front)
     _prove(sidecar.exists(), f"{_rel(sidecar)} is missing: run the {front} probe first")
     run = json.loads(sidecar.read_text(encoding="utf-8"))
-    beside = phase31_beside() if front == "e1" else None
+    beside = {"e1": phase31_beside, "e6": e6_a2_context_beside}.get(front, lambda: None)()
     return _write_record(target, build_record(front, run, beside=beside), run)
 
 
