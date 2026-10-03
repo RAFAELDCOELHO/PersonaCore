@@ -553,7 +553,9 @@ Docstrings in these modules will discuss `reference_set_for_calibration`, `repor
 | A4 | Committing the 749 KB pin arm record under `results/phase37_r1b_arm.json` is wanted (outsider re-derivation) | Structure | low |
 | A5 | No markdown publication is needed in Phase 37 ("beside the verdict" = the `results/phase37_*` records); the v6.0 report (Phase 45) renders it | Summary | low–medium |
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+All four were ruled by Rafael on 2026-10-03 before planning; see 37-CONTEXT.md `<addendum>`: Q1 → D-11, Q2 → D-12, Q3 → D-13, Q4 → D-14.
 
 1. **Does a crashed R1b attempt consume D-04's "one attempt"?** We know D-04 says one attempt, and that a new run needs approved and root cause. It is unclear whether this applies when no record exists (only a ledger `lost` line). Recommendation: treat any started attempt as the attempt, and require approved plus a reconcile before relaunch (the 36-07 W3 pattern). Ask Rafael at the plan checkpoint.
 2. **The D-04 delta definition** (A3).
