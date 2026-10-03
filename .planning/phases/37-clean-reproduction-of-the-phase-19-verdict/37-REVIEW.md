@@ -19,6 +19,13 @@ findings:
   info: 6
   total: 11
 status: issues_found
+fixed:
+  WR-01: 9abab12
+  WR-02: 5896ae3
+  WR-03: 9069c5c
+  WR-04: 2781bd6
+  WR-05: 6dbad06
+warnings_open: 0
 ---
 
 # Phase 37: Code Review Report
@@ -26,7 +33,7 @@ status: issues_found
 **Reviewed:** 2026-10-03
 **Depth:** deep (cross-checked against scripts/phase19_erasure.py, scripts/phase19_run.py, scripts/phase35_prereg.py, scripts/phase36_ledger.py, scripts/phase25_run.py, src/personacore/provenance.py)
 **Files Reviewed:** 9
-**Status:** issues_found
+**Status:** issues_found. All five warnings were fixed on 2026-10-03, one commit each (see each finding's **Fixed:** line); the six Info findings are open.
 
 ## Summary
 
@@ -70,6 +77,8 @@ Targeted suites: test_phase37_prereg/r1a/r1b gave 81 passed and test_phase37_rou
 
 ### WR-01: R1b records the HEAD at the END of the run as the run's commit, not the commit that was launched
 
+**Fixed:** 9abab12. `preflight()` reads `git_sha()` right after `refuse_if_dirty` and refuses `unknown`; it also reads `module_sha256()` at launch. The sidecar and `provenance.run` carry `git_sha_at_launch`, `git_sha_at_end` and `head_moved_during_run`; provenance carries `module_sha256_at_launch`, the emit-time `module_sha256` and `modules_changed_since_launch`. Test: `test_a_commit_landing_mid_run_is_named_not_hidden`.
+
 **File:** `scripts/phase37_r1b.py:223` (and `:151`, `:294`)
 
 **Issue:** The commit the code ran from is known only at launch. `preflight()` proves the tree clean at launch (`:133`) but persists no SHA: `git_sha()` at `:151` is only printed. The sidecar's `"git_sha": git_sha()` is evaluated at `:223`, after the sweep and the ~68 min arm. `module_sha256` is hashed even later, at emit time (`:294`).
@@ -97,6 +106,8 @@ Optionally, `emit` can refuse when `module_sha256_at_launch` differs from the em
 
 ### WR-02: A crash during the 68-minute arm loses the attempt's sweep measurement entirely; the full 288 ordering is never recorded
 
+**Fixed:** 5896ae3. `run()` writes the write-once `data/phase37_r1b_sweep.json` (via `atomic_write_json`) right after `prefix_decision` and before the arm. It holds k, `ordered_prefix`, `full_ordering` (288), the curve rows and the decision, and the driver prints `SWEEP k=.. run_arm=..`. `preflight` refuses when the file exists. The sidecar holds its SHA-256, and `emit` reads the sweep from it. Test: `test_rehearsal_crash_during_arm_keeps_sweep_and_ledger_reconcilable`.
+
 **File:** `scripts/phase37_r1b.py:189-232`
 
 **Issue:** The sweep result exists only in memory:
@@ -118,6 +129,8 @@ Separately, `r1b_scope.re_measured` asserts `ordering_288_addresses`, but only `
 
 ### WR-03: Gitignored run inputs are not checked before the ledger start line, so a missing file burns the attempt
 
+**Fixed:** 9069c5c. `run_inputs()` lists the files from their readers' constants (convbase_slim, the adapter, the tokenizer, dialog_val bin and mask, retention_val, the phase18 corpus and arm record). `preflight` refuses before the start line if any is missing. Test: `test_a_missing_run_input_refuses_before_the_start_line` (8 cases).
+
 **File:** `scripts/phase37_r1b.py:121-155` (preflight) vs `scripts/phase14_recall.py:733`, `scripts/phase19_erasure.py:2555, 2808-2834`
 
 **Issue:** D-16 says the cheap refusals run before the start line. `refuse_if_dirty` cannot see gitignored inputs (provenance.py docstring: "`.gitignore`d paths ... correctly do not block"). The run needs:
@@ -138,6 +151,8 @@ Optionally, also run the pin's `assert_phase18_parity` on a dry config built the
 
 ### WR-04: R1a's "verdict and its reasons equal the recorded Verdict section" check is subset-only
 
+**Fixed:** 2781bd6. `derive()` parses the `- (a|b|c) ` lines of `### 1.` and refuses unless the re-derived reasons equal them, in order. Test: `test_a_dropped_reason_halts` (reasons[:1] now refuses).
+
 **File:** `scripts/phase37_r1a.py:117-118`
 
 **Issue:** `for reason in got["reasons"]: _prove(f"- {reason}\n" in section, ...)` checks that each re-derived reason appears in the recorded section. It does not check that every recorded reason is re-derived. A re-derivation that drops a reason still passes. `r1a_extra_assertions` (prereg) and REPRO-01 SC1 promise equality ("the verdict and its three reasons equal the recorded Verdict section").
@@ -156,6 +171,8 @@ It prints `1`: derive() accepts one of three recorded reasons.
 **Fix:** Parse the recorded reason lines the way `tests/test_phase37_routes.py::_recorded_reasons` already does: `### 1.` block, `- (a|b|c) ` lines. Then assert `got["reasons"] == recorded` (ordered, equal length).
 
 ### WR-05: R1a/R1b `git_sha()` reads the process cwd while the clean-tree check reads `_ROOT`
+
+**Fixed:** 6dbad06. Both `main()`s run `os.chdir(_ROOT)` after validating their arguments, which also covers the pin arm's `config.git_sha`. `src/personacore/provenance.py` is unchanged. Tests: `test_main_from_another_cwd_records_the_repo_sha` (R1a) and `test_main_dispatches_with_signature_valid_kwargs` (R1b, from a tmp cwd).
 
 **File:** `scripts/phase37_r1a.py:178, 217`; `scripts/phase37_r1b.py:223, 295`; `src/personacore/provenance.py:28-42`
 
