@@ -54,6 +54,7 @@ from test_phase29_prereg import _git, _planted  # noqa: E402
 from test_phase36_prereg import _skip_failures, _untested_functions  # noqa: E402
 
 _REAL_SIDECAR = _ROOT / "data" / "phase37_r1b_run.json"
+_REAL_SWEEP = _ROOT / "data" / "phase37_r1b_sweep.json"
 
 # WR-03: every input file the run reads, as the (module, constant) its reader takes it from.
 _RUN_INPUTS = (
@@ -80,9 +81,11 @@ _GITIGNORED_INPUTS = (
 def _real_tree_untouched():
     before = _git("status", "--porcelain", "--", "results", "ledger")
     sidecar_before = _REAL_SIDECAR.exists()
+    sweep_before = _REAL_SWEEP.exists()
     yield
     assert _git("status", "--porcelain", "--", "results", "ledger") == before
     assert _REAL_SIDECAR.exists() == sidecar_before
+    assert _REAL_SWEEP.exists() == sweep_before
 
 
 @pytest.fixture(scope="module")
@@ -269,6 +272,15 @@ def test_run_on_the_committed_order_replicates(rig, curve, committed):
     assert on_disk == json.loads(json.dumps(record))
     sidecar = json.loads(phase37_r1b.run_sidecar(rig.root).read_text(encoding="utf-8"))
     assert sidecar["arm_ran"] is True and sidecar["run_id"] == phase37_r1b.RUN_ID
+    swept = phase37_r1b.sweep_record(rig.root)
+    assert swept == rig.root / "data" / "phase37_r1b_sweep.json"
+    assert sidecar["sweep_record_sha256"] == record["sweep_record_sha256"]
+    assert sidecar["sweep_record_sha256"] == hashlib.sha256(swept.read_bytes()).hexdigest()
+    on_disk_sweep = json.loads(swept.read_text(encoding="utf-8"))
+    assert (
+        on_disk_sweep["sweep"] == record["sweep"]
+        and on_disk_sweep["decision"] == record["decision"]
+    )
     scope = phase37_prereg.ENTRIES["r1b_scope"]["value"]
     assert record["re_measured"] == list(scope["re_measured"])
     assert record["inherited"] == list(scope["inherited"])
@@ -307,6 +319,8 @@ def _diverged(rig):
     assert "draw_identity" not in record and "sweep" in record
     assert [x["event"] for x in _lines(rig)] == ["start", "end"]
     assert not (rig.root / phase37_prereg.R1B_ARM_RECORD).exists()
+    swept = json.loads(phase37_r1b.sweep_record(rig.root).read_text(encoding="utf-8"))
+    assert swept["decision"]["run_arm"] is False and swept["sweep"] == record["sweep"]
     return record
 
 
@@ -367,6 +381,10 @@ def _refuse_sidecar(rig, monkeypatch):
     phase37_r1b.run_sidecar(rig.root).write_text("{}", encoding="utf-8")
 
 
+def _refuse_sweep_record(rig, monkeypatch):
+    phase37_r1b.sweep_record(rig.root).write_text("{}", encoding="utf-8")
+
+
 def _refuse_cpu(rig, monkeypatch):
     monkeypatch.setattr(phase37_r1b, "_device", lambda: "cpu")
 
@@ -392,6 +410,7 @@ def _refuse_launch(rig, monkeypatch):
         _refuse_record,
         _refuse_arm,
         _refuse_sidecar,
+        _refuse_sweep_record,
         _refuse_cpu,
         _refuse_adapter,
         _refuse_unknown_sha,
@@ -453,6 +472,89 @@ def test_a_commit_landing_mid_run_is_named_not_hidden(rig, monkeypatch):
     assert sidecar["module_sha256_at_launch"] == launch
 
 
+def test_rehearsal_crash_during_arm_keeps_sweep_and_ledger_reconcilable(
+    rig, monkeypatch, curve, capsys
+):
+    """Rafael's rehearsal (WR-02): run() end to end on CPU, on tmp_path, the device work simulated,
+    and the erased arm crashing AFTER it started. Tmp root, tmp ledger, tmp heartbeat: it is not
+    an attempt and never touches ledger/v6_mps_ledger.jsonl."""
+    import torch
+
+    monkeypatch.setattr(torch.backends.mps, "is_available", lambda: False)  # no MPS call at all
+    real_results = sorted((_ROOT / "results").glob("phase37_r1b*.json"))
+    prefix = _prefix(curve)
+    full = [*prefix, *(tuple(a) for a in pin.component_index() if tuple(a) not in set(prefix))]
+    assert len(full) == len(pin.component_index())  # the whole 288-address ordering
+    rig.sweep["ordered"] = full
+    sweep_path = phase37_r1b.sweep_record(rig.root)
+    started = []
+
+    def crashing_arm(name, device, *, components=(), record_path=None, **kw):
+        started.append((name, device, list(components), record_path, sweep_path.exists()))
+        raise RuntimeError("arm died mid-draw")
+
+    monkeypatch.setattr(pin, "run_erasure_arm", crashing_arm)
+    with pytest.raises(RuntimeError, match="arm died mid-draw"):
+        phase37_r1b.run(root=rig.root, **rig.paths)
+    out = capsys.readouterr().out
+    print(out, end="")
+    # The arm started, on the re-measured prefix, with the sweep ALREADY on disk.
+    assert started == [("erased", "mps", prefix, rig.root / phase37_prereg.R1B_ARM_RECORD, True)]
+
+    # (1) The sweep record holds k, the prefix, the full ordering, the curve rows and the D-07
+    # decision exactly as the sweep produced them, and the driver printed k and run_arm.
+    swept = json.loads(sweep_path.read_text(encoding="utf-8"))
+    decision = phase37_prereg.prefix_decision(curve["k"], full[: curve["k"]], prefix)
+    assert swept["run_id"] == phase37_r1b.RUN_ID
+    assert swept["git_sha_at_launch"] == _git("rev-parse", "HEAD")
+    assert swept["sweep"]["k"] == curve["k"]
+    assert swept["sweep"]["ordered_prefix"] == [list(a) for a in full[: curve["k"]]]
+    assert swept["sweep"]["full_ordering"] == [list(a) for a in full]
+    assert swept["sweep"]["curve"] == curve["checkpoints"]
+    assert swept["decision"] == json.loads(json.dumps(decision))
+    assert swept["decision"]["run_arm"] is True
+    assert f"SWEEP k={curve['k']} run_arm=True {sweep_path}" in out
+    print(
+        f"REHEARSAL (1) sweep on disk: k={swept['sweep']['k']} "
+        f"prefix={len(swept['sweep']['ordered_prefix'])} "
+        f"full_ordering={len(swept['sweep']['full_ordering'])} "
+        f"curve_rows={len(swept['sweep']['curve'])} run_arm={swept['decision']['run_arm']}"
+    )
+
+    # (2) The ledger holds an open start for RUN_ID and no end line; no sidecar exists.
+    lines = _lines(rig)
+    assert [(x["event"], x["run_id"]) for x in lines] == [("start", phase37_r1b.RUN_ID)]
+    assert phase37_r1b.RUN_ID in phase36_ledger.open_runs(lines)
+    assert not phase37_r1b.run_sidecar(rig.root).exists()
+    still_open = sorted(phase36_ledger.open_runs(lines))
+    print(f"REHEARSAL (2) ledger: {[x['event'] for x in lines]} open={still_open}")
+
+    # (3) reconcile closes it; preflight still refuses a relaunch (D-11), and the ledger alone
+    # refuses it too once the sweep record is moved out of the way.
+    phase36_ledger.reconcile(**rig.paths)
+    reconciled = _lines(rig)
+    assert [x["event"] for x in reconciled] == ["start", "lost"]
+    assert reconciled[1]["flag"] == phase36_ledger.LOST_FLAG
+    assert phase36_ledger.open_runs(reconciled) == {}
+    with pytest.raises(SystemExit, match=r"phase37_r1b_sweep\.json exists.*\(D-11\)"):
+        phase37_r1b.preflight(root=rig.root, ledger_path=rig.paths["ledger_path"])
+    aside = rig.root / "sweep_aside.json"
+    aside.write_bytes(sweep_path.read_bytes())
+    sweep_path.unlink()
+    with pytest.raises(SystemExit, match=r"the ledger already holds a line .*\(D-11\)"):
+        phase37_r1b.preflight(root=rig.root, ledger_path=rig.paths["ledger_path"])
+    assert _lines(rig) == reconciled
+    print(
+        f"REHEARSAL (3) reconciled: {[x['event'] for x in reconciled]} "
+        f"flag={reconciled[1]['flag']!r}; preflight refuses the relaunch (D-11)"
+    )
+
+    # (4) No R1b result was written, under the tmp root or the real one.
+    assert sorted((rig.root / "results").glob("phase37_r1b*.json")) == []
+    assert sorted((_ROOT / "results").glob("phase37_r1b*.json")) == real_results
+    print("REHEARSAL (4) results/phase37_r1b*.json written: none")
+
+
 # =================================================================================================
 # (5) emit / build_record: the consumer fed the REAL committed erased arm (D-03, D-04, D-12).
 # =================================================================================================
@@ -460,6 +562,12 @@ def test_a_commit_landing_mid_run_is_named_not_hidden(rig, monkeypatch):
 
 def _plant_sidecar(rig, curve, *, arm_ran):
     prefix = _prefix(curve)
+    swept = {
+        "sweep": {"k": curve["k"], "ordered_prefix": curve["ordered_prefix"]},
+        "decision": phase37_prereg.prefix_decision(curve["k"], prefix, prefix),
+    }
+    sweep_path = phase37_r1b.sweep_record(rig.root)
+    sweep_path.write_text(json.dumps(swept), encoding="utf-8")
     blob = {
         "run_id": phase37_r1b.RUN_ID,
         "git_sha_at_launch": "0" * 40,
@@ -470,12 +578,11 @@ def _plant_sidecar(rig, curve, *, arm_ran):
         "torch_version": "planted",
         "started_utc": "2026-10-03T00:00:00+00:00",
         "finished_utc": "2026-10-03T01:00:00+00:00",
-        "sweep": {"k": curve["k"], "ordered_prefix": curve["ordered_prefix"]},
-        "decision": phase37_prereg.prefix_decision(curve["k"], prefix, prefix),
+        "sweep_record_sha256": hashlib.sha256(sweep_path.read_bytes()).hexdigest(),
         "arm_ran": arm_ran,
     }
     phase37_r1b.run_sidecar(rig.root).write_text(json.dumps(blob), encoding="utf-8")
-    return blob
+    return {**blob, **json.loads(json.dumps(swept))}  # what emit hands build_record
 
 
 def test_emit_on_the_committed_arm_reads_replicated(rig, curve):
@@ -507,6 +614,14 @@ def test_emit_on_a_shifted_arm_reads_not_replicated_with_context(rig, curve, com
 
 def test_emit_refuses_an_existing_record_and_a_missing_sidecar(rig, curve):
     with pytest.raises(SystemExit, match="phase37_r1b_run.json"):
+        phase37_r1b.emit(root=rig.root)
+    _plant_sidecar(rig, curve, arm_ran=False)
+    swept = phase37_r1b.sweep_record(rig.root)
+    swept.write_text(swept.read_text(encoding="utf-8") + " ", encoding="utf-8")
+    with pytest.raises(SystemExit, match="sweep record"):  # WR-02: emit uses the sweep record
+        phase37_r1b.emit(root=rig.root)
+    swept.unlink()
+    with pytest.raises(SystemExit, match="phase37_r1b_sweep.json is missing"):
         phase37_r1b.emit(root=rig.root)
     _plant_sidecar(rig, curve, arm_ran=False)
     (rig.root / phase37_prereg.R1B_RECORD).write_text("{}", encoding="utf-8")

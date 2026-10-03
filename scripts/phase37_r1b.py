@@ -13,7 +13,10 @@ and the adapter's SHA-256 must equal the committed curve's `adapter_in_sha256`.
 D-07. k == 78 and the SAME set of addresses as the committed prefix -> the arm runs on the
 re-measured list (same set, bit-identical weights whatever the order; positions moved is
 description). k != 78 or another set -> the arm does NOT run and the record reads NOT_REPLICATED
-with k and the set difference as its verdict fields. The sweep is recorded in BOTH branches (D-14).
+with k and the set difference as its verdict fields. The sweep is recorded in BOTH branches (D-14):
+k, ordered[:k], the full 288 ordering, the curve rows and the decision go to the write-once
+data/phase37_r1b_sweep.json BEFORE the arm starts (and k / run_arm are printed), so a crash inside
+the arm still leaves them on disk; `emit` reads them from there.
 
 D-03. REPLICATED / NOT_REPLICATED comes only from `phase37_prereg.replicated` over
 `phase37_routes.rederive` of the replica arm — the same rederive R1a runs. Draw bit-identity
@@ -21,11 +24,12 @@ against results/phase19_arm_erased.json and the per-slot non-target context (D-0
 beside it, labelled `criterion: False`.
 
 ONE ATTEMPT (D-11, D-15, D-16). The attempt starts at the ledger start line. Every cheap refusal
-(existing records or sidecar, any ledger line for RUN_ID, a dirty tree, `require_launch("R1b")`, a
-device other than MPS, a missing input file, an adapter that is not the curve's) runs BEFORE that
-line and is not an attempt. Once the start line is written the attempt is THE attempt: a crash
-before the sidecar leaves an open start that `phase36_ledger.reconcile` turns into a lost line; a
-crash after the sidecar is closed by an end line and `emit`, never reconciled.
+(existing records, sidecar or sweep record, any ledger line for RUN_ID, a dirty tree,
+`require_launch("R1b")`, a device other than MPS, a missing input file, an adapter that is not the
+curve's) runs BEFORE that line and is not an attempt. Once the start line is written the attempt is
+THE attempt: a crash before the sidecar leaves an open start that `phase36_ledger.reconcile` turns
+into a lost line (the sweep record stays on disk if the sweep finished); a crash after the sidecar
+is closed by an end line and `emit`, never reconciled.
 
 It is launched only by Rafael, after his "approved" and a passing `require_launch("R1b")`, through
 artifacts/com.personacore.phase37.r1b.plist. The Phase 19 retrain and replicate arms are out of
@@ -104,6 +108,13 @@ def run_sidecar(root):
     return pathlib.Path(root) / "data" / "phase37_r1b_run.json"
 
 
+def sweep_record(root):
+    """WR-02: the gitignored, WRITE-ONCE sweep record — written before the arm starts, read by
+    `emit`. A crash during the ~68 min arm then still leaves the attempt's k, prefix, full ordering,
+    curve rows and D-07 decision on disk for the root-cause investigation (D-11, D-14)."""
+    return pathlib.Path(root) / "data" / "phase37_r1b_sweep.json"
+
+
 def adapter_sha256():
     import phase14_recall
 
@@ -159,7 +170,12 @@ def _curve():
 def preflight(*, root=None, ledger_path=None):
     """Every refusal before the ledger start line (D-16). Writes nothing."""
     root = pathlib.Path(root) if root is not None else _ROOT
-    for path in (root / prereg.R1B_RECORD, root / prereg.R1B_ARM_RECORD, run_sidecar(root)):
+    for path in (
+        root / prereg.R1B_RECORD,
+        root / prereg.R1B_ARM_RECORD,
+        run_sidecar(root),
+        sweep_record(root),
+    ):
         _prove(not path.exists(), f"{path} exists: the one R1b attempt has already run (D-11)")
     _prove(
         not any(line["run_id"] == RUN_ID for line in phase36_ledger.read_ledger(ledger_path)),
@@ -249,6 +265,7 @@ def run(*, root=None, ledger_path=None, heartbeat_path=None):
             "stopped": chosen["stopped"],
             "cap": chosen["cap"],
             "ordered_prefix": [list(a) for a in remeasured],
+            "full_ordering": [list(a) for a in chosen["ordered"]],  # r1b_scope's 288 ordering
             "intact_nll": chosen["intact_nll"],
             "curve": chosen["curve"],
             "wall_clock_min": (time.monotonic() - t0) / 60,
@@ -257,6 +274,21 @@ def run(*, root=None, ledger_path=None, heartbeat_path=None):
         decision = prereg.prefix_decision(
             chosen["k"], remeasured, [tuple(a) for a in curve["ordered_prefix"]]
         )
+        # WR-02: on disk, write-once, BEFORE the arm — the sweep survives a crash inside it.
+        sweep_path = sweep_record(root)
+        _prove(not sweep_path.exists(), f"{sweep_path} exists: the sweep record is write-once")
+        sweep_path.parent.mkdir(parents=True, exist_ok=True)
+        phase25_run.atomic_write_json(
+            sweep_path,
+            {
+                "run_id": RUN_ID,
+                "git_sha_at_launch": pre["git_sha"],
+                "written_utc": _now(),
+                "sweep": sweep,
+                "decision": decision,
+            },
+        )
+        print(f"SWEEP k={sweep['k']} run_arm={decision['run_arm']} {sweep_path}", flush=True)
         model = artifact = None  # release the sweep model: the arm loads its own
         gc.collect()
         if torch.backends.mps.is_available():  # never reached on a CPU-only host (ubuntu CI)
@@ -288,8 +320,7 @@ def run(*, root=None, ledger_path=None, heartbeat_path=None):
                 "torch_version": torch.__version__,
                 "started_utc": started_utc,
                 "finished_utc": _now(),
-                "sweep": sweep,
-                "decision": decision,
+                "sweep_record_sha256": _sha256(sweep_path),
                 "arm_ran": decision["run_arm"],
             },
         )
@@ -309,7 +340,8 @@ def run(*, root=None, ledger_path=None, heartbeat_path=None):
 
 
 def build_record(blob, *, root):
-    """The R1b record from the run sidecar ``blob`` (and the replica arm record when it ran)."""
+    """The R1b record from ``blob`` (the run sidecar merged with the sweep record's sweep and
+    decision, as `emit` builds it) and the replica arm record when it ran."""
     root = pathlib.Path(root)
     erased_path = pin.arm_record_path("erased")
     committed = json.loads(erased_path.read_text(encoding="utf-8"))
@@ -319,6 +351,7 @@ def build_record(blob, *, root):
         "verdict": None,
         "decision": blob["decision"],
         "sweep": blob["sweep"],  # D-14: both branches
+        "sweep_record_sha256": blob["sweep_record_sha256"],
         "tolerance": dict(filled["tolerance"]),
         "replicated_definition": dict(filled["replicated_definition"]),
         "re_measured": list(scope["re_measured"]),
@@ -376,6 +409,13 @@ def emit(*, root=None):
     )
     sidecar = run_sidecar(root)
     _prove(sidecar.exists(), f"{sidecar} is missing: there is no R1b run to emit")
+    sweep_path = sweep_record(root)
+    _prove(sweep_path.exists(), f"{sweep_path} is missing: the run wrote it before the arm")
+    blob = json.loads(sidecar.read_text(encoding="utf-8"))
+    _prove(
+        _sha256(sweep_path) == blob["sweep_record_sha256"],
+        f"the sweep record {sweep_path} is not the bytes the run wrote (sidecar SHA-256)",
+    )
     refuse_if_dirty(
         who="phase37_r1b",
         detail=(
@@ -389,7 +429,10 @@ def emit(*, root=None):
         ),
         cwd=_ROOT,
     )
-    record = build_record(json.loads(sidecar.read_text(encoding="utf-8")), root=root)
+    swept = json.loads(sweep_path.read_text(encoding="utf-8"))
+    record = build_record(
+        {**blob, "sweep": swept["sweep"], "decision": swept["decision"]}, root=root
+    )
     phase25_run.atomic_write_json(out, record)
     print(f"R1b {record['verdict']} {out}", flush=True)
     return record
