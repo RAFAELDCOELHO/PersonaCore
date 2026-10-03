@@ -22,6 +22,7 @@ import hashlib
 import inspect
 import json
 import pathlib
+import re
 import shutil
 import sys
 import types
@@ -46,12 +47,33 @@ import phase36_ledger  # noqa: E402  (same; never aliased)
 import phase37_prereg  # noqa: E402  (same; never aliased)
 import phase37_r1b  # noqa: E402  (same; never aliased — _untested_functions counts by name)
 import phase37_routes  # noqa: E402  (same; never aliased)
+import teach_persona  # noqa: E402  (same)
 
 from personacore.provenance import git_sha  # noqa: E402
 from test_phase29_prereg import _git, _planted  # noqa: E402
 from test_phase36_prereg import _skip_failures, _untested_functions  # noqa: E402
 
 _REAL_SIDECAR = _ROOT / "data" / "phase37_r1b_run.json"
+
+# WR-03: every input file the run reads, as the (module, constant) its reader takes it from.
+_RUN_INPUTS = (
+    (phase14_recall, "CONVBASE_SLIM"),
+    (phase14_recall, "ADAPTER_PATH"),
+    (phase14_recall, "TOKENIZER_PATH"),
+    (teach_persona, "DIALOG_VAL_BIN"),
+    (teach_persona, "DIALOG_VAL_MASK"),
+    (pin, "RETENTION_BIN"),
+    (pin, "PHASE18_CORPUS_PATH"),
+    (pin, "PHASE18_ARM_RECORD_PATH"),
+)
+# The gitignored ones (absent on CI): the rig stands each in with a tmp file.
+_GITIGNORED_INPUTS = (
+    "CONVBASE_SLIM",
+    "ADAPTER_PATH",
+    "DIALOG_VAL_BIN",
+    "DIALOG_VAL_MASK",
+    "RETENTION_BIN",
+)
 
 
 @pytest.fixture(autouse=True)
@@ -96,6 +118,11 @@ def rig(tmp_path, monkeypatch, curve):
         arms=[],
         sweep={"k": curve["k"], "ordered": _prefix(curve), "raise": None},
     )
+    for owner, name in _RUN_INPUTS:
+        if name in _GITIGNORED_INPUTS:
+            stand_in = tmp_path / "data" / f"input_{name}"
+            stand_in.write_bytes(b"stand-in")
+            monkeypatch.setattr(owner, name, stand_in)
     monkeypatch.setattr(phase37_r1b, "_device", lambda: "mps")
     monkeypatch.setattr(phase37_r1b, "adapter_sha256", lambda: curve["adapter_in_sha256"])
     monkeypatch.setattr(phase37_r1b, "refuse_if_dirty", lambda **kw: rig.dirty.append(kw))
@@ -345,6 +372,22 @@ def _refuse_launch(rig, monkeypatch):
 def test_preflight_refusals_write_no_ledger_line(rig, monkeypatch, plant):
     plant(rig, monkeypatch)
     with pytest.raises(SystemExit):
+        phase37_r1b.run(root=rig.root, **rig.paths)
+    assert not rig.paths["ledger_path"].exists()
+    assert not rig.paths["heartbeat_path"].exists()
+    assert rig.arms == []
+
+
+def test_run_inputs_are_the_readers_constants():
+    assert phase37_r1b.run_inputs() == tuple(getattr(owner, name) for owner, name in _RUN_INPUTS)
+
+
+@pytest.mark.parametrize(("owner", "name"), _RUN_INPUTS, ids=[name for _, name in _RUN_INPUTS])
+def test_a_missing_run_input_refuses_before_the_start_line(rig, monkeypatch, owner, name):
+    """WR-03 / D-16: a missing input is a preflight refusal, not THE attempt."""
+    missing = rig.root / "missing" / name
+    monkeypatch.setattr(owner, name, missing)
+    with pytest.raises(SystemExit, match=re.escape(f"{missing} is missing")):
         phase37_r1b.run(root=rig.root, **rig.paths)
     assert not rig.paths["ledger_path"].exists()
     assert not rig.paths["heartbeat_path"].exists()

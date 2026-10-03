@@ -22,10 +22,10 @@ beside it, labelled `criterion: False`.
 
 ONE ATTEMPT (D-11, D-15, D-16). The attempt starts at the ledger start line. Every cheap refusal
 (existing records or sidecar, any ledger line for RUN_ID, a dirty tree, `require_launch("R1b")`, a
-device other than MPS, an adapter that is not the curve's) runs BEFORE that line and is not an
-attempt. Once the start line is written the attempt is THE attempt: a crash before the sidecar
-leaves an open start that `phase36_ledger.reconcile` turns into a lost line; a crash after the
-sidecar is closed by an end line and `emit`, never reconciled.
+device other than MPS, a missing input file, an adapter that is not the curve's) runs BEFORE that
+line and is not an attempt. Once the start line is written the attempt is THE attempt: a crash
+before the sidecar leaves an open start that `phase36_ledger.reconcile` turns into a lost line; a
+crash after the sidecar is closed by an end line and `emit`, never reconciled.
 
 It is launched only by Rafael, after his "approved" and a passing `require_launch("R1b")`, through
 artifacts/com.personacore.phase37.r1b.plist. The Phase 19 retrain and replicate arms are out of
@@ -94,6 +94,27 @@ def adapter_sha256():
     return _sha256(phase14_recall.ADAPTER_PATH)
 
 
+def run_inputs():
+    """WR-03: every input file the run reads, from the constants its readers take them from.
+
+    `refuse_if_dirty` cannot see the gitignored ones (checkpoints/, data/), so without this a
+    missing file crashes AFTER the ledger start line and burns the one attempt (D-11, D-16).
+    """
+    import phase14_recall as recall
+    import teach_persona as tp
+
+    return (
+        recall.CONVBASE_SLIM,  # load_adapted_model: the sweep's and the arm's base
+        recall.ADAPTER_PATH,  # load_adapted_model, adapter_sha256
+        recall.TOKENIZER_PATH,  # load_adapted_model
+        tp.DIALOG_VAL_BIN,  # pin.dialogue_ppl_pair: the sweep's curve rows and the arm
+        tp.DIALOG_VAL_MASK,  # same
+        pin.RETENTION_BIN,  # run_erasure_arm's retention_perplexity
+        pin.PHASE18_CORPUS_PATH,  # run_erasure_arm's corpus_path default
+        pin.PHASE18_ARM_RECORD_PATH,  # run_erasure_arm: pre-erasure per_fact and attack family
+    )
+
+
 def _device():
     from personacore.preflight import preflight_device
 
@@ -143,6 +164,12 @@ def preflight(*, root=None, ledger_path=None):
     gate = phase36_ledger.require_launch(FRONT, ledger_path=ledger_path)
     device = _device()
     _prove(device == "mps", f"R1b is the MPS replica; preflight resolved {device!r}")
+    for path in run_inputs():
+        _prove(
+            pathlib.Path(path).exists(),
+            f"{path} is missing: the run reads it, so this refuses before the ledger start line "
+            "(D-16) instead of crashing after it",
+        )
     curve = _curve()
     _prove(
         adapter_sha256() == curve["adapter_in_sha256"],
