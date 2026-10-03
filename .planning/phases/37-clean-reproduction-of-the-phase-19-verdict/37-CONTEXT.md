@@ -227,6 +227,29 @@ from Rafael), and any edit to `scripts/phase19_erasure.py` or `scripts/erasure_g
 
 </deferred>
 
+<addendum>
+## Plan-time rulings (Rafael, 2026-10-03, /gsd-plan-phase 37)
+
+The researcher's four open questions (`37-RESEARCH.md` §Open Questions), answered before planning.
+Each one goes into the Phase 37 pre-registration, which must be complete before any
+`results/phase37_*` record exists.
+
+- **D-11:** **A started attempt is THE attempt.** Any R1b launch counts as D-04's one attempt,
+  including a crash that leaves no record and only a ledger `lost` line. A relaunch needs Rafael's
+  "approved", a ledger reconcile and a root-cause note first (the 36-07 W3 pattern).
+- **D-12:** **D-04's per-fact non-target deltas.** For each of the 7 non-targets, NOT_REPLICATED
+  carries the replica pooled delta, the committed pooled delta, and |replica − committed|, beside
+  0.14814814814814814 (`nontarget_noise_floor.value`). They are context and never the criterion.
+- **D-13:** **R1a also re-derives the (b) floor from the committed replicate arm**
+  (`results/phase19_arm_replicate.json`), the way `phase19_run.report()` does, as one extra
+  assertion. It adds that record to the input SHA-256 list. The four REPRO-01 numbers and the
+  verdict stay the headline.
+- **D-14:** **The re-measured sweep is recorded in BOTH R1b branches.** `ordered[:k]` and the
+  curve rows go in REPLICATED and NOT_REPLICATED (D-07) alike, so a root-cause investigation has
+  the data. This is description only and refines D-07's "only the k and the set difference": the
+  verdict fields stay those two.
+</addendum>
+
 ---
 
 *Phase: 37-clean-reproduction-of-the-phase-19-verdict*
