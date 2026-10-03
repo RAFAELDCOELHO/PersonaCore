@@ -149,3 +149,34 @@ def b_floor_from_replicate():
         f"{floor.NONTARGET_NOISE_FLOOR!r}",
     )
     return value
+
+
+def select_target_prefix(model, tok, device, artifact, *, fact, dialogue_ppl):
+    """Defect E — THE ERASE-08 wrapper (D-08). Phase 41 imports this and writes no other.
+
+    `phase19_run.target_ablate`'s call shape, which produced the committed curve
+    (results/phase19_collateral_curve.json, |R| = 8, k = 78): the pin's `select_ablation_prefix`
+    ranks against `phase18_extraction.reference_set_for(fact.slot)`, never the calibration twin the
+    pin's `_selected_components` would pass. The pin is imported unedited and never monkeypatched;
+    neither `reference_set_for_calibration` nor `_selected_components` is called.
+    ``dialogue_ppl`` is a zero-argument callable (R1b passes
+    ``lambda: pin.dialogue_ppl_pair(model, device, forbid)``).
+    """
+    import phase14_factset as factset
+    import phase18_extraction as extraction
+
+    taught = {f.slot: f.value for f in factset.LOCKED_FACTS}
+    return pin.select_ablation_prefix(
+        model,
+        tok,
+        device,
+        artifact,
+        slot=fact.slot,
+        value=fact.value,
+        references=extraction.reference_set_for(fact.slot),
+        collateral={
+            slot: (taught[slot], extraction.reference_set_for(slot))
+            for slot in extraction.CORE_SLOTS
+        },
+        dialogue_ppl=dialogue_ppl,
+    )
