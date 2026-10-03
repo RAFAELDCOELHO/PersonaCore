@@ -20,9 +20,11 @@ Phase 19 path. It takes no arguments.
 """
 
 import datetime
+import fnmatch
 import hashlib
 import json
 import pathlib
+import subprocess
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
@@ -33,8 +35,12 @@ import erasure_gate  # noqa: E402
 import phase19_erasure as pin  # noqa: E402
 import phase19_floor as floor  # noqa: E402
 import phase19_run as p19run  # noqa: E402  — the two record-path constants only
+import phase25_run  # noqa: E402  — atomic_write_json, the one os.replace writer
 import phase35_prereg  # noqa: E402
+import phase37_prereg as prereg  # noqa: E402
 import phase37_routes as routes  # noqa: E402
+
+from personacore.provenance import git_sha, refuse_if_dirty  # noqa: E402
 
 _ROOT = pathlib.Path(__file__).resolve().parent.parent
 
@@ -123,3 +129,105 @@ def derive(erased=None):
             "E": "phase37_routes.select_target_prefix",
         },
     }
+
+
+def write_record(derived, path, *, base, run):
+    """Write ``derived`` to ``path`` ONCE: phase37 path, no overwrite, tracked prereg, clean."""
+    path = pathlib.Path(path)
+    rel = path.relative_to(base).as_posix()
+    _prove(
+        fnmatch.fnmatch(rel, prereg.RECORD_GLOB),
+        f"{rel} does not match RECORD_GLOB {prereg.RECORD_GLOB!r}: R1a never writes Phase 19",
+    )
+    _prove(
+        not path.exists(),
+        f"{path} exists — REFUSING to overwrite it. The R1a record is write-once; corrections "
+        "are dated continuations",
+    )
+    tracked = subprocess.run(
+        ["git", "ls-files", "--error-unmatch", "scripts/phase37_prereg.py"],
+        cwd=_ROOT,
+        capture_output=True,
+    )
+    _prove(
+        tracked.returncode == 0,
+        "the pre-registration scripts/phase37_prereg.py is not tracked: a record cannot precede it",
+    )
+    pathspec = ("scripts", "src", "results")
+    if path.is_relative_to(_ROOT):
+        pathspec += (f":(exclude){path.relative_to(_ROOT).as_posix()}",)
+    refuse_if_dirty(
+        who="phase37_r1a",
+        detail=(
+            "the R1a record publishes git_sha and hashes its modules and input records from the "
+            "working tree; a record written from a dirty tree names a commit it cannot be "
+            "regenerated from"
+        ),
+        pathspec=pathspec,
+        cwd=_ROOT,
+    )
+    record = {
+        **derived,
+        "input_sha256": {r: _sha256(_ROOT / r) for r in INPUT_RECORDS},
+        "provenance": {
+            "run": {
+                key: run[key]
+                for key in ("git_sha", "device", "torch_version", "started_utc", "finished_utc")
+            },
+            "module_sha256": {r: _sha256(_ROOT / r) for r in MODULES},
+            "head_at_write": git_sha(),
+            "written_utc": _now(),
+        },
+    }
+    phase25_run.atomic_write_json(path, record)
+    return record
+
+
+def check_record(derived, path):
+    """Verify an existing R1a record against a fresh derivation and fresh input digests."""
+    record = json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
+    for key in ("assertions", "margin", "b_floor", "verdict", "reasons"):
+        _prove(
+            record.get(key) == derived[key],
+            f"STOP: the record's {key} is {record.get(key)!r} but re-derives {derived[key]!r}",
+        )
+    fresh = {r: _sha256(_ROOT / r) for r in INPUT_RECORDS}
+    _prove(
+        record.get("input_sha256") == fresh,
+        "STOP: an input record's bytes differ from the SHA-256 the R1a record holds",
+    )
+    return record
+
+
+def main(argv=None, *, out_root=None):
+    if argv:
+        raise SystemExit(__doc__)
+    base = pathlib.Path(out_root) if out_root is not None else _ROOT
+    path = base / prereg.R1A_RECORD
+    started = _now()
+    derived = derive()
+    finished = _now()
+    if path.exists():
+        check_record(derived, path)
+        print(f"R1a REPRODUCED (record verified) {path}")
+    else:
+        import torch  # only for the provenance version string
+
+        run = {
+            "git_sha": git_sha(),
+            "device": "cpu",
+            "torch_version": torch.__version__,
+            "started_utc": started,
+            "finished_utc": finished,
+        }
+        write_record(derived, path, base=base, run=run)
+        print(f"R1a REPRODUCED (record written) {path}")
+    for key, value in derived["assertions"].items():
+        print(f"  {key}: {value!r}")
+    print(f"  margin: {derived['margin']!r}  b_floor: {derived['b_floor']!r}")
+    print(f"  verdict: {derived['verdict']}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))
