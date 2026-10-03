@@ -24,6 +24,7 @@ import fnmatch
 import hashlib
 import json
 import pathlib
+import re
 import subprocess
 import sys
 
@@ -114,8 +115,16 @@ def derive(erased=None):
         f"**{got['verdict']}**" in section,
         f"STOP: the verdict re-derives {got['verdict']!r}, not the recorded one",
     )
-    for reason in got["reasons"]:
-        _prove(f"- {reason}\n" in section, f"STOP: reason {reason!r} is not a recorded reason")
+    # WR-04: EQUAL, ordered, to the `- (a|b|c) ` lines of `### 1.` — a dropped reason must refuse.
+    recorded = [
+        line[2:]
+        for line in section.split("### 2.")[0].splitlines()
+        if re.match(r"- \([abc]\) ", line)
+    ]
+    _prove(
+        list(got["reasons"]) == recorded,
+        f"STOP: the reasons re-derive {got['reasons']!r}, not the recorded {recorded!r}",
+    )
     return {
         "assertions": {key: got[key] for key in phase35_prereg.R1A_ASSERTIONS},
         "margin": got["margin"],

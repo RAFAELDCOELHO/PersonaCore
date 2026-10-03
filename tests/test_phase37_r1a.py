@@ -93,6 +93,20 @@ def test_verdict_and_reasons_match_the_recorded_report(derived):
         assert f"- {reason}\n" in section
 
 
+def test_a_dropped_reason_halts(monkeypatch):
+    """WR-04: the re-derived reasons must EQUAL the recorded `- (a|b|c)` lines, not be a subset."""
+    real = phase37_r1a.routes.rederive
+
+    def short(record, **kw):
+        out = real(record, **kw)
+        out["reasons"] = out["reasons"][:1]
+        return out
+
+    monkeypatch.setattr(phase37_r1a.routes, "rederive", short)
+    with pytest.raises(SystemExit, match=r"STOP: the reasons re-derive"):
+        phase37_r1a.derive()
+
+
 def test_k_and_destroyed_pct_cross_check_phase35_r1a_rederive(derived):
     cross = phase35_prereg.r1a_rederive()
     assert derived["assertions"]["k"] == cross["k"]
