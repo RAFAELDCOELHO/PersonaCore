@@ -241,7 +241,24 @@ def test_run_on_the_committed_order_replicates(rig, curve, committed):
     beats = [json.loads(t) for t in rig.paths["heartbeat_path"].read_text().splitlines()]
     assert beats and all(b["point"] == phase37_r1b.RUN_ID for b in beats)
     run = record["provenance"]["run"]
-    assert set(run) == {"git_sha", "device", "torch_version", "started_utc", "finished_utc"}
+    assert (
+        set(run)
+        == set(phase37_r1b.RUN_PROVENANCE_KEYS)
+        == {
+            "git_sha_at_launch",
+            "git_sha_at_end",
+            "head_moved_during_run",
+            "device",
+            "torch_version",
+            "started_utc",
+            "finished_utc",
+        }
+    )
+    head = _git("rev-parse", "HEAD")
+    assert run["git_sha_at_launch"] == run["git_sha_at_end"] == head
+    assert run["head_moved_during_run"] is False
+    assert record["provenance"]["module_sha256_at_launch"] == phase37_r1b.module_sha256()
+    assert record["provenance"]["modules_changed_since_launch"] == []
     assert run["device"] == "mps" and run["started_utc"] <= run["finished_utc"]
     sweep = record["sweep"]
     assert sweep["ordered_prefix"] == curve["ordered_prefix"] and sweep["k"] == curve["k"]
@@ -358,6 +375,10 @@ def _refuse_adapter(rig, monkeypatch):
     monkeypatch.setattr(phase37_r1b, "adapter_sha256", lambda: "0" * 64)
 
 
+def _refuse_unknown_sha(rig, monkeypatch):
+    monkeypatch.setattr(phase37_r1b, "git_sha", lambda: "unknown")
+
+
 def _refuse_launch(rig, monkeypatch):
     def cut(front, **kw):
         raise SystemExit("[phase36_ledger] PAUSE")
@@ -367,7 +388,15 @@ def _refuse_launch(rig, monkeypatch):
 
 @pytest.mark.parametrize(
     "plant",
-    [_refuse_record, _refuse_arm, _refuse_sidecar, _refuse_cpu, _refuse_adapter, _refuse_launch],
+    [
+        _refuse_record,
+        _refuse_arm,
+        _refuse_sidecar,
+        _refuse_cpu,
+        _refuse_adapter,
+        _refuse_unknown_sha,
+        _refuse_launch,
+    ],
 )
 def test_preflight_refusals_write_no_ledger_line(rig, monkeypatch, plant):
     plant(rig, monkeypatch)
@@ -397,9 +426,31 @@ def test_a_missing_run_input_refuses_before_the_start_line(rig, monkeypatch, own
 def test_preflight_alone_writes_nothing_and_reports_the_gate(rig, curve, capsys):
     pre = phase37_r1b.preflight(root=rig.root, ledger_path=rig.paths["ledger_path"])
     assert pre["device"] == "mps" and pre["curve"] == curve and pre["gate"] == {"front": "R1b"}
+    assert pre["git_sha"] == _git("rev-parse", "HEAD")  # WR-01: captured at launch
+    assert pre["module_sha256"] == phase37_r1b.module_sha256()
     assert capsys.readouterr().out.startswith("PREFLIGHT OK")
     assert not rig.paths["ledger_path"].exists()
     assert sorted(p.name for p in rig.root.iterdir()) == ["data", "results"]
+
+
+def test_a_commit_landing_mid_run_is_named_not_hidden(rig, monkeypatch):
+    """WR-01: launch HEAD, end HEAD and the change between them are all in the record."""
+    heads = iter(["a" * 40, "b" * 40, "c" * 40])  # preflight, sidecar, emit
+    monkeypatch.setattr(phase37_r1b, "git_sha", lambda: next(heads))
+    real = phase37_r1b.module_sha256
+    launch = {rel: "0" * 64 for rel in phase37_r1b.MODULES}
+    hashes = iter([launch])  # preflight's read; every later read is the real tree
+    monkeypatch.setattr(phase37_r1b, "module_sha256", lambda: next(hashes, None) or real())
+    record = phase37_r1b.run(root=rig.root, **rig.paths)
+    run = record["provenance"]["run"]
+    assert (run["git_sha_at_launch"], run["git_sha_at_end"]) == ("a" * 40, "b" * 40)
+    assert run["head_moved_during_run"] is True
+    assert record["provenance"]["head_at_write"] == "c" * 40
+    assert record["provenance"]["module_sha256_at_launch"] == launch
+    assert record["provenance"]["module_sha256"] == real()
+    assert record["provenance"]["modules_changed_since_launch"] == sorted(phase37_r1b.MODULES)
+    sidecar = json.loads(phase37_r1b.run_sidecar(rig.root).read_text(encoding="utf-8"))
+    assert sidecar["module_sha256_at_launch"] == launch
 
 
 # =================================================================================================
@@ -411,7 +462,10 @@ def _plant_sidecar(rig, curve, *, arm_ran):
     prefix = _prefix(curve)
     blob = {
         "run_id": phase37_r1b.RUN_ID,
-        "git_sha": "0" * 40,
+        "git_sha_at_launch": "0" * 40,
+        "git_sha_at_end": "0" * 40,
+        "head_moved_during_run": False,
+        "module_sha256_at_launch": phase37_r1b.module_sha256(),
         "device": "mps",
         "torch_version": "planted",
         "started_utc": "2026-10-03T00:00:00+00:00",
@@ -467,7 +521,8 @@ def test_build_record_without_the_arm(rig, curve):
     assert record["verdict"] == phase37_prereg.ENTRIES["not_replicated_rule"]["value"]
     assert record["arm_record"] is None and record["sweep"] == blob["sweep"]
     assert set(record["provenance"]["module_sha256"]) == set(phase37_r1b.MODULES)
-    assert record["provenance"]["run"]["git_sha"] == blob["git_sha"]
+    assert record["provenance"]["run"]["git_sha_at_launch"] == blob["git_sha_at_launch"]
+    assert record["provenance"]["modules_changed_since_launch"] == []
     expected = {
         rel: hashlib.sha256((_ROOT / rel).read_bytes()).hexdigest()
         for rel in (phase37_prereg.CURVE_RECORD, phase37_prereg.ERASED_RECORD)

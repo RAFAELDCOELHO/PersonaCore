@@ -68,6 +68,17 @@ MODULES = (
     "scripts/phase37_routes.py",
     "scripts/phase37_r1b.py",
 )
+# WR-01: the commit is known only at launch. A commit landing during the ~75 min run must be NAMED
+# in the record (launch HEAD, end HEAD and the flag), never silently replace the launch commit.
+RUN_PROVENANCE_KEYS = (
+    "git_sha_at_launch",
+    "git_sha_at_end",
+    "head_moved_during_run",
+    "device",
+    "torch_version",
+    "started_utc",
+    "finished_utc",
+)
 
 
 def _prove(condition, message):
@@ -81,6 +92,11 @@ def _sha256(path):
 
 def _now():
     return datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+
+def module_sha256():
+    """``{rel: sha256}`` of MODULES as they are on disk now (read at launch and again at emit)."""
+    return {rel: _sha256(_ROOT / rel) for rel in MODULES}
 
 
 def run_sidecar(root):
@@ -161,6 +177,13 @@ def preflight(*, root=None, ledger_path=None):
         pathspec=LAUNCH_PATHSPEC,
         cwd=_ROOT,
     )
+    # WR-01: the launch commit and module bytes, read right after the tree is proven clean.
+    launch_sha = git_sha()
+    _prove(
+        launch_sha != "unknown",
+        "git_sha() could not read HEAD: the record would name no commit (run from the repo root)",
+    )
+    launch_modules = module_sha256()
     gate = phase36_ledger.require_launch(FRONT, ledger_path=ledger_path)
     device = _device()
     _prove(device == "mps", f"R1b is the MPS replica; preflight resolved {device!r}")
@@ -176,11 +199,17 @@ def preflight(*, root=None, ledger_path=None):
         "the production adapter is not the one the committed curve was swept on",
     )
     print(
-        f"PREFLIGHT OK {git_sha()} device={device} cost={prereg.R1B_COST_HOURS} h "
+        f"PREFLIGHT OK {launch_sha} device={device} cost={prereg.R1B_COST_HOURS} h "
         f"cap={prereg.R1B_COST_CAP_HOURS} h",
         flush=True,
     )
-    return {"device": device, "curve": curve, "gate": gate}
+    return {
+        "device": device,
+        "curve": curve,
+        "gate": gate,
+        "git_sha": launch_sha,
+        "module_sha256": launch_modules,
+    }
 
 
 def run(*, root=None, ledger_path=None, heartbeat_path=None):
@@ -243,12 +272,18 @@ def run(*, root=None, ledger_path=None, heartbeat_path=None):
         )
         # Nothing between the arm and this write raises except a real failure; from here on the
         # attempt's output survives any post-processing error: `emit` rebuilds the record on CPU.
+        end_sha = git_sha()
+        if end_sha != pre["git_sha"]:
+            print(f"WARN HEAD moved during the run: {pre['git_sha']} -> {end_sha}", flush=True)
         run_sidecar(root).parent.mkdir(parents=True, exist_ok=True)
         phase25_run.atomic_write_json(
             run_sidecar(root),
             {
                 "run_id": RUN_ID,
-                "git_sha": git_sha(),
+                "git_sha_at_launch": pre["git_sha"],
+                "git_sha_at_end": end_sha,
+                "head_moved_during_run": end_sha != pre["git_sha"],
+                "module_sha256_at_launch": pre["module_sha256"],
                 "device": device,
                 "torch_version": torch.__version__,
                 "started_utc": started_utc,
@@ -314,12 +349,14 @@ def build_record(blob, *, root):
         )
     else:
         record["verdict"] = prereg.ENTRIES["not_replicated_rule"]["value"]
+    launch, now = blob["module_sha256_at_launch"], module_sha256()
     record["provenance"] = {
-        "run": {
-            key: blob[key]
-            for key in ("git_sha", "device", "torch_version", "started_utc", "finished_utc")
-        },
-        "module_sha256": {rel: _sha256(_ROOT / rel) for rel in MODULES},
+        "run": {key: blob[key] for key in RUN_PROVENANCE_KEYS},
+        "module_sha256_at_launch": launch,  # WR-01: what actually ran
+        "module_sha256": now,  # at write
+        "modules_changed_since_launch": sorted(
+            rel for rel in MODULES if launch.get(rel) != now[rel]
+        ),
         "head_at_write": git_sha(),
         "written_utc": _now(),
     }
