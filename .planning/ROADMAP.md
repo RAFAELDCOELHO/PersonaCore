@@ -1619,7 +1619,33 @@ replica of k = 78 is published beside the verdict under a tolerance fixed before
   4. No record exists before the pre-registration module and its ancestry test are committed;
      result records are write-once and committed only after Rafael writes approved. (REPRO-03)
 
-**Plans**: TBD
+**Plans**: 7 plans in 6 waves (the commit order is load-bearing: the prereg before any `results/phase37_*`, R1b's driver built before R1a's record freezes the prereg, every record committed only after Rafael's approved)
+
+Plans:
+**Wave 1**
+
+- [ ] 37-01-PLAN.md — `scripts/phase37_prereg.py` + ancestry test: the slot fill (k/target/non-target tolerance 0 as preferences, destroyed_pct 0.8396 pp derived from the records), "replicated", D-04/D-07/D-11/D-12/D-14 rules, D-06 cost guard
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 37-02-PLAN.md — `scripts/phase37_routes.py`: route_a..route_d + `rederive`, the defect-E/ERASE-08 wrapper `select_target_prefix`, natural reds on the committed records, pin and gate byte-unchanged
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 37-03-PLAN.md — `scripts/phase37_r1a.py`: the one CPU command (REPRO-01 exact assertions, (b) floor, recorded verdict), write-once record then verify mode
+- [ ] 37-04-PLAN.md — `scripts/phase37_r1b.py` + LaunchAgent: ledger gate, defect-E sweep, D-07 branch, erased arm at K = 48, REPLICATED/NOT_REPLICATED record; CPU-tested on the committed arm record
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 37-05-PLAN.md — R1a record: suite green, one command, Rafael's approved, single-path commit (freezes the prereg)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 37-06-PLAN.md — R1b launch: preflight + cost line, Rafael's approved, the one MPS attempt under the LaunchAgent, outputs verified (no commits)
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 37-07-PLAN.md — R1b records: Rafael's approved, ledger then arm record then summary record, full suite
 
 ### Phase 38: Exposure Rank at Larger Minted Sets
 
