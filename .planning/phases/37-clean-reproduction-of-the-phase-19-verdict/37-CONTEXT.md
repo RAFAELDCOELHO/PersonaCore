@@ -251,6 +251,9 @@ Each one goes into the Phase 37 pre-registration, which must be complete before 
 
 ### Plan-check rulings (Rafael, 2026-10-03, after checker iteration 2)
 
+Source for D-11..D-16: Rafael's answers to the multiple-choice menus in the `/gsd-plan-phase 37`
+Claude Code session of 2026-10-03, recorded here and in commits d710181 and 1eec113.
+
 - **D-15:** **D-11 governs EVERY relaunch.** A second R1b run of any kind needs Rafael's
   "approved", a ledger reconcile and a root-cause note first. That covers a crash, a completed
   NOT_REPLICATED, and a D-07 divergence (k ≠ 78 or a different set). This supersedes D-07's "A new
