@@ -248,6 +248,17 @@ Each one goes into the Phase 37 pre-registration, which must be complete before 
   curve rows go in REPLICATED and NOT_REPLICATED (D-07) alike, so a root-cause investigation has
   the data. This is description only and refines D-07's "only the k and the set difference": the
   verdict fields stay those two.
+
+### Plan-check rulings (Rafael, 2026-10-03, after checker iteration 2)
+
+- **D-15:** **D-11 governs EVERY relaunch.** A second R1b run of any kind needs Rafael's
+  "approved", a ledger reconcile and a root-cause note first. That covers a crash, a completed
+  NOT_REPLICATED, and a D-07 divergence (k ≠ 78 or a different set). This supersedes D-07's "A new
+  run needs only Rafael's approved".
+- **D-16:** **The attempt starts at the ledger start line.** A launch the driver refuses in
+  preflight (dirty tree, untracked prereg, failed `require_launch`, wrong device, adapter mismatch)
+  happens before the start line and runs nothing on MPS, so it is not an attempt. D-11's "Any R1b
+  launch counts" means any launch that has written its start line.
 </addendum>
 
 ---
