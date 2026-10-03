@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  PHASE 37 (REPRO-03) — the R1b MPS replica agent: `phase37_r1b.py run` is THE one R1b attempt
+  (D-11): the defect-E sweep, the D-07 decision, the erased arm at K = 48, the v6.0 ledger start
+  and end lines, beats on data/v6_mps_heartbeat.jsonl (phase36_ledger.HEARTBEAT_PATH, the driver's
+  default). A copy of com.personacore.phase36.probe.plist: the same caffeinate -dims wrapper, venv
+  python, working directory and environment; its own log pair.
+  Rafael copies it to ~/Library/LaunchAgents, then `launchctl bootstrap` and `launchctl kickstart`,
+  only after his "approved" and a passing `phase37_r1b.py preflight`; `launchctl bootout` once the
+  run has finished.
+
+  IT DOES NOT START ITSELF. RunAtLoad is false and KeepAlive is false: loading starts nothing; the
+  run begins only on `launchctl kickstart` and ends for good when the driver exits.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.personacore.phase37.r1b</string>
+
+  <!-- KEEPALIVE IS FALSE: a relaunch is a second attempt, which D-11 allows only after Rafael's
+       "approved", a ledger reconcile and a root-cause note — never a supervisor's restart. -->
+  <key>KeepAlive</key>
+  <false/>
+
+  <key>RunAtLoad</key>
+  <false/>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/caffeinate</string>
+    <string>-dims</string>
+    <string>/Users/juliorcoelho/PersonaCore/.venv/bin/python</string>
+    <string>/Users/juliorcoelho/PersonaCore/scripts/phase37_r1b.py</string>
+    <string>run</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/juliorcoelho/PersonaCore</string>
+
+  <key>StandardOutPath</key>
+  <string>/Users/juliorcoelho/PersonaCore/logs/phase37_r1b.out</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/juliorcoelho/PersonaCore/logs/phase37_r1b.err</string>
+
+  <key>ProcessType</key>
+  <string>Interactive</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <!-- D-44: any pytest run during the replica skips the MPS legs loudly instead of contending. -->
+    <key>PERSONACORE_SWEEP_ACTIVE</key>
+    <string>1</string>
+    <key>PATH</key>
+    <string>/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>PYTHONUNBUFFERED</key>
+    <string>1</string>
+  </dict>
+</dict>
+</plist>

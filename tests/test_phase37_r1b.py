@@ -47,7 +47,8 @@ import phase37_prereg  # noqa: E402  (same; never aliased)
 import phase37_r1b  # noqa: E402  (same; never aliased — _untested_functions counts by name)
 import phase37_routes  # noqa: E402  (same; never aliased)
 
-from test_phase29_prereg import _git  # noqa: E402
+from test_phase29_prereg import _git, _planted  # noqa: E402
+from test_phase36_prereg import _skip_failures, _untested_functions  # noqa: E402
 
 _REAL_SIDECAR = _ROOT / "data" / "phase37_r1b_run.json"
 
@@ -454,3 +455,63 @@ def test_main_dispatches_with_signature_valid_kwargs(monkeypatch, command):
 def test_main_refuses_anything_else(argv):
     with pytest.raises(SystemExit):
         phase37_r1b.main(argv)
+
+
+# =================================================================================================
+# (7) The LaunchAgent (a mirror of the phase36 probe agent), zero skips, every function called.
+# =================================================================================================
+
+_PLIST = _ROOT / "artifacts" / "com.personacore.phase37.r1b.plist"
+_PROBE_PLIST = _ROOT / "artifacts" / "com.personacore.phase36.probe.plist"
+
+
+def _plist(path):
+    import plistlib
+
+    return plistlib.loads(path.read_bytes())
+
+
+def test_plist_mirrors_the_phase36_probe_agent():
+    ours, probe = _plist(_PLIST), _plist(_PROBE_PLIST)
+    assert ours["Label"] == "com.personacore.phase37.r1b"
+    assert ours["KeepAlive"] is False and ours["RunAtLoad"] is False
+    args = ours["ProgramArguments"]
+    assert args[:3] == probe["ProgramArguments"][:3]
+    assert args[:2] == ["/usr/bin/caffeinate", "-dims"]
+    assert args[2].endswith("/.venv/bin/python")
+    assert args[3].endswith("scripts/phase37_r1b.py")
+    assert args[4:] == ["run"]
+    for key in ("WorkingDirectory", "ProcessType", "EnvironmentVariables"):
+        assert ours[key] == probe[key], key
+    assert ours["EnvironmentVariables"]["PERSONACORE_SWEEP_ACTIVE"] == "1"
+    # Suffix comparisons only, so the assertion holds on CI's root too.
+    assert ours["StandardOutPath"].endswith("logs/phase37_r1b.out")
+    assert ours["StandardErrorPath"].endswith("logs/phase37_r1b.err")
+    for key in ("StandardOutPath", "StandardErrorPath"):
+        assert ours[key] != probe[key]
+
+
+def test_main_parses_the_plist_arguments(monkeypatch):
+    seen = []
+    monkeypatch.setattr(phase37_r1b, "run", lambda **kw: seen.append(kw))
+    phase37_r1b.main(_plist(_PLIST)["ProgramArguments"][4:])
+    assert seen == [{}]
+
+
+def test_no_skips_in_this_file(tmp_path):
+    source = pathlib.Path(__file__).read_text(encoding="utf-8")
+    assert _skip_failures(source) == []
+    planted = source + '\n\ndef test_planted():\n    pytest.skip("x")\n'
+    assert _skip_failures(_planted(tmp_path, source, planted, "skip.py"))
+
+
+def test_every_phase37_r1b_function_has_a_cpu_test(tmp_path):
+    real = _SCRIPTS / "phase37_r1b.py"
+    before = real.read_bytes()
+    source = before.decode("utf-8")
+    test_source = pathlib.Path(__file__).read_text(encoding="utf-8")
+    assert _untested_functions("phase37_r1b", source, test_source) == []
+    planted = source + '\n\ndef planted_untested():\n    """Planted."""\n'
+    copied = _planted(tmp_path, source, planted, "untested.py")
+    assert _untested_functions("phase37_r1b", copied, test_source) == ["planted_untested"]
+    assert real.read_bytes() == before
