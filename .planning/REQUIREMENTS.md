@@ -729,8 +729,8 @@ reproducible by an outsider. No closed verdict is reopened; v6.0 publishes besid
 
 ### Cost probes and budget (COST)
 
-- [ ] **COST-01**: Every MPS front is priced by a probe on the M3 before any budget: the exact E1 reading (A2 only, on the eight facts' questions, at K = 16 and at K = 48) with its fixed cost separated from its per-draw cost, an M2 retrain plus its measurement, one DP configuration at the grid's longest step count, a sample of minting clearance and E5 scoring, and anchor-context generation; the Phase 31 probe, a different reading (416 extraction questions in four families plus taught and held-out recall), is recorded beside the E1 probe for comparison and never extrapolated from
-- [ ] **COST-02**: The v6.0 budget and its stop line are committed from the probes before the first measured point (the ARCAL pattern), inside Rafael's ceiling of 90 h of MPS for the whole milestone, probes included; if the probes show the fronts do not fit, the work halts and the cut options go to Rafael — no front is cut unilaterally
+- [x] **COST-01**: Every MPS front is priced by a probe on the M3 before any budget: the exact E1 reading (A2 only, on the eight facts' questions, at K = 16 and at K = 48) with its fixed cost separated from its per-draw cost, an M2 retrain plus its measurement, one DP configuration at the grid's longest step count, a sample of minting clearance and E5 scoring, and anchor-context generation; the Phase 31 probe, a different reading (416 extraction questions in four families plus taught and held-out recall), is recorded beside the E1 probe for comparison and never extrapolated from
+- [x] **COST-02**: The v6.0 budget and its stop line are committed from the probes before the first measured point (the ARCAL pattern), inside Rafael's ceiling of 90 h of MPS for the whole milestone, probes included; if the probes show the fronts do not fit, the work halts and the cut options go to Rafael — no front is cut unilaterally
 
 ### Erasure across facts, orderings and seeds (ERASE) — E1
 
@@ -815,8 +815,8 @@ reproducible by an outsider. No closed verdict is reopened; v6.0 publishes besid
 | PKG-06 | Phase 44 | Pending |
 | PKG-07 | Phase 44 | Pending |
 | PKG-08 | Phase 44 | Pending |
-| COST-01 | Phase 36 | Pending |
-| COST-02 | Phase 36 | Pending |
+| COST-01 | Phase 36 | Complete |
+| COST-02 | Phase 36 | Complete |
 | ERASE-03 | Phase 41 | Pending |
 | ERASE-04 | Phase 41 | Pending |
 | ERASE-05 | Phase 41 | Pending |

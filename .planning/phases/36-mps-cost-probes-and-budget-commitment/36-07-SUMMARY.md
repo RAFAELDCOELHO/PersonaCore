@@ -55,7 +55,7 @@ The out log, one line per front:
 ```
 
 Run span (record `provenance.run`): 2026-10-02T18:48:29Z → 22:28:06Z. The agent exited with
-status 0; the err log holds only ledger-report lines (0 `error`/`traceback` matches). Not yet
+status 0; the err log is empty (0 bytes; corrected after verification). Not yet
 unloaded at the time of writing (RunAtLoad/KeepAlive false, so it cannot relaunch).
 
 ## Task 3 — checks, emit, records, dry
