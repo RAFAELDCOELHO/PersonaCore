@@ -1914,7 +1914,7 @@ Next (v5.0): `/gsd:plan-phase 29`.
 | ----- | --------- | -------------- | ------ | --------- |
 | 35. v6.0 Pre-Registration and the Research It Rests On | v6.0 | 5/5 | Complete | 2026-10-01 — verification passed 5/5 SC (a4c7beb); Rafael's review corrections f13ad62/d850d0c + code-review fixes 1e1e1c5/3805beb; suite 3487/4/0 at bbcec95; zero gsd-sdk mutation handlers |
 | 36. MPS Cost Probes and Budget Commitment | v6.0 | 8/8 | Complete | 2026-10-02 — verification passed 4/4 SC (ecdce31); probe records + ledger f7b9962..0d59b6d; Rafael's ruling (spread_scaled, E6 a2_regenerated_entries = 0, no cuts) + approved → fill 9a5718a, budget 6b57231 (77.72 h, stop line 90 h, S = 5); review fixes b3ab341; suite 3782/4/0 at e72c17a; zero gsd-sdk mutation handlers |
-| 37. Clean Reproduction of the Phase 19 Verdict | v6.0 | 0/TBD | Not started | - |
+| 37. Clean Reproduction of the Phase 19 Verdict | v6.0 | 0/7 | Planned | - |
 | 38. Exposure Rank at Larger Minted Sets | v6.0 | 0/TBD | Not started | - |
 | 39. Instrument × Context 2×2 | v6.0 | 0/TBD | Not started | - |
 | 40. M2 Seed Noise Floor | v6.0 | 0/TBD | Not started | - |
