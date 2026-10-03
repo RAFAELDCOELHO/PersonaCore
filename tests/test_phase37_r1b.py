@@ -47,6 +47,7 @@ import phase37_prereg  # noqa: E402  (same; never aliased)
 import phase37_r1b  # noqa: E402  (same; never aliased — _untested_functions counts by name)
 import phase37_routes  # noqa: E402  (same; never aliased)
 
+from personacore.provenance import git_sha  # noqa: E402
 from test_phase29_prereg import _git, _planted  # noqa: E402
 from test_phase36_prereg import _skip_failures, _untested_functions  # noqa: E402
 
@@ -437,18 +438,21 @@ def test_build_record_without_the_arm(rig, curve):
 
 
 @pytest.mark.parametrize("command", ["preflight", "run", "emit"])
-def test_main_dispatches_with_signature_valid_kwargs(monkeypatch, command):
+def test_main_dispatches_with_signature_valid_kwargs(tmp_path, monkeypatch, command):
     real = getattr(phase37_r1b, command)
     seen = []
 
     def recorder(*args, **kwargs):
         inspect.signature(real).bind(*args, **kwargs)
-        seen.append((args, kwargs))
+        # WR-05: whatever the launch cwd, the command runs at the repo root, so every git_sha()
+        # (the driver's and the pin's arm record) names this repository's HEAD.
+        seen.append((args, kwargs, pathlib.Path.cwd(), git_sha()))
         return command
 
     monkeypatch.setattr(phase37_r1b, command, recorder)
+    monkeypatch.chdir(tmp_path)
     assert phase37_r1b.main([command]) == command
-    assert seen == [((), {})]
+    assert seen == [((), {}, _ROOT, _git("rev-parse", "HEAD"))]
 
 
 @pytest.mark.parametrize("argv", [["bogus"], [], ["run", "extra"]])
@@ -491,7 +495,8 @@ def test_plist_mirrors_the_phase36_probe_agent():
         assert ours[key] != probe[key]
 
 
-def test_main_parses_the_plist_arguments(monkeypatch):
+def test_main_parses_the_plist_arguments(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)  # main chdirs to the repo root; monkeypatch restores the cwd
     seen = []
     monkeypatch.setattr(phase37_r1b, "run", lambda **kw: seen.append(kw))
     phase37_r1b.main(_plist(_PLIST)["ProgramArguments"][4:])

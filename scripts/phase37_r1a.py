@@ -23,6 +23,7 @@ import datetime
 import fnmatch
 import hashlib
 import json
+import os
 import pathlib
 import re
 import subprocess
@@ -211,7 +212,10 @@ def check_record(derived, path):
 def main(argv=None, *, out_root=None):
     if argv:
         raise SystemExit(__doc__)
-    base = pathlib.Path(out_root) if out_root is not None else _ROOT
+    base = pathlib.Path(out_root).resolve() if out_root is not None else _ROOT
+    # WR-05: git_sha() reads the process cwd; run at the repo root whatever the launch directory,
+    # so the record never names "unknown" or another checkout's HEAD.
+    os.chdir(_ROOT)
     path = base / prereg.R1A_RECORD
     started = _now()
     derived = derive()

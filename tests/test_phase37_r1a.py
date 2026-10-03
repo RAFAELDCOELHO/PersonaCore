@@ -175,6 +175,17 @@ def test_main_writes_once_with_hashes_and_provenance(tmp_path, recorder, derived
     assert len(recorder) == 1
 
 
+def test_main_from_another_cwd_records_the_repo_sha(tmp_path, recorder, monkeypatch):
+    """WR-05: launched from outside the repo, the record still names the repo's HEAD."""
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+    assert phase37_r1a.main([], out_root=tmp_path / "out") == 0
+    record = json.loads(_tmp_record(tmp_path / "out").read_text(encoding="utf-8"))
+    head = _git("rev-parse", "HEAD")
+    assert record["provenance"]["run"]["git_sha"] == record["provenance"]["head_at_write"] == head
+
+
 @pytest.mark.parametrize("edit", ["assertion", "input_sha256"])
 def test_an_edited_record_fails_verification(tmp_path, recorder, edit):
     phase37_r1a.main([], out_root=tmp_path)

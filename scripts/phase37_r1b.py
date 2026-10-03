@@ -37,6 +37,7 @@ import datetime
 import fnmatch
 import hashlib
 import json
+import os
 import pathlib
 import sys
 import time
@@ -335,6 +336,9 @@ def main(argv=None):
     commands = {"preflight": preflight, "run": run, "emit": emit}
     if len(argv) != 1 or argv[0] not in commands:
         raise SystemExit(__doc__)
+    # WR-05: git_sha() (this driver's and the pin arm record's) reads the process cwd; run at the
+    # repo root whatever the launch directory, so no record names "unknown" or another checkout.
+    os.chdir(_ROOT)
     return commands[argv[0]]()
 
 
