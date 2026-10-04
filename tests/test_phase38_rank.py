@@ -65,13 +65,18 @@ def _real_sidecars():
     return sorted((_REPO / "data").glob("phase38_rank_*"))
 
 
+_REAL_IDENTITY = _REPO / "data" / "phase38_rehearsal.json"
+
+
 @pytest.fixture(autouse=True)
 def _real_tree_untouched():
     before = _git("status", "--porcelain", "--", "results", "ledger")
     sidecars = _real_sidecars()
+    identity = _REAL_IDENTITY.exists()  # D-34: no test creates or deletes the real identity
     yield
     assert _git("status", "--porcelain", "--", "results", "ledger") == before
     assert _real_sidecars() == sidecars
+    assert _REAL_IDENTITY.exists() == identity
 
 
 def _read(rel):
@@ -974,6 +979,7 @@ def test_a_perturbed_cpu_nll_is_counted_and_a_subset_has_no_events(rig):
     assert (cpu["gate_cells"], cpu["gate_differing"]) == (1, 0)
     assert record["events"] is None and "k8" in record["events_reason"]
     assert record["set_sizes"] == {"pet_name": 8}
+    assert record["rehearsal_disclosure"] == {"this_is_the_rehearsal": True}
 
 
 def test_a_gate_failed_run_emits_the_gate_rows_only(rig):
@@ -987,6 +993,7 @@ def test_a_gate_failed_run_emits_the_gate_rows_only(rig):
     assert record["gate"]["passed"] is False
     assert not {"readings", "events", "sensitivity_numeric", "cpu_crosscheck", "a2"} & set(record)
     assert record["approval"] == phase38_prereg.approval_block()
+    assert record["rehearsal_disclosure"] == {"this_is_the_rehearsal": True}
     assert (rig.root / phase38_prereg.RANK_RECORD).exists()
 
 
@@ -1022,6 +1029,170 @@ def test_emit_refusals_write_nothing(rig, monkeypatch):
     with pytest.raises(SystemExit, match=r"REFUSING to overwrite"):
         phase38_rank.emit(root=rig.root)
     assert out.read_text(encoding="utf-8") == "{}"
+
+
+# =================================================================================================
+# (4c) D-34: the rehearsal identity, written by run() before the first score; the disclosure of
+# every later commit to a scoring module; the preflight gate on the real root.
+# =================================================================================================
+
+_DISCLOSED = ("scripts/phase38_rank.py", "scripts/phase38_sizes_prereg.py")
+
+
+def _identity(path, **shape):
+    shape = {"readings": list(READINGS), "slots": list(SLOTS), "max_size": 8, **shape}
+    return phase38_rank.record_rehearsal(path, **shape)
+
+
+def test_disclosed_modules_and_the_identity_path(tmp_path, monkeypatch):
+    assert phase38_rank.DISCLOSED_MODULES == _DISCLOSED
+    assert set(_DISCLOSED) <= set(phase38_rank.MODULES)
+    assert phase38_rank.rehearsal_identity_path() == _REAL_IDENTITY
+    monkeypatch.setattr(phase38_rank, "_ROOT", tmp_path)
+    assert phase38_rank.rehearsal_identity_path() == tmp_path / "data" / "phase38_rehearsal.json"
+
+
+def test_record_rehearsal_keeps_the_first_identity(tmp_path, capsys):
+    path = tmp_path / "id.json"
+    first = _identity(path, slots=["pet_name", "birth_year"])
+    assert f"REHEARSAL RECORDED {_git('rev-parse', 'HEAD')}" in capsys.readouterr().out
+    on = _sidecar(path)
+    assert first == {"status": "recorded", **on}
+    assert on["git_sha"] == _git("rev-parse", "HEAD")
+    assert on["module_sha256"] == {
+        rel: hashlib.sha256((_REPO / rel).read_bytes()).hexdigest() for rel in _DISCLOSED
+    }
+    assert (on["readings"], on["slots"], on["max_size"]) == (
+        list(READINGS),
+        ["pet_name", "birth_year"],
+        8,
+    )
+    assert datetime.datetime.fromisoformat(on["started_utc"]).tzinfo is not None
+    before = path.read_bytes()
+    again = _identity(path, slots=["street"], max_size=32)
+    assert again == {"status": "kept", **on}
+    assert path.read_bytes() == before
+
+
+def test_the_identity_is_written_before_the_first_score(rig, tmp_path, monkeypatch):
+    """B-1: a crash on the FIRST scoring call leaves the identity and no sidecar; a preflight
+    refusal leaves no identity; a rerun after the crash keeps the first identity."""
+    identity = tmp_path / "id.json"
+    shape = {"readings": ("k0",), "slots": ("pet_name",), "max_size": 8}
+
+    def dirty(**kw):
+        raise SystemExit("[phase38_rank] dirty tree")
+
+    monkeypatch.setattr(phase38_rank, "refuse_if_dirty", dirty)
+    with pytest.raises(SystemExit, match=r"dirty tree"):
+        phase38_rank.run(root=rig.root, **rig.paths, **shape, rehearsal_identity=identity)
+    assert not identity.exists() and not rig.paths["ledger_path"].exists()
+    monkeypatch.setattr(phase38_rank, "refuse_if_dirty", lambda **kw: None)
+    rig.crash = lambda reading, slot, value: True
+    with pytest.raises(RuntimeError, match="scorer died"):
+        phase38_rank.run(root=rig.root, **rig.paths, **shape, rehearsal_identity=identity)
+    assert len(rig.log) == 1  # the crash came on the very first score
+    assert identity.exists()
+    assert list((rig.root / "data").iterdir()) == []
+    assert [x["event"] for x in _lines(rig)] == ["start"]
+    first = identity.read_bytes()
+    second = tmp_path / "second"
+    (second / "data").mkdir(parents=True)
+    rig.crash = None
+    paths = {"ledger_path": second / "ledger.jsonl", "heartbeat_path": second / "hb.jsonl"}
+    assert phase38_rank.run(root=second, **paths, **shape, rehearsal_identity=identity) == "SCORED"
+    assert identity.read_bytes() == first
+
+
+def test_the_real_root_never_records_a_rehearsal(tmp_path):
+    identity, ledger = tmp_path / "id.json", tmp_path / "ledger.jsonl"
+    with pytest.raises(SystemExit, match=r"^\[phase38_rank\] .*full"):
+        phase38_rank.run(ledger_path=ledger, rehearsal_identity=identity)
+    assert not identity.exists() and not ledger.exists()
+
+
+def _git_lines(*args):
+    return [line for line in _git(*args).splitlines() if line]
+
+
+def test_rehearsal_disclosure_lists_every_commit_to_a_scoring_module():
+    first = _git_lines("log", "--reverse", "--format=%H", "--", "tests/test_phase38_rank.py")[0]
+    identity = {
+        "git_sha": first,
+        "module_sha256": {
+            rel: hashlib.sha256(_git("show", f"{first}:{rel}").encode() + b"\n").hexdigest()
+            for rel in _DISCLOSED
+        },
+        "readings": list(READINGS),
+        "slots": ["pet_name", "birth_year"],
+        "max_size": 8,
+        "started_utc": "2026-10-04T00:00:00+00:00",
+    }
+    head = _git("rev-parse", "HEAD")
+    launch = phase38_rank.module_sha256()
+    disclosure = phase38_rank.rehearsal_disclosure(
+        identity, launch_git_sha=head, launch_module_sha256=launch
+    )
+    commits = disclosure["commits"]
+    assert commits and disclosure["driver_changed"] is True
+    assert disclosure["changed"]["scripts/phase38_rank.py"] is True
+    for commit in commits:
+        touched = set(_git_lines("show", "--name-only", "--format=", commit["sha"]))
+        assert commit["modules"] == [rel for rel in _DISCLOSED if rel in touched]
+        assert commit["modules"], commit
+        assert commit["reason"] == _git("log", "-1", "--format=%s", commit["sha"])
+    assert _git_lines("log", "--format=%H", f"{first}..{head}", "--", *_DISCLOSED) == [
+        c["sha"] for c in commits
+    ]
+    assert disclosure["slice_read"] == {
+        "readings": list(READINGS),
+        "slots": ["pet_name", "birth_year"],
+        "max_size": 8,
+    }
+    assert disclosure["statement"] == (
+        "The CPU rehearsal (38-07) read pet_name, birth_year at |R| 8 under 8 readings, minted "
+        "candidates included, before the driver review and the MPS run (D-34)."
+    )
+    assert disclosure["launch_module_sha256"] == {rel: launch[rel] for rel in _DISCLOSED}
+    assert (disclosure["rehearsal_git_sha"], disclosure["launch_git_sha"]) == (first, head)
+    same = {**identity, "git_sha": head, "module_sha256": {r: launch[r] for r in _DISCLOSED}}
+    equal = phase38_rank.rehearsal_disclosure(
+        same, launch_git_sha=head, launch_module_sha256=launch
+    )
+    assert equal["commits"] == [] and equal["driver_changed"] is False
+    assert equal["changed"] == {rel: False for rel in _DISCLOSED}
+    drifted = {**same, "module_sha256": {**same["module_sha256"], _DISCLOSED[1]: "0" * 64}}
+    with pytest.raises(SystemExit, match=r"^\[phase38_rank\] .*without a commit"):
+        phase38_rank.rehearsal_disclosure(drifted, launch_git_sha=head, launch_module_sha256=launch)
+
+
+def test_preflight_on_the_real_root_requires_the_identity(rig, monkeypatch):
+    monkeypatch.setattr(phase38_rank, "_ROOT", rig.root)
+    with pytest.raises(SystemExit, match=r"^\[phase38_rank\] .*D-34"):
+        phase38_rank.preflight(ledger_path=rig.paths["ledger_path"])
+    assert not rig.paths["ledger_path"].exists() and rig.launches == []
+    _identity(phase38_rank.rehearsal_identity_path())
+    assert phase38_rank.rehearsal_identity_path() == rig.root / "data" / "phase38_rehearsal.json"
+    assert phase38_rank.preflight(ledger_path=rig.paths["ledger_path"])["device"] == "mps"
+
+
+@pytest.mark.parametrize("gate_fails", [False, True])
+def test_the_real_root_record_carries_the_disclosure(rig, monkeypatch, gate_fails):
+    monkeypatch.setattr(phase38_rank, "_ROOT", rig.root)
+    _identity(phase38_rank.rehearsal_identity_path(), slots=["pet_name", "birth_year"])
+    if gate_fails:
+        rig.table[("k32", "street", TAUGHT["street"])] = 3.0
+    status = phase38_rank.run(**rig.paths)
+    assert status == ("GATE_FAILED" if gate_fails else "SCORED")
+    if not gate_fails:
+        phase38_rank.crosscheck()
+    record = phase38_rank.emit()
+    disclosure = record["rehearsal_disclosure"]
+    head = _git("rev-parse", "HEAD")
+    assert (disclosure["rehearsal_git_sha"], disclosure["launch_git_sha"]) == (head, head)
+    assert disclosure["commits"] == [] and disclosure["driver_changed"] is False
+    assert disclosure["slice_read"]["slots"] == ["pet_name", "birth_year"]
+    assert (rig.root / phase38_prereg.RANK_RECORD).exists()
 
 
 # =================================================================================================

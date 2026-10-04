@@ -78,6 +78,12 @@ MODULES = (
     "scripts/phase38_rank.py",
     "scripts/teach_persona.py",
 )
+# D-34: the modules that decide what is scored and are NOT frozen before the rehearsal
+# (scripts/phase38_prereg.py is frozen by the minting record; the other MODULES are pinned
+# instruments). Every commit touching one of them after the rehearsal is disclosed with its reason.
+DISCLOSED_MODULES = ("scripts/phase38_rank.py", SIZES_FILE)
+if not set(DISCLOSED_MODULES) <= set(MODULES):
+    raise SystemExit(f"[phase38_rank] {DISCLOSED_MODULES} is not a subset of MODULES")
 RUN_PROVENANCE_KEYS = (
     "git_sha_at_launch",
     "git_sha_at_end",
@@ -143,6 +149,88 @@ def outputs(root):
         cpu_sidecar(root),
         *(nll_sidecar(root, reading) for reading in prereg.READINGS),
     )
+
+
+def rehearsal_identity_path():
+    """D-34: the gitignored rehearsal identity under the output root (read at call time)."""
+    return pathlib.Path(_ROOT) / "data" / "phase38_rehearsal.json"
+
+
+def record_rehearsal(path, *, readings, slots, max_size):
+    """D-34: the FIRST attempt that passed preflight is THE rehearsal; its identity is never
+    overwritten. Reads no sidecar."""
+    path = pathlib.Path(path)
+    if path.exists():
+        kept = _load(path)
+        print(f"REHEARSAL KEPT {kept['git_sha']}", flush=True)
+        return {"status": "kept", **kept}
+    identity = {
+        "git_sha": git_sha(),
+        "module_sha256": {rel: _sha256(_REPO / rel) for rel in DISCLOSED_MODULES},
+        "readings": list(readings),
+        "slots": list(slots),
+        "max_size": max_size,
+        "started_utc": _now(),
+    }
+    phase25_run.atomic_write_json(path, identity)
+    print(f"REHEARSAL RECORDED {identity['git_sha']}", flush=True)
+    return {"status": "recorded", **identity}
+
+
+def rehearsal_disclosure(identity, *, launch_git_sha, launch_module_sha256):
+    """D-34: every commit touching a DISCLOSED_MODULES file between the rehearsal and the launch,
+    its subject as the reason, and per-module changed flags."""
+    log = subprocess.run(
+        (
+            "git",
+            "log",
+            "--format=%H%x09%s",
+            f"{identity['git_sha']}..{launch_git_sha}",
+            "--",
+            *DISCLOSED_MODULES,
+        ),
+        cwd=_REPO,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    commits = []
+    for line in log.splitlines():
+        sha, reason = line.split("\t", 1)
+        touched = subprocess.run(
+            ("git", "show", "--name-only", "--format=", sha),
+            cwd=_REPO,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.split()
+        modules = [rel for rel in DISCLOSED_MODULES if rel in touched]
+        commits.append({"sha": sha, "reason": reason, "modules": modules})
+    changed = {
+        rel: launch_module_sha256[rel] != identity["module_sha256"][rel]
+        for rel in DISCLOSED_MODULES
+    }
+    driver_changed = any(changed.values())
+    _prove(
+        not driver_changed or commits,
+        "a scoring module changed after the rehearsal without a commit (D-34)",
+    )
+    slice_read = {key: identity[key] for key in ("readings", "slots", "max_size")}
+    return {
+        "statement": (
+            f"The CPU rehearsal (38-07) read {', '.join(slice_read['slots'])} at "
+            f"|R| {slice_read['max_size']} under {len(slice_read['readings'])} readings, minted "
+            "candidates included, before the driver review and the MPS run (D-34)."
+        ),
+        "slice_read": slice_read,
+        "rehearsal_git_sha": identity["git_sha"],
+        "rehearsal_module_sha256": identity["module_sha256"],
+        "launch_git_sha": launch_git_sha,
+        "launch_module_sha256": {rel: launch_module_sha256[rel] for rel in DISCLOSED_MODULES},
+        "changed": changed,
+        "driver_changed": driver_changed,
+        "commits": commits,
+    }
 
 
 def m2_adapter_path():
@@ -343,6 +431,11 @@ def preflight(*, root=None, ledger_path=None, device=None, readings=None):
         f"E5 runs on MPS on the real root (D-17); resolved {resolved!r}. A CPU device is only for "
         "a rehearsal root outside the repository",
     )
+    _prove(
+        not _is_real(root) or rehearsal_identity_path().exists(),
+        f"{rehearsal_identity_path()} is missing — D-34: run the 38-07 rehearsal first; the "
+        "real run launches only after the rehearsal identity is recorded",
+    )
     for path in outputs(root):
         _prove(not path.exists(), f"{path} exists: the E5 scoring has already run")
     _prove(
@@ -414,6 +507,7 @@ def run(
     readings=None,
     slots=None,
     max_size=None,
+    rehearsal_identity=None,
 ):
     """THE run: preflight, ledger start, the D-18 gate pass, the scoring pass, sidecars, ledger
     end. No in-run stop timer: the committed stop is checked by require_launch (D-23)."""
@@ -422,9 +516,10 @@ def run(
 
     root = pathlib.Path(root) if root is not None else _ROOT
     _prove(
-        not _is_real(root) or (readings is None and slots is None and max_size is None),
-        "the real root runs the full READINGS x SLOTS x E5_SET_SIZES shape only; a partial shape "
-        "is a rehearsal into a tmp root outside the repository",
+        not _is_real(root)
+        or (readings is None and slots is None and max_size is None and rehearsal_identity is None),
+        "the real root runs the full READINGS x SLOTS x E5_SET_SIZES shape only and records no "
+        "rehearsal; a partial shape is a rehearsal into a tmp root outside the repository",
     )
     pre = preflight(root=root, ledger_path=ledger_path, device=device, readings=readings)
     readings, device = pre["readings"], pre["device"]
@@ -433,6 +528,8 @@ def run(
     heartbeat_path = heartbeat_path or phase36_ledger.HEARTBEAT_PATH
     state = {"point": RUN_ID, "stage": "gate", "shape": None, "draw_index": None}
     phase25_run.beat(heartbeat_path, **state)  # the thread's first beat waits a full period
+    if rehearsal_identity is not None:  # D-34: before the first value is scored
+        record_rehearsal(rehearsal_identity, readings=readings, slots=list(plan), max_size=max_size)
     stop, thread = phase25_run.start_heartbeat(heartbeat_path, state)
     started = _now()
     try:
@@ -669,6 +766,16 @@ def build_record(root):
             "e5_stop_hours": prereg.E5_STOP_HOURS,
         },
     }
+    if _is_real(root):
+        identity = rehearsal_identity_path()
+        _prove(identity.exists(), f"{identity} is missing: the D-34 disclosure needs it")
+        record["rehearsal_disclosure"] = rehearsal_disclosure(
+            _load(identity),
+            launch_git_sha=blob["git_sha_at_launch"],
+            launch_module_sha256=blob["module_sha256_at_launch"],
+        )
+    else:
+        record["rehearsal_disclosure"] = {"this_is_the_rehearsal": True}
     sidecars = {"run": _sha256(run_sidecar(root)), "gate": blob["gate_sha256"]}
     if blob["status"] == "SCORED":
         cpu_path = cpu_sidecar(root)
