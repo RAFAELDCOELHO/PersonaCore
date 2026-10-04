@@ -5,6 +5,8 @@ What this file proves:
   read from the committed minting record through phase38_prereg.max_set_size, equal to the
   record's own max_set_size, never typed;
 - the declared sizes fit the committed Phase 36 E5 caps (sets and max_set_size, never prefixes);
+- it is committed after the minting record and before every other results/phase38_* record
+  (Phase 35 legs (a)/(b)), types no size and never passes prefixes to the caps check;
 - the file imports only json, pathlib and three torch-free modules, and importing it opens no
   checkpoint (tests/test_phase36_caps.py exec's it on ubuntu CI). It is not torch-free: the
   module-level caps call reaches torch through phase35_prereg.seed_list (38-05 false premise).
@@ -35,8 +37,9 @@ import phase35_prereg  # noqa: E402  (scripts/ is not a package)
 import phase36_caps  # noqa: E402  (same)
 import phase38_prereg  # noqa: E402  (same)
 
-from test_phase29_prereg import _planted  # noqa: E402
-from test_phase36_prereg import _HEAVY  # noqa: E402
+from test_phase29_prereg import _assert_frozen_before, _git, _planted  # noqa: E402
+from test_phase36_prereg import _HEAVY, _skip_failures  # noqa: E402
+from test_phase38_prereg import _first_add, _phase38_records, _strictly_before  # noqa: E402
 
 SIZES = "scripts/phase38_sizes_prereg.py"
 
@@ -141,3 +144,102 @@ def test_importing_the_sizes_file_opens_no_checkpoint():
     # NON-VACUITY: the same hook sees a planted checkpoint open (the open fails; the event fires).
     planted = "try:\n    open('checkpoints/planted.pt')\nexcept OSError:\n    pass"
     assert _checkpoint_opens(planted) == ["checkpoints/planted.pt"]
+
+
+# =================================================================================================
+# (2) ORDERING (Phase 35 legs (a)/(b), T-38-20): after the minting record, before every other
+# phase-38 record. Honest at zero scoring records and after them.
+# =================================================================================================
+
+
+def _first_commit(path):
+    return _git("log", "--format=%H", "--", path).split()[-1]
+
+
+def _scoring_records():
+    return [p for p in _phase38_records() if p != phase38_prereg.MINTING_RECORD]
+
+
+def test_minting_record_precedes_the_sizes_file():
+    minting = _first_add(phase38_prereg.MINTING_RECORD)
+    assert _strictly_before(minting, _first_commit(SIZES))
+    # NON-VACUITY (natural RED): the reverse relation is False.
+    assert not _strictly_before(_first_commit(SIZES), minting)
+
+
+def test_sizes_file_is_frozen_before_every_other_phase38_record():
+    _assert_frozen_before(SIZES, _scoring_records())
+    # NON-VACUITY (natural RED): the sizes file was committed after the minting record.
+    with pytest.raises(subprocess.CalledProcessError):
+        _assert_frozen_before(SIZES, [phase38_prereg.MINTING_RECORD])
+
+
+def test_this_test_file_is_first_added_before_every_scoring_record():
+    # Only the FIRST add: a later fix to this file must not redden the guard forever.
+    mine = _first_add("tests/test_phase38_sizes_prereg.py")
+    for record in _scoring_records():
+        assert _strictly_before(mine, _first_add(record)), record
+    # NON-VACUITY: the same check against the minting record (added before this file) is False.
+    assert not _strictly_before(mine, _first_add(phase38_prereg.MINTING_RECORD))
+
+
+# =================================================================================================
+# (3) NOTHING TYPED, NO PREFIXES IN THE CAPS CALL (T-38-21, T-38-22), ZERO SKIPS.
+# =================================================================================================
+
+_TYPED = {512, 220, 2048}
+
+
+def _typed_sizes(source):
+    constants = [n for n in ast.walk(ast.parse(source)) if isinstance(n, ast.Constant)]
+    assert constants, "meta-guard: no Constant node, the literal walk is vacuous"
+    return [
+        n.lineno
+        for n in constants
+        if type(n.value) is int and n.value in _TYPED  # str docstrings never match
+    ]
+
+
+def test_no_size_is_typed(tmp_path):
+    source = (_ROOT / SIZES).read_text(encoding="utf-8")
+    assert _typed_sizes(source) == []
+    assert _typed_sizes(_planted(tmp_path, source, source + "\nX = 220\n", "typed.py"))
+
+
+def _caps_call_failures(source):
+    calls = [
+        n
+        for n in ast.walk(ast.parse(source))
+        if isinstance(n, ast.Call)
+        and isinstance(n.func, ast.Attribute)
+        and n.func.attr == "check_unit_caps"
+    ]
+    if len(calls) != 1:
+        return [f"{len(calls)} check_unit_caps calls, expected exactly one"]
+    (call,) = calls
+    failures = [f"keyword {k.arg}=" for k in call.keywords if k.arg == "prefixes"]
+    starred = [k.value for k in call.keywords if k.arg is None]
+    if not any(
+        isinstance(v, ast.Call)
+        and isinstance(v.func, ast.Attribute)
+        and v.func.attr == "counts_for"
+        for v in starred
+    ):
+        failures.append("no **counts_for(...) argument")
+    return failures
+
+
+def test_caps_call_never_passes_prefixes(tmp_path):
+    source = (_ROOT / SIZES).read_text(encoding="utf-8")
+    assert _caps_call_failures(source) == []
+    planted = source.replace("E5_SET_SIZES))", "E5_SET_SIZES), prefixes=8)")
+    assert _caps_call_failures(_planted(tmp_path, source, planted, "prefixes.py")) == [
+        "keyword prefixes="
+    ]
+
+
+def test_no_skips_in_this_file(tmp_path):
+    source = pathlib.Path(__file__).read_text(encoding="utf-8")
+    assert _skip_failures(source) == []
+    planted = source + '\n\ndef test_planted():\n    pytest.skip("x")\n'
+    assert _skip_failures(_planted(tmp_path, source, planted, "skip.py"))
