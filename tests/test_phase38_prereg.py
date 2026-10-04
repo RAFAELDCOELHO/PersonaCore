@@ -725,3 +725,187 @@ def test_every_phase38_prereg_function_has_a_cpu_test(tmp_path):
     copied = _planted(tmp_path, source, planted, "untested.py")
     assert _untested_functions("phase38_prereg", copied, test_source) == ["planted_untested"]
     assert real.read_bytes() == before
+
+
+# =================================================================================================
+# (11) THE MINTING RULE AS CODE (plan 38-02): the report parser, the exclusion sets, levenshtein,
+# draw_name and mint_names under the global stop. Small per_slot only: the real 2048-per-slot mint
+# is plan 04's (Pitfall 8).
+# =================================================================================================
+
+
+@pytest.fixture(scope="module")
+def tok():
+    from personacore.tokenizer import from_json
+
+    return from_json(_ROOT / "artifacts" / "tokenizer.json")
+
+
+@pytest.fixture(scope="module")
+def parsed():
+    text = (_ROOT / phase38_prereg.PHASE17_REPORT).read_text(encoding="utf-8")
+    return phase38_prereg.parse_completions(text)
+
+
+def _flat_questions(questions_by_slot):
+    return tuple(q for slot in phase38_prereg.SLOTS for q in questions_by_slot[slot])
+
+
+@pytest.fixture(scope="module")
+def minted24(tok, parsed):
+    completions, questions = parsed
+    return phase38_prereg.mint_names(
+        tok,
+        completions,
+        _flat_questions(questions),
+        per_slot=24,
+        seed=phase35_prereg.seed_list()[0],
+    )
+
+
+def test_parse_completions_on_the_tracked_report(parsed):
+    import phase17_isolation  # torch at import: tests only
+
+    completions, questions = parsed
+    assert tuple(completions) == phase38_prereg.SLOTS
+    assert tuple(questions) == phase38_prereg.SLOTS
+    assert {len(c) for c in completions.values()} == {phase38_prereg.COMPLETIONS_PER_SLOT}
+    assert sum(map(len, completions.values())) == phase38_prereg.COMPLETIONS_TOTAL
+    held_out = phase17_isolation.held_out_by_slot()
+    assert tuple(held_out) == phase38_prereg.SLOTS
+    for slot in phase38_prereg.SLOTS:
+        assert list(questions[slot]) == [item.question for item in held_out[slot]], slot
+    assert sum(map(len, questions.values())) == 104
+    text = (_ROOT / phase38_prereg.PHASE17_REPORT).read_text(encoding="utf-8")
+    assert hashlib.sha256(text.encode("utf-8")).hexdigest() == (
+        phase38_prereg.PHASE17_REPORT_SHA256
+    )
+
+
+def test_parse_completions_refuses_a_missing_line_or_header():
+    text = (_ROOT / phase38_prereg.PHASE17_REPORT).read_text(encoding="utf-8")
+    lines = text.splitlines(keepends=True)
+    warm = next(i for i, line in enumerate(lines) if line.startswith("  - warm 2: `"))
+    header = next(i for i, line in enumerate(lines) if line.startswith("### Slot `cat_name`"))
+    for broken in (lines[:warm] + lines[warm + 1 :], lines[:header] + lines[header + 1 :]):
+        with pytest.raises(SystemExit, match="D-24"):
+            phase38_prereg.parse_completions("".join(broken))
+
+
+def test_taught_anywhere_and_forbidden():
+    taught = phase38_prereg.taught_anywhere()
+    assert len(taught) == 118
+    assert len(phase38_prereg.forbidden_for_substring()) == 123
+    assert {fact.value for fact in phase14_factset.LOCKED_FACTS} <= taught
+    assert taught <= phase38_prereg.forbidden_for_substring()
+
+
+def test_levenshtein_witnesses():
+    assert phase38_prereg.levenshtein("zorr", "zorp") == 1
+    assert phase38_prereg.levenshtein("tarrowgate", "marrowgate") == 1
+    assert phase38_prereg.levenshtein("abc", "abc") == 0
+    assert phase38_prereg.levenshtein("", "ab") == 2
+    assert phase38_prereg.levenshtein("kitten", "sitting") == 3
+
+
+def test_draw_name_is_deterministic_lowercase_ascii():
+    first = phase38_prereg.draw_name(random.Random(5))
+    assert first == phase38_prereg.draw_name(random.Random(5))
+    rng = random.Random(5)
+    for _ in range(200):
+        name = phase38_prereg.draw_name(rng)
+        assert name and name.isascii() and name.isalpha() and name.islower(), name
+
+
+def test_mint_names_holds_every_filter(tok, parsed, minted24):
+    completions, questions = parsed
+    flat = _flat_questions(questions)
+    taught = phase38_prereg.taught_anywhere()
+    lists = minted24["lists"]
+    assert minted24["reached"] is True
+    assert tuple(lists) == phase38_prereg.NAME_SLOTS
+    by_slot = {fact.slot: fact.value for fact in phase14_factset.LOCKED_FACTS}
+    assert minted24["taught_token_count"] == {
+        slot: len(tok.encode(by_slot[slot])) for slot in phase38_prereg.NAME_SLOTS
+    }
+    norm = phase14_factset.normalize_for_match
+    question_norm = [norm(q) for q in flat]
+    for slot, values in lists.items():
+        assert len(values) >= 24, slot
+        assert len(set(values)) == len(values)
+        for v in values:
+            assert v.isascii() and v.isalpha() and v.islower() and " " not in v
+            assert len(tok.encode(v)) == minted24["taught_token_count"][slot]
+            assert v not in taught
+            assert all(phase38_prereg.levenshtein(v, t) > 1 for t in taught), v
+            assert phase14_factset.exact_match_clean(completions[slot], v), v
+            assert not any(norm(v) in q for q in question_norm), v
+    every = [v for values in lists.values() for v in values]
+    pool = every + sorted(phase38_prereg.forbidden_for_substring())
+    for v in every:
+        assert not any(o != v and (norm(v) in norm(o) or norm(o) in norm(v)) for o in pool), v
+    for slot in phase38_prereg.NAME_SLOTS:
+        rejections = minted24["rejections"][slot]
+        assert tuple(rejections) == phase38_prereg.NAME_FILTERS
+        assert all(type(n) is int and n >= 0 for n in rejections.values())
+    assert set(minted24["stream"]) == {"draws", "token_count", "duplicate"}
+    assert minted24["stop_draw"] == minted24["stream"]["draws"]
+
+
+def test_mint_names_is_deterministic(tok, parsed, minted24):
+    completions, questions = parsed
+    again = phase38_prereg.mint_names(
+        tok,
+        completions,
+        _flat_questions(questions),
+        per_slot=24,
+        seed=phase35_prereg.seed_list()[0],
+    )
+    assert again == minted24
+
+
+def test_mint_names_is_prefix_stable(tok, parsed, minted24):
+    completions, questions = parsed
+    small = phase38_prereg.mint_names(
+        tok,
+        completions,
+        _flat_questions(questions),
+        per_slot=8,
+        seed=phase35_prereg.seed_list()[0],
+    )
+    assert small["reached"] is True
+    assert small["stop_draw"] <= minted24["stop_draw"]
+    for slot in phase38_prereg.NAME_SLOTS:
+        short, long = small["lists"][slot], minted24["lists"][slot]
+        assert len(short) >= 8
+        assert long[: len(short)] == short, slot
+
+
+def test_mint_names_reports_a_short_stream_without_raising(tok, parsed):
+    completions, questions = parsed
+    out = phase38_prereg.mint_names(
+        tok,
+        completions,
+        _flat_questions(questions),
+        per_slot=24,
+        seed=phase35_prereg.seed_list()[0],
+        max_draws=50,
+    )
+    assert out["reached"] is False
+    assert out["stop_draw"] is None
+    assert out["stream"]["draws"] == 50
+    assert any(len(v) < 24 for v in out["lists"].values())
+
+
+def test_screen_names_the_first_failing_shared_filter(tok):
+    screen = phase38_prereg._new_screen(tok, ["what is your quillon street"], ["zorvex"])
+    assert screen["substring_minted"] == ["zorvex"]
+    assert len(screen["substring_forbidden"]) == 123
+    assert phase38_prereg._screen(tok, "brakimo", 9, screen) == "over_budget"
+    assert phase38_prereg._screen(tok, "quillon", 5, screen) == "in_question"
+    assert phase38_prereg._screen(tok, "zorpik", 5, screen) == "substring_forbidden"
+    assert phase38_prereg._screen(tok, "zorvexa", 5, screen) == "substring_minted"
+    assert phase38_prereg._screen(tok, "rvex", 5, screen) == "substring_minted"
+    assert phase38_prereg._screen(tok, "brakimo", 5, screen) is None
+    screen["live"] = set()
+    assert phase38_prereg._screen(tok, "brakimo", 5, screen) == "roundtrip"

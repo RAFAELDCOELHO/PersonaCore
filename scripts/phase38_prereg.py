@@ -27,6 +27,8 @@ import hashlib
 import json
 import math
 import pathlib
+import random
+import re
 import sys
 import types
 
@@ -919,3 +921,199 @@ def a2_counts():
             "counts": {k: counts[slot][k] for k in PREFIXES},
         }
     return out
+
+
+# =================================================================================================
+# (10) THE MINTING RULE AS CODE (D-01..D-04, D-24..D-27, D-32), exactly the e5_minting_rule entry.
+# Pure: the tokenizer, the parsed completions and the questions are arguments, so every function
+# runs on CPU against the tracked report and tokenizer. Every random choice goes through
+# rng.random() only (Pitfall 6: the other Random methods changed across Python versions).
+# =================================================================================================
+
+# Phase 17's filter 1 budget. tests/test_phase38_prereg.py::test_max_value_tokens_matches_phase17
+# proves it equals phase17_personas.MAX_VALUE_TOKENS (that module imports torch, so not read here).
+MAX_VALUE_TOKENS = 8
+
+_SLOT_HEADER = re.compile(r"^### Slot `(\w+)` — (\d+) questions, (\d+) completions$")
+_QUESTION = re.compile(r"^- Q `(.*)` — prompt = \d+ ids$")
+_COMPLETION_LABELS = ("greedy", "warm 1", "warm 2", "warm 3")
+_REPORT_END = "## Filters"
+
+
+def parse_completions(text):
+    """D-24: ``({slot: completions}, {slot: questions})`` from the Phase 17 report, in SLOTS order.
+
+    Line-based: each ``### Slot`` header opens a slot; each ``- Q`` line is followed by exactly one
+    greedy and three warm completion lines; parsing stops at ``## Filters``. Every invariant is
+    proved: the slot order, 13 questions and 52 completions per slot, 416 in total.
+    """
+    lines = text.split("\n")
+    _prove(_REPORT_END in lines, f"D-24: the report has no {_REPORT_END!r} line")
+    lines = lines[: lines.index(_REPORT_END)]
+    completions, questions, headers = {}, {}, {}
+    slot = None
+    for i, line in enumerate(lines):
+        header = _SLOT_HEADER.match(line)
+        if header:
+            slot = header.group(1)
+            _prove(slot not in headers, f"D-24: slot {slot!r} appears twice")
+            headers[slot] = (int(header.group(2)), int(header.group(3)))
+            completions[slot], questions[slot] = [], []
+            continue
+        question = _QUESTION.match(line)
+        if question is None:
+            continue
+        _prove(slot is not None, f"D-24: question at line {i + 1} before any slot header")
+        questions[slot].append(question.group(1))
+        for offset, label in enumerate(_COMPLETION_LABELS, 1):
+            prefix = f"  - {label}: `"
+            row = lines[i + offset] if i + offset < len(lines) else ""
+            _prove(
+                row.startswith(prefix) and row.endswith("`"),
+                f"D-24: line {i + offset + 1} is not the {label!r} completion of {slot}",
+            )
+            completions[slot].append(row[len(prefix) : -1])
+    _prove(tuple(completions) == SLOTS, f"D-24: slots {tuple(completions)}, not {SLOTS}")
+    per_question = len(_COMPLETION_LABELS)
+    for slot in SLOTS:
+        n_q, n_c = len(questions[slot]), len(completions[slot])
+        _prove(
+            n_c == COMPLETIONS_PER_SLOT and n_q * per_question == n_c,
+            f"D-24: {slot} has {n_q} questions and {n_c} completions, not "
+            f"{COMPLETIONS_PER_SLOT // per_question} and {COMPLETIONS_PER_SLOT}",
+        )
+        _prove(headers[slot] == (n_q, n_c), f"D-24: {slot} header {headers[slot]} != {(n_q, n_c)}")
+    total = sum(map(len, completions.values()))
+    _prove(total == COMPLETIONS_TOTAL, f"D-24: {total} completions, not {COMPLETIONS_TOTAL}")
+    return (
+        {slot: tuple(completions[slot]) for slot in SLOTS},
+        {slot: tuple(questions[slot]) for slot in SLOTS},
+    )
+
+
+def taught_anywhere():
+    """D-03: every value taught anywhere: the Phase 14 pools, the Phase 17 personas, the filler."""
+    pools = (fact for _, facts in phase14_factset.all_pools() for fact in facts)
+    personas = (fact for facts in phase17_persona_facts.PERSONA_FACTS.values() for fact in facts)
+    return frozenset(fact.value for fact in (*pools, *personas, *phase21_filler.FILLER_FACTS))
+
+
+def forbidden_for_substring():
+    """D-03: the substring filter's set, taught_anywhere() plus Phase 17's FORBIDDEN_VALUES."""
+    return taught_anywhere() | phase17_persona_facts.FORBIDDEN_VALUES
+
+
+def levenshtein(left, right):
+    """D-27: edit distance, iterative two-row (tests/test_phase17_personas.py's _levenshtein)."""
+    previous = list(range(len(right) + 1))
+    for i, a in enumerate(left, 1):
+        current = [i]
+        for j, b in enumerate(right, 1):
+            current.append(min(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + (a != b)))
+        previous = current
+    return previous[-1]
+
+
+def draw_name(rng):
+    """D-01: 1..MAX_SYLLABLES syllables, each onset + nucleus + coda drawn in that order, every
+    choice ``seq[int(rng.random() * len(seq))]``."""
+    n = 1 + int(rng.random() * MAX_SYLLABLES)
+    syllables = []
+    for _ in range(n):
+        for seq in (ONSETS, NUCLEI, CODAS):
+            syllables.append(seq[int(rng.random() * len(seq))])
+    return "".join(syllables)
+
+
+def _screen(tok, value, count, screen):
+    """The filters names and numbers share, after ``excluded``, in NAME_FILTERS order (D-03,
+    D-26): the name of the first that fails, or None. ``screen`` holds the live ids (Phase 17's
+    vocabulary plus special tokens) and the normalized questions, forbidden and minted values."""
+    if count > MAX_VALUE_TOKENS:
+        return "over_budget"
+    ids = tok.encode(value)
+    if tok.decode(ids) != value or not set(ids) <= screen["live"]:
+        return "roundtrip"
+    norm = phase14_factset.normalize_for_match(value)
+    if any(norm in q for q in screen["questions"]):
+        return "in_question"
+    for name in ("substring_forbidden", "substring_minted"):
+        if any(norm in o or o in norm for o in screen[name]):
+            return name
+    return None
+
+
+def _new_screen(tok, questions, minted):
+    """The ``_screen`` context: live ids and the normalized questions, forbidden, minted values."""
+    norm = phase14_factset.normalize_for_match
+    return {
+        "live": set(tok.vocab) | set(tok.special_tokens.values()),
+        "questions": [norm(q) for q in questions],
+        "substring_forbidden": [norm(v) for v in sorted(forbidden_for_substring())],
+        "substring_minted": [norm(v) for v in minted],
+    }
+
+
+def mint_names(tok, completions_by_slot, questions, *, per_slot, seed, max_draws=MAX_DRAWS):
+    """D-01..D-04, D-25..D-27: the name slots from ONE stream under the global stop.
+
+    Each draw is kept only at a taught token count (else stream ``token_count``), dropped if seen
+    before (``duplicate``), dealt round-robin to the slots sharing its count in NAME_SLOTS order,
+    then passed through NAME_FILTERS in order; the first failing filter counts against the slot.
+    Stops at the end of the first draw after which every name slot holds >= ``per_slot``, so the
+    lists at a smaller ``per_slot`` are prefixes of those at a larger one. Short at ``max_draws``:
+    ``reached`` False, never an exception here (mint_all raises the D-26 STOP).
+    """
+    by_slot = {fact.slot: fact.value for fact in phase14_factset.LOCKED_FACTS}
+    taught_count = {slot: len(tok.encode(by_slot[slot])) for slot in NAME_SLOTS}
+    slots_by_count = {}
+    for slot in NAME_SLOTS:
+        slots_by_count.setdefault(taught_count[slot], []).append(slot)
+    rng = random.Random(seed)
+    excluded = taught_anywhere()
+    screen = _new_screen(tok, questions, ())
+    lists = {slot: [] for slot in NAME_SLOTS}
+    rejections = {slot: dict.fromkeys(NAME_FILTERS, 0) for slot in NAME_SLOTS}
+    stream = {"draws": 0, "token_count": 0, "duplicate": 0}
+    counter = dict.fromkeys(slots_by_count, 0)
+    seen = set()
+    stop_draw = None
+    while stream["draws"] < max_draws:
+        stream["draws"] += 1
+        value = draw_name(rng)
+        count = len(tok.encode(value))
+        if count not in slots_by_count:
+            stream["token_count"] += 1
+            continue
+        if value in seen:
+            stream["duplicate"] += 1
+            continue
+        seen.add(value)
+        targets = slots_by_count[count]
+        slot = targets[counter[count] % len(targets)]
+        counter[count] += 1
+        failed = "excluded" if value in excluded else _screen(tok, value, count, screen)
+        if failed is None and any(
+            levenshtein(value, t) == 1 for t in excluded if abs(len(t) - len(value)) <= 1
+        ):
+            failed = "neighbour_d1"
+        if failed is None and not phase14_factset.exact_match_clean(
+            completions_by_slot[slot], value
+        ):
+            failed = "clearance"
+        if failed is None:
+            lists[slot].append(value)
+            screen["substring_minted"].append(phase14_factset.normalize_for_match(value))
+        else:
+            rejections[slot][failed] += 1
+        if all(len(lists[s]) >= per_slot for s in NAME_SLOTS):
+            stop_draw = stream["draws"]
+            break
+    return {
+        "lists": lists,
+        "rejections": rejections,
+        "stream": stream,
+        "stop_draw": stop_draw,
+        "reached": stop_draw is not None,
+        "taught_token_count": taught_count,
+    }
