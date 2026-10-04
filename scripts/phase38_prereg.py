@@ -1117,3 +1117,124 @@ def mint_names(tok, completions_by_slot, questions, *, per_slot, seed, max_draws
         "reached": stop_draw is not None,
         "taught_token_count": taught_count,
     }
+
+
+def seeded_shuffle(values, seed):
+    """D-10: explicit Fisher-Yates with a fresh random.Random(seed); the input is not changed."""
+    out = list(values)
+    rng = random.Random(seed)
+    for i in range(len(out) - 1, 0, -1):
+        j = int(rng.random() * (i + 1))
+        out[i], out[j] = out[j], out[i]
+    return out
+
+
+def neighbour_flags(values):
+    """D-27: for each value, whether it is at edit distance exactly 1 from a taught-anywhere value
+    (numeric slots keep these; they are flagged, never rejected)."""
+    taught = taught_anywhere()
+    return [
+        any(levenshtein(v, t) == 1 for t in taught if abs(len(t) - len(v)) <= 1) for v in values
+    ]
+
+
+def numeric_candidates(slot, tok, completions_by_slot, questions, *, accepted):
+    """D-09 / D-26 / D-27: the slot's range ascending through NUMERIC_FILTERS in order; returns
+    (kept ascending, {filter: rejections}). ``accepted`` are the values already minted in other
+    slots (substring_minted). No neighbour screen: numeric slots are exempt (D-27)."""
+    _prove(
+        slot in NUMERIC_RANGES, f"{slot!r} is not one of the NUMERIC_RANGES {tuple(NUMERIC_RANGES)}"
+    )
+    taught = next(f.value for f in phase14_factset.LOCKED_FACTS if f.slot == slot)
+    taught_count = len(tok.encode(taught))
+    excluded = taught_anywhere()
+    screen = _new_screen(tok, questions, accepted)
+    lo, hi = NUMERIC_RANGES[slot]
+    kept, rejections = [], dict.fromkeys(NUMERIC_FILTERS, 0)
+    for n in range(lo, hi + 1):
+        value = str(n)
+        count = len(tok.encode(value))
+        if count != taught_count:
+            failed = "token_count"
+        elif value in excluded:
+            failed = "excluded"
+        else:
+            failed = _screen(tok, value, count, screen)
+        if failed is None and not phase14_factset.exact_match_clean(
+            completions_by_slot[slot], value
+        ):
+            failed = "clearance"
+        if failed is None:
+            kept.append(value)
+        else:
+            rejections[failed] += 1
+    return kept, rejections
+
+
+def max_set_size(n_cleared):
+    """D-31: max |R| = min(e5_max_set_size, n_cleared + 1); |R| counts the taught value."""
+    return min(phase35_prereg.ENTRIES["e5_max_set_size"]["value"], n_cleared + 1)
+
+
+def nested_sizes(max_size):
+    """D-08: the NESTED_SIZES below ``max_size``, plus ``max_size`` itself."""
+    _prove(max_size >= NESTED_SIZES[0], f"max |R| {max_size} is below {NESTED_SIZES[0]}")
+    return tuple(s for s in NESTED_SIZES if s < max_size) + (max_size,)
+
+
+def mint_all(
+    tok, completions_by_slot, questions_by_slot, *, per_slot=SLACK_PER_SLOT, max_draws=MAX_DRAWS
+):
+    """The whole minting rule (e5_minting_rule), all eight slots in SLOTS order.
+
+    The seed is read here, lazily, as phase35_prereg.seed_list()[0] (torch at import). The name
+    slots come from mint_names; any short slot at ``max_draws`` is the D-26 STOP. The numeric slots
+    follow in NUMERIC_RANGES order, each excluding every value already accepted, then shuffled
+    (D-10) and flagged (D-27).
+    """
+    seed = phase35_prereg.seed_list()[0]
+    questions = [q for slot in SLOTS for q in questions_by_slot[slot]]
+    names = mint_names(
+        tok, completions_by_slot, questions, per_slot=per_slot, seed=seed, max_draws=max_draws
+    )
+    counts = {slot: len(values) for slot, values in names["lists"].items()}
+    _prove(
+        names["reached"],
+        f"D-26 STOP: name slots short of {per_slot} at max_draws = {max_draws}: {counts}. Write "
+        "nothing; bring the numbers to Rafael; never lower the slack",
+    )
+    slots = {
+        slot: {
+            "cleared": names["lists"][slot],
+            "taught_token_count": names["taught_token_count"][slot],
+            "rejections": names["rejections"][slot],
+        }
+        for slot in NAME_SLOTS
+    }
+    accepted = [v for values in names["lists"].values() for v in values]
+    for slot in NUMERIC_RANGES:
+        kept, rejections = numeric_candidates(
+            slot, tok, completions_by_slot, questions, accepted=accepted
+        )
+        accepted += kept
+        cleared = seeded_shuffle(kept, seed)
+        flags = neighbour_flags(cleared)
+        slots[slot] = {
+            "cleared": cleared,
+            "taught_token_count": len(
+                tok.encode(next(f.value for f in phase14_factset.LOCKED_FACTS if f.slot == slot))
+            ),
+            "rejections": rejections,
+            "neighbour_d1": [i for i, flag in enumerate(flags) if flag],
+        }
+    for row in slots.values():
+        row["n_cleared"] = len(row["cleared"])
+        row["max_set_size"] = max_set_size(row["n_cleared"])
+    return {
+        "seed": seed,
+        "per_slot": per_slot,
+        "max_draws": max_draws,
+        "stream": names["stream"],
+        "stop_draw": names["stop_draw"],
+        "slots": {slot: slots[slot] for slot in SLOTS},
+    }

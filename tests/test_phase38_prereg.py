@@ -909,3 +909,199 @@ def test_screen_names_the_first_failing_shared_filter(tok):
     assert phase38_prereg._screen(tok, "brakimo", 5, screen) is None
     screen["live"] = set()
     assert phase38_prereg._screen(tok, "brakimo", 5, screen) == "roundtrip"
+
+
+# =================================================================================================
+# (12) THE NUMERIC SLOTS, THE SEEDED SHUFFLE, THE NEIGHBOUR FLAGS, mint_all AND THE SET SIZES
+# (D-08..D-10, D-26, D-27, D-31), and the random() AST gate (Pitfall 6, T-38-08).
+# =================================================================================================
+
+
+def test_max_value_tokens_matches_phase17():
+    import phase17_personas  # torch at import: tests only
+
+    assert phase38_prereg.MAX_VALUE_TOKENS == phase17_personas.MAX_VALUE_TOKENS
+
+
+def test_seeded_shuffle_is_a_deterministic_fisher_yates():
+    values = list(range(50))
+    shuffled = phase38_prereg.seeded_shuffle(values, 1337)
+    assert values == list(range(50))
+    assert sorted(shuffled) == values
+    assert shuffled != values
+    assert shuffled == phase38_prereg.seeded_shuffle(values, 1337)
+    assert shuffled != phase38_prereg.seeded_shuffle(values, 7)
+    assert phase38_prereg.seeded_shuffle([], 1) == []
+
+
+@pytest.fixture(scope="module")
+def numeric(tok, parsed):
+    completions, questions = parsed
+    flat = _flat_questions(questions)
+    years, year_rej = phase38_prereg.numeric_candidates(
+        "birth_year", tok, completions, flat, accepted=[]
+    )
+    houses, house_rej = phase38_prereg.numeric_candidates(
+        "house_number", tok, completions, flat, accepted=years
+    )
+    return years, year_rej, houses, house_rej
+
+
+def test_numeric_candidates_birth_year_and_house_number(numeric):
+    years, year_rej, houses, house_rej = numeric
+    assert len(years) == 219
+    assert years == sorted(years, key=int)
+    assert all(1800 <= int(y) <= 2025 for y in years)
+    assert year_rej == {f: (7 if f == "excluded" else 0) for f in phase38_prereg.NUMERIC_FILTERS}
+    taught = phase38_prereg.taught_anywhere()
+    excluded_years = sorted(str(n) for n in range(1800, 2026) if str(n) in taught)
+    assert excluded_years == ["1893", "1906", "1941", "1953", "1962", "1974", "1987"]
+    assert len(houses) == 8768
+    assert tuple(house_rej) == phase38_prereg.NUMERIC_FILTERS
+    assert house_rej["substring_minted"] == 219
+    assert house_rej["excluded"] == 13
+    assert not set(houses) & set(years)
+    with pytest.raises(SystemExit, match="NUMERIC_RANGES"):
+        phase38_prereg.numeric_candidates("street", None, {}, (), accepted=[])
+
+
+def test_neighbour_flags(numeric):
+    assert phase38_prereg.neighbour_flags(["1987", "1988", "2000"]) == [False, True, False]
+    years = numeric[0]
+    flags = phase38_prereg.neighbour_flags(years)
+    assert sum(flags) == 101
+
+
+@pytest.fixture(scope="module")
+def minted_all(tok, parsed):
+    completions, questions = parsed
+    return phase38_prereg.mint_all(tok, completions, questions, per_slot=24)
+
+
+def test_mint_all_reads_the_seed_and_covers_every_slot(tok, parsed, minted_all, minted24, numeric):
+    assert minted_all["seed"] == phase35_prereg.seed_list()[0] == 1337
+    assert minted_all["per_slot"] == 24
+    assert tuple(minted_all["slots"]) == phase38_prereg.SLOTS
+    assert minted_all["stop_draw"] == minted24["stop_draw"]
+    assert minted_all["stream"] == minted24["stream"]
+    years, year_rej, houses, house_rej = numeric
+    for slot in phase38_prereg.NAME_SLOTS:
+        row = minted_all["slots"][slot]
+        assert row["cleared"] == minted24["lists"][slot]
+        assert row["rejections"] == minted24["rejections"][slot]
+        assert "neighbour_d1" not in row
+    for slot, kept, rej in (("birth_year", years, year_rej), ("house_number", houses, house_rej)):
+        row = minted_all["slots"][slot]
+        assert row["cleared"] == phase38_prereg.seeded_shuffle(kept, minted_all["seed"])
+        assert row["rejections"] == rej
+        flags = phase38_prereg.neighbour_flags(row["cleared"])
+        assert row["neighbour_d1"] == [i for i, f in enumerate(flags) if f]
+    for slot, row in minted_all["slots"].items():
+        assert row["n_cleared"] == len(row["cleared"])
+        assert row["max_set_size"] == phase38_prereg.max_set_size(row["n_cleared"])
+        assert row["taught_token_count"] == len(
+            tok.encode(next(f.value for f in phase14_factset.LOCKED_FACTS if f.slot == slot))
+        )
+    assert minted_all["slots"]["birth_year"]["max_set_size"] == 220
+    assert len(minted_all["slots"]["birth_year"]["neighbour_d1"]) == 101
+
+
+def test_mint_all_seed_is_read_not_typed(tok, parsed, minted_all, monkeypatch):
+    completions, questions = parsed
+    monkeypatch.setattr(phase35_prereg, "seed_list", lambda: (7, 8))
+    other = phase38_prereg.mint_all(tok, completions, questions, per_slot=8)
+    assert other["seed"] == 7
+    for slot in phase38_prereg.NAME_SLOTS:
+        assert other["slots"][slot]["cleared"] != minted_all["slots"][slot]["cleared"][:8]
+
+
+def test_mint_all_stops_on_a_short_slot(tok, parsed):
+    completions, questions = parsed
+    with pytest.raises(SystemExit) as raised:
+        phase38_prereg.mint_all(tok, completions, questions, per_slot=24, max_draws=50)
+    message = str(raised.value)
+    assert "D-26" in message
+    for slot in phase38_prereg.NAME_SLOTS:
+        assert slot in message
+
+
+def test_minted_values_pass_the_phase17_filters(tok, parsed, minted_all):
+    import phase17_persona_facts
+    import phase17_personas  # torch at import: tests only
+
+    _, questions = parsed
+    values = [v for s in phase38_prereg.NAME_SLOTS for v in minted_all["slots"][s]["cleared"][:24]]
+    values += [
+        v for s in phase38_prereg.NUMERIC_RANGES for v in minted_all["slots"][s]["cleared"][:24]
+    ]
+    assert len(values) == len(set(values)) == 8 * 24
+    assert phase17_personas.filter_roundtrip(tok, values) == tuple(values)
+    phase17_personas.filter_substring_disjoint(values, phase17_persona_facts.FORBIDDEN_VALUES)
+    phase17_personas.filter_absent_from_questions(values, _flat_questions(questions))
+    phase17_personas.filter_token_budget({v: len(tok.encode(v)) for v in values})
+
+
+def test_max_set_size_and_nested_sizes():
+    assert phase38_prereg.max_set_size(2048) == 512
+    assert phase38_prereg.max_set_size(219) == 220
+    assert phase38_prereg.max_set_size(511) == 512
+    assert phase38_prereg.nested_sizes(512) == (8, 32, 128, 512)
+    assert phase38_prereg.nested_sizes(220) == (8, 32, 128, 220)
+    assert phase38_prereg.nested_sizes(8) == (8,)
+    with pytest.raises(SystemExit):
+        phase38_prereg.nested_sizes(7)
+
+
+_BANNED_RANDOM = {
+    "choice",
+    "choices",
+    "shuffle",
+    "sample",
+    "randrange",
+    "randint",
+    "uniform",
+    "getrandbits",
+}
+_RANDOM_CONSTRUCTORS = {"mint_names", "seeded_shuffle"}
+
+
+def _random_failures(sources):
+    """Pitfall 6: Random methods other than random() and random.Random outside the two owners."""
+    failures, random_calls = [], 0
+    for relpath, source in sources:
+        tree = ast.parse(source)
+        allowed = set()
+        for node in tree.body:
+            if isinstance(node, ast.FunctionDef) and node.name in _RANDOM_CONSTRUCTORS:
+                allowed |= {id(n) for n in ast.walk(node)}
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module == "random":
+                failures.append(f"{relpath}:{node.lineno}: from random import")
+            if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
+                continue
+            attr = node.func.attr
+            if attr in _BANNED_RANDOM:
+                failures.append(f"{relpath}:{node.lineno}: .{attr}(")
+            elif attr == "random":
+                random_calls += 1
+            elif attr == "Random" and id(node) not in allowed:
+                failures.append(
+                    f"{relpath}:{node.lineno}: random.Random outside {_RANDOM_CONSTRUCTORS}"
+                )
+    return failures, random_calls
+
+
+def test_only_random_is_called_in_phase38_scripts(tmp_path):
+    paths = sorted(_SCRIPTS.glob("phase38_*.py"))
+    assert paths, "meta-guard: no scripts/phase38_*.py"
+    sources = [(p.relative_to(_ROOT).as_posix(), p.read_text(encoding="utf-8")) for p in paths]
+    failures, random_calls = _random_failures(sources)
+    assert failures == []
+    assert random_calls > 0, "meta-guard: no .random() call found, the gate would be vacuous"
+    source = (_ROOT / PREREG).read_text(encoding="utf-8")
+    for name, plant in (
+        ("choice.py", "\n\ndef planted(rng, x):\n    return rng.choice(x)\n"),
+        ("ctor.py", "\n\nRNG = random.Random(0)\n"),
+    ):
+        planted = _planted(tmp_path, source, source + plant, name)
+        assert _random_failures([(name, planted)])[0], name
