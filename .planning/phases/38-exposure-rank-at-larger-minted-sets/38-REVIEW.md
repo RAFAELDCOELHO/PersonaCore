@@ -13,7 +13,7 @@ findings:
   warning: 4
   info: 4
   total: 8
-status: issues_found
+status: resolved
 ---
 
 # Phase 38: Code Review Report
@@ -204,3 +204,15 @@ The clean-tree check plus `git_sha` is the real guarantee, so this is informatio
 _Reviewed: 2026-10-04_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
+
+## Resolution (Rafael's ruling at the 38-04 review checkpoint, 2026-10-04)
+
+| Finding | Ruling | Commit |
+|---|---|---|
+| WR-01 | FIXED as ruled: `relation` returns `ALREADY_AT_K0` when the event already holds at k = 0 and `UNREACHABLE_AT_SIZE` when "moved" cannot fire at the size (`moved_reachable(rank_0, size)` is `2 x rank_0 <= |R|`); NEVER stays "could have moved and did not"; both outcomes are recorded with rank_0, the per-prefix flags are unchanged, and one sentence each sits in the D-12 (`rank_moved`) and D-29 (`left_top_eighth`) entries. Precedence (orchestrator's choice, within the ruling): UNREACHABLE_AT_SIZE, then ALREADY_AT_K0, then the reference outcomes. Tests cover birth_year at |R| = 220 with rank_0 >= 28 and |R| = 8 with rank_0 >= 5. | d33986c |
+| WR-02 | Not fixed: known limitation (no commit may land on main during the ~74 s mint; plan 04 Task 2 records `git rev-parse HEAD` before the run and requires provenance git_sha and head_at_write to equal it) | — |
+| WR-03 | Not fixed: known limitation (plan 04 Task 2 requires the whole `git status --porcelain` to be clean before the mint, which covers artifacts/tokenizer.json) | — |
+| WR-04 | Not fixed: known limitation (deliberate-bypass class; every value a consumer reads is still checked) | — |
+| IN-01..IN-04 | Not fixed: informational | — |
+
+Downstream: the 38-07 record builder must pass `reachable=prereg.moved_reachable(rank_0, size)` for the moved event and record rank_0 beside every relation; 38-09/38-10 present the two new outcomes alongside BEFORE / SAME / AFTER / NEVER.
