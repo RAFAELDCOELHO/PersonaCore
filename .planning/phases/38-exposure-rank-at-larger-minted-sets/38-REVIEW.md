@@ -13,7 +13,7 @@ findings:
   warning: 4
   info: 4
   total: 8
-status: issues_found
+status: resolved
 second_review: {critical: 0, warning: 3, info: 5, total: 8}
 ---
 
@@ -379,3 +379,10 @@ The D-21 I/O-free check accepts `()`, and `all([])` is True, so a rehearsal with
 _Reviewed: 2026-10-04_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
+
+## Second review resolution (Rafael's ruling at the 38-08 review checkpoint, 2026-10-04)
+
+"reviewed — nothing to fix." DR-01, DR-02, DR-03 and DI-01..DI-05 (all eight) are known limitations. No driver
+or sizes-file change after the 38-07 rehearsal beyond 1e68330, so no second rehearsal is run (DR-01/DR-02
+cannot arise). DR-03 is covered at 38-08 Task 2 by calling `rehearsal_disclosure` on the real identity file
+(read-only) before the launch.
