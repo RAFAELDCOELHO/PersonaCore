@@ -103,6 +103,67 @@ Decided by Rafael in discuss-phase 39 (2026-10-04), except where marked as carri
 - **D-22 (declared limitations):** one seed, one target, |R| 6-8 in the main reading; the 1-vs-27 unit
   asymmetry (D-07); no generation cross-check (D-20).
 
+### Rulings at plan time (2026-10-04, after 39-RESEARCH.md Open Questions 1-4; Rafael, in Portuguese, paraphrased faithfully)
+- **D-23 (Q1, context (b) ids = B1).** The NLL/rank context (b) is the committed A2 prompt up to and
+  including `<|assistant|>` (`phase18_extraction._guarded_span(entry)`), followed by the whole
+  candidate value. It differs from (a) in two ways, the question added and the `ans1` preamble dropped;
+  both are declared in the report. (The injected-prefix reading is impossible for every candidate: the
+  pet_name reference `nyxen` is 3 ids, its injection budget is 0, and `split_value_ids` refuses it. This
+  was measured at plan time.)
+  - **D-23a:** keep the **per-token NLL** of every candidate in both contexts.
+  - **D-23b:** for the taught value under (b), also report the sum over only the tokens AFTER the
+    prefix A2 injects (`realized_injection` of the committed A2 draw for that question). That sum is the
+    NLL in A2's exact context. Measured at plan time: for all 216 entries, `prompt_ids ==
+    _guarded_span(e) + encode(taught)[:realized_injection]`, and each committed A2 draw carries
+    `realized_injection`.
+  - **D-23c (amends D-17 for context (b)):** the descriptive predicted hit rate under (b) uses that
+    suffix sum, not the whole-value NLL. Context (a) has no injected prefix and keeps the whole value.
+  - **D-23d:** B1′ (question + `ans1` preamble + value) is recorded as **not measured**, in the same list
+    as the |R| > 8 reading (D-12).
+- **D-24 (Q2, R_q "lost" mirrors the two generation events on n1 = the number of the 27 questions at
+  rank 1).**
+  - Collapse classification: R_q collapsed iff n1 = 0, as generation collapses at 0 answered
+    questions.
+  - Damage classification: R_q damaged iff the drop of n1/27 relative to k = 0 of the same context
+    exceeds the published margin, by the same committed formula as generation (D-14 / Phase 38 D-33,
+    strict `>`).
+  - The median and the rank of the mean NLL stay published as descriptive summaries (D-10), outside the
+    criterion.
+  - Rafael's note: median > 1 is the same rule as n1 < 14, and no generation event uses that threshold.
+    Checked: the median of 27 ranks is the 14th smallest, so median = 1 iff n1 >= 14.
+- **D-25 (Q3, WR-01 and k = 0 per cell — the proposal approved as written, plus the R_q/G_q
+  additions).**
+  - k = 0 cells: no damage class (k = 0 is the reference). Collapse is classified.
+  - A reading already lost at k = 0 in its own context → `ALREADY_AT_K0`, and the cell enters no
+    sufficiency class.
+  - G_a damage when the k = 0 anchor unit is a miss → `UNREACHABLE_AT_SIZE`. At n = 1, damage
+    (drop > 8/27) holds exactly when k = 0 hit and k missed.
+  - Damage is strict `>`, so person_name k8 (drop = 8/27 exactly) is not damaged.
+  - Added: R_q under collapse with n1 = 0 already at k = 0 → `ALREADY_AT_K0`. R_q under damage with
+    n1(k = 0) < 9 → `UNREACHABLE_AT_SIZE`, since a drop above 8/27 needs n1(k = 0) >= 9. The same
+    reachability test applies to G_q from the committed k = 0 count. (All committed k = 0 G_q counts are
+    >= 18, so G_q damage is reachable in every slot today; the test still runs.)
+  - The tested truth table includes these cases, and the record keeps n1(k = 0) (and the k = 0 count of
+    each generation reading) beside every relation.
+- **D-26 (Q4, extra (ii) also runs for adapter-off).** Rafael: "Yes, add adapter-off". (ii) runs for
+  all 8 adapters: 8 × 216 × 7 = 12,096 minted NLLs instead of the priced 10,584 (+1,512 NLLs, +0.0196 h
+  at `e5_nll_high`). The approved projection in the prereg becomes 0.7227090186770592 h, which is <=
+  stop (a) 0.7424221732238463 h. These numbers are computed in the prereg, never typed. D-11's other
+  terms are unchanged: descriptive only, caps checked without the raised counts, no second stop rule.
+
+### Defaults taken at plan time (39-RESEARCH Open Questions 5-7; not yet confirmed by Rafael)
+- **D-27 (Q5, the prereg is frozen before the rehearsal).** The prereg's code review runs BEFORE the CPU
+  rehearsal. The rehearsal identity records `sha256(scripts/phase39_prereg.py)`, and the real-root
+  preflight REFUSES on drift. Any later prereg edit needs Rafael's ruling plus disclosure in the record.
+  (In Phase 38, the minting record froze the prereg before the rehearsal; here no record precedes the
+  run.)
+- **D-28 (Q6, anchor seed index).** stage_e6's `i * K` (i = the slot's `LOCKED_FACTS` position; the
+  committed probe configuration). Its seed windows (1337..1719: SEED + i*48 + s, s = 0..46) coincide with the windows of A2
+  `seed_index` 0..7. The prompts differ, but this shared randomness is declared in the report.
+- **D-29 (Q7, D-17 caveat for (b)).** Published as descriptive with D-17's caveat, plus: under D-23c the
+  (b) prediction is conditioned on the injected prefix, exactly as G_q's hit is scored on
+  `prefix_text + completion`.
+
 ### Claude's Discretion
 - Module and record names under `results/phase39_*` (V6_RESULT_PATHS member), driver structure, test
   layout, and the order of plans — following the Phase 38 split (prereg, review, run, records, report).
@@ -186,6 +247,7 @@ Decided by Rafael in discuss-phase 39 (2026-10-04), except where marked as carri
 
 - Minted-set reading under the full question at |R| > 8 (32, 128, 512; birth_year 220) — recorded as not
   measured in E6 (D-12); may run later as a dated continuation after E1-E4, labelled as after E6.
+- B1′ context (b) (question + `ans1` preamble + value) — recorded as not measured in E6 (D-23d).
 
 </deferred>
 
