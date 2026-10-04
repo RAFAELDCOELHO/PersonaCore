@@ -127,7 +127,7 @@ quoted). Facts marked "measured" were measured by Claude this session before the
 - **D-30.** The before / same prefix / after / never answer (D-15) is given for BOTH events (D-12 and
   D-29), per slot and per set size.
 
-### Defaults taken without a ruling (forced or following an existing decision; flagged to Rafael)
+### Defaults taken at plan time, then CONFIRMED by Rafael (2026-10-04: "Os dois padrões estão certos. Mantenha D-31 e D-32 como estão.")
 - **D-31 (Q3, |R| counts the taught value).** |R_n| = n INCLUDING the taught value (n - 1 minted),
   sizes 8/32/128/512; `birth_year` maximum |R| = 220 (219 + taught). Forced: `reference_set_for`
   appends the taught value (`phase18_extraction.py:1203`), and a taught value on top of 512 minted
