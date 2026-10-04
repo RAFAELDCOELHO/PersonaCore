@@ -19,15 +19,21 @@ arguments.
 """
 
 import datetime
+import fnmatch
 import hashlib
+import json
+import os
 import pathlib
+import subprocess
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "src"))
 
+import phase25_run  # noqa: E402  — atomic_write_json, the one os.replace writer
 import phase38_prereg as prereg  # noqa: E402
 
+from personacore.provenance import git_sha, refuse_if_dirty  # noqa: E402
 from personacore.tokenizer import from_json  # noqa: E402
 
 _ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -143,3 +149,107 @@ def derive():
         "slots": result["slots"],
         "phase17_filter_proof": proof,
     }
+
+
+def write_record(derived, path, *, base, run):
+    """Write ``derived`` to ``path`` ONCE: minting path, no overwrite, tracked prereg, clean."""
+    path = pathlib.Path(path)
+    rel = path.relative_to(base).as_posix()
+    _prove(
+        fnmatch.fnmatch(rel, prereg.MINTING_GLOB),
+        f"{rel} does not match MINTING_GLOB {prereg.MINTING_GLOB!r}: the mint writes nothing else",
+    )
+    _prove(
+        not path.exists(),
+        f"{path} exists — REFUSING to overwrite it. The minting record is write-once; corrections "
+        "are dated continuations",
+    )
+    tracked = subprocess.run(
+        ["git", "ls-files", "--error-unmatch", "scripts/phase38_prereg.py"],
+        cwd=_ROOT,
+        capture_output=True,
+    )
+    _prove(
+        tracked.returncode == 0,
+        "the pre-registration scripts/phase38_prereg.py is not tracked: a record cannot precede it",
+    )
+    pathspec = ("scripts", "src", "results")
+    if path.is_relative_to(_ROOT):
+        pathspec += (f":(exclude){path.relative_to(_ROOT).as_posix()}",)
+    refuse_if_dirty(
+        who="phase38_mint",
+        detail=(
+            "the minting record publishes git_sha and hashes the rule's modules and its input "
+            "records from the working tree; lists minted from a dirty tree name a commit they "
+            "cannot be re-minted from"
+        ),
+        pathspec=pathspec,
+        cwd=_ROOT,
+    )
+    record = {
+        **derived,
+        "input_sha256": {r: _sha256(_ROOT / r) for r in INPUT_RECORDS},
+        "provenance": {
+            "run": {
+                key: run[key]
+                for key in ("git_sha", "device", "torch_version", "started_utc", "finished_utc")
+            },
+            "module_sha256": {r: _sha256(_ROOT / r) for r in MODULES},
+            "head_at_write": git_sha(),
+            "written_utc": _now(),
+        },
+    }
+    phase25_run.atomic_write_json(path, record)
+    return record
+
+
+def check_record(derived, path):
+    """Verify an existing minting record against a fresh mint and fresh input digests."""
+    record = json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
+    for key, value in derived.items():
+        plain = json.loads(json.dumps(value))  # tuples -> lists, as the record stores them
+        _prove(
+            record.get(key) == plain,
+            f"STOP: the record's {key} differs from the fresh mint; re-minting does not "
+            "reproduce it",
+        )
+    fresh = {r: _sha256(_ROOT / r) for r in INPUT_RECORDS}
+    _prove(
+        record.get("input_sha256") == fresh,
+        "STOP: an input record's bytes differ from the SHA-256 the minting record holds",
+    )
+    return record
+
+
+def main(argv=None, *, out_root=None):
+    if argv:
+        raise SystemExit(__doc__)
+    base = pathlib.Path(out_root).resolve() if out_root is not None else _ROOT
+    os.chdir(_ROOT)  # git_sha() reads the process cwd
+    path = base / prereg.MINTING_RECORD
+    started = _now()
+    derived = derive()
+    finished = _now()
+    if path.exists():
+        check_record(derived, path)
+        print(f"MINTING VERIFIED (record re-minted and matched) {path}")
+    else:
+        import torch  # only for the provenance version string
+
+        run = {
+            "git_sha": git_sha(),
+            "device": "cpu",
+            "torch_version": torch.__version__,
+            "started_utc": started,
+            "finished_utc": finished,
+        }
+        write_record(derived, path, base=base, run=run)
+        print(f"MINTING WRITTEN {path}")
+    print(f"  stop_draw: {derived['stop_draw']}  per_slot: {derived['per_slot']}")
+    for slot, row in derived["slots"].items():
+        print(f"  {slot}: n_cleared {row['n_cleared']}  max_set_size {row['max_set_size']}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))
