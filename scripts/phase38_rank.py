@@ -513,3 +513,282 @@ def run(
     )
     print(f"RUN {status} — next: crosscheck, then emit", flush=True)
     return status
+
+
+def curve_for(taught, taught_nll, minted, minted_nll, sizes, *, exclude=()):
+    """``{str(size): {size, rank, bits}}`` at each nested size: members = minted[: size - 1]
+    without the ``exclude`` indices, effective size = len(members) + 1 (D-31, D-27)."""
+    nll = {taught: taught_nll, **dict(zip(minted, minted_nll))}
+    excluded = set(exclude)
+    curve = {}
+    for size in sizes:
+        members = [v for i, v in enumerate(minted[: size - 1]) if i not in excluded]
+        n = len(members) + 1
+        rank = prereg.rank_in_prefix(nll, taught, members)
+        curve[str(size)] = {"size": n, "rank": rank, "bits": prereg.exposure_bits(rank, n)}
+    return curve
+
+
+def _load(path):
+    return json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
+
+
+def crosscheck(*, root=None, device="cpu"):
+    """D-19: re-score every gate set and every scored maximum set on CPU into a write-once CPU
+    sidecar. Descriptive only; no ledger line (CPU)."""
+    import phase18_extraction
+    import torch
+
+    root = pathlib.Path(root) if root is not None else _ROOT
+    sidecar = run_sidecar(root)
+    _prove(sidecar.exists(), f"{sidecar} is missing: there is no E5 run to cross-check")
+    blob = _load(sidecar)
+    _prove(blob["status"] == "SCORED", f"the run is {blob['status']}, not SCORED: nothing to check")
+    out = cpu_sidecar(root)
+    _prove(not out.exists(), f"{out} exists: the CPU cross-check is write-once")
+    plan = scoring_plan(slots=blob["slots"], max_size=blob["max_size"])
+    state = {"point": RUN_ID, "stage": "crosscheck", "shape": None, "draw_index": None}
+    started, gate, ranks = _now(), {}, {}
+    for reading in blob["readings"]:
+        with reading_model(reading, device) as (model, tok):
+            nll_by_slot = {}
+            for slot in plan:
+                references = phase18_extraction.reference_set_for(slot)
+                nlls = score_values(model, tok, device, slot, references, state)
+                nll_by_slot[slot] = dict(zip(references, nlls))
+            gate[reading] = {s: r["rank"] for s, r in gate_reading(reading, nll_by_slot).items()}
+            ranks[reading] = {}
+            for slot, row in plan.items():
+                nlls = score_values(
+                    model, tok, device, slot, [row["taught"], *row["minted"]], state
+                )
+                curve = curve_for(row["taught"], nlls[0], row["minted"], nlls[1:], row["sizes"])
+                ranks[reading][slot] = {size: cell["rank"] for size, cell in curve.items()}
+    _write_once(
+        out,
+        {
+            "device": device,
+            "torch_version": torch.__version__,
+            "started_utc": started,
+            "finished_utc": _now(),
+            "gate": gate,
+            "ranks": ranks,
+        },
+    )
+    print(f"CROSSCHECK DONE {out}", flush=True)
+    return out
+
+
+def _hours(started, finished):
+    delta = datetime.datetime.fromisoformat(finished) - datetime.datetime.fromisoformat(started)
+    return delta.total_seconds() / 3600
+
+
+def _events(curves, slots, sizes, a2):
+    """D-12 / D-29 / D-30 / WR-01 over the six PREFIXES only (D-16), per slot and nested size."""
+    events = {}
+    for slot in slots:
+        counts, n = a2[slot]["counts"], a2[slot]["n_questions"]
+        collapse = prereg.first_collapse(counts)
+        damage = prereg.first_damage(counts, n)
+        events[slot] = {}
+        for size in sizes[slot]:
+            ranks = {k: curves[f"k{k}"][slot]["curve"][str(size)]["rank"] for k in prereg.PREFIXES}
+            rank_0 = ranks[0]
+            definitions = {
+                "moved": (
+                    {k: prereg.moved(r, rank_0) for k, r in ranks.items()},
+                    prereg.moved_reachable(rank_0, size),
+                ),
+                "left_top_eighth": (
+                    {k: prereg.left_top_eighth(r, size) for k, r in ranks.items()},
+                    True,
+                ),
+            }
+            events[slot][str(size)] = {}
+            for name, (flags, reachable) in definitions.items():
+                first = prereg.first_event(flags)
+                events[slot][str(size)][name] = {
+                    "flags": {str(k): flag for k, flag in flags.items()},
+                    "first": first,
+                    "rank_0": rank_0,
+                    "reachable": reachable,
+                    "vs_collapse": prereg.relation(first, collapse, reachable=reachable),
+                    "vs_damage": prereg.relation(first, damage, reachable=reachable),
+                }
+    return events
+
+
+def _cpu_block(cpu, curves, gate_rows, slots, sizes):
+    cells = [[reading, slot, size] for reading in curves for slot in slots for size in sizes[slot]]
+    differing = [
+        [r, s, size]
+        for r, s, size in cells
+        if cpu["ranks"][r][s][str(size)] != curves[r][s]["curve"][str(size)]["rank"]
+    ]
+    gate_cells = [[r, s] for r, rows in gate_rows.items() for s in rows]
+    gate_differing = [[r, s] for r, s in gate_cells if cpu["gate"][r][s] != gate_rows[r][s]["rank"]]
+    return {
+        "criterion": False,
+        "note": "D-19: descriptive only, never a criterion",
+        "device": cpu["device"],
+        "torch_version": cpu["torch_version"],
+        "cells": len(cells),
+        "differing": len(differing),
+        "differing_cells": differing,
+        "gate_cells": len(gate_cells),
+        "gate_differing": len(gate_differing),
+        "gate_differing_cells": gate_differing,
+    }
+
+
+def build_record(root):
+    """The E5 record, only from the sidecars and through the frozen phase38_prereg definitions."""
+    root = pathlib.Path(root)
+    blob = _load(run_sidecar(root))
+    _prove(
+        _sha256(gate_sidecar(root)) == blob["gate_sha256"],
+        f"{gate_sidecar(root)} is not the bytes the run wrote (run sidecar SHA-256)",
+    )
+    gate = _load(gate_sidecar(root))
+    record = {
+        "front": FRONT,
+        "run_id": RUN_ID,
+        "status": blob["status"],
+        "approval": prereg.approval_block(),
+        "minting_record": {
+            "path": prereg.MINTING_RECORD,
+            "sha256": _sha256(_REPO / prereg.MINTING_RECORD),
+        },
+        "set_sizes": blob["sizes"],
+        "reconstruction": blob["reconstruction"],
+        "gate": gate,
+        "cost": {
+            "run_hours": _hours(blob["started_utc"], blob["finished_utc"]),
+            "e5_projection_hours": prereg.E5_PROJECTION_HOURS,
+            "e5_stop_hours": prereg.E5_STOP_HOURS,
+        },
+    }
+    sidecars = {"run": _sha256(run_sidecar(root)), "gate": blob["gate_sha256"]}
+    if blob["status"] == "SCORED":
+        cpu_path = cpu_sidecar(root)
+        _prove(cpu_path.exists(), f"{cpu_path} is missing: run crosscheck before emit (D-19)")
+        minting = _json(prereg.MINTING_RECORD)["slots"]
+        slots = blob["slots"]
+        sizes = {slot: list(prereg.nested_sizes(blob["sizes"][slot])) for slot in slots}
+        curves, sensitivity = {}, {}
+        for reading in blob["readings"]:
+            path = nll_sidecar(root, reading)
+            _prove(
+                _sha256(path) == blob["nll_sha256"].get(reading),
+                f"{path} is not the bytes the run wrote (run sidecar SHA-256)",
+            )
+            curves[reading] = {}
+            for slot, row in _load(path)["slots"].items():
+                _prove(
+                    row["minted"] == minting[slot]["cleared"][: blob["sizes"][slot] - 1],
+                    f"{path} {slot}: the scored values are not the minting record's prefix",
+                )
+                args = (row["taught"], row["taught_nll"], row["minted"], row["minted_nll"])
+                curves[reading][slot] = {
+                    "taught_nll": row["taught_nll"],
+                    "minted_nll": row["minted_nll"],
+                    "curve": curve_for(*args, sizes[slot]),
+                }
+                if "neighbour_d1" in minting[slot]:
+                    block = sensitivity.setdefault(
+                        slot,
+                        {
+                            "descriptive": True,
+                            "note": "D-27: ranks without the distance-1 neighbours of a taught "
+                            "value; never enters any definition",
+                            "curves": {},
+                        },
+                    )
+                    block["curves"][reading] = curve_for(
+                        *args, sizes[slot], exclude=minting[slot]["neighbour_d1"]
+                    )
+        a2 = prereg.a2_counts()
+        missing = [f"k{k}" for k in prereg.PREFIXES if f"k{k}" not in curves]
+        cpu = _load(cpu_path)
+        sidecars.update(cpu=_sha256(cpu_path), nll=blob["nll_sha256"])
+        record.update(
+            readings=curves,
+            descriptive_readings=["M2", "adapter_off"],
+            descriptive_note="D-11 / D-16: M2 and adapter-off are descriptive references; they "
+            "enter neither moved, left the top eighth, collapsed nor damaged",
+            committed_reference_sets=gate["rows"],
+            sensitivity_numeric=sensitivity,
+            events=None if missing else _events(curves, slots, sizes, a2),
+            a2={
+                slot: {
+                    "n_questions": a2[slot]["n_questions"],
+                    "counts": {str(k): c for k, c in a2[slot]["counts"].items()},
+                    "first_collapse": prereg.first_collapse(a2[slot]["counts"]),
+                    "first_damage": prereg.first_damage(
+                        a2[slot]["counts"], a2[slot]["n_questions"]
+                    ),
+                    "margin": prereg.MARGIN,
+                }
+                for slot in slots
+            },
+            drop_formula_audit=prereg.drop_formula_audit(a2),
+            cpu_crosscheck=_cpu_block(cpu, curves, gate["rows"], slots, sizes),
+        )
+        if missing:
+            record["events_reason"] = (
+                f"a rehearsal subset without the readings {missing}: the events are defined over "
+                f"all six prefixes {list(prereg.PREFIXES)}"
+            )
+    launch, now = blob["module_sha256_at_launch"], module_sha256()
+    record["provenance"] = {
+        "run": {key: blob[key] for key in RUN_PROVENANCE_KEYS},
+        "module_sha256_at_launch": launch,
+        "module_sha256": now,
+        "modules_changed_since_launch": sorted(
+            rel for rel in MODULES if launch.get(rel) != now[rel]
+        ),
+        "sidecar_sha256": sidecars,
+        "head_at_write": git_sha(),
+        "written_utc": _now(),
+    }
+    return record
+
+
+def emit(*, root=None):
+    """Write results/phase38_rank.json ONCE from the sidecars (D-22, SC4)."""
+    root = pathlib.Path(root) if root is not None else _ROOT
+    out = root / prereg.RANK_RECORD
+    _prove(
+        not out.exists(),
+        f"{out} exists — REFUSING to overwrite it. The E5 record is write-once; corrections are "
+        "dated continuations",
+    )
+    sidecar = run_sidecar(root)
+    _prove(sidecar.exists(), f"{sidecar} is missing: there is no E5 run to emit")
+    blob = _load(sidecar)
+    _prove(
+        not _is_real(root)
+        or (
+            blob["readings"] == list(prereg.READINGS)
+            and blob["slots"] == list(prereg.SLOTS)
+            and blob["max_size"] is None
+        ),
+        "the real root emits the full READINGS x SLOTS x E5_SET_SIZES shape only",
+    )
+    pathspec = LAUNCH_PATHSPEC
+    if out.resolve().is_relative_to(_REPO.resolve()):
+        pathspec = (*LAUNCH_PATHSPEC, f":(exclude){prereg.RANK_RECORD}")
+    refuse_if_dirty(
+        who="phase38_rank",
+        detail=(
+            "the E5 record publishes git_sha and hashes its modules from the working tree; a "
+            "record written from a dirty tree names a commit it cannot be regenerated from"
+        ),
+        pathspec=pathspec,
+        cwd=_REPO,
+    )
+    record = build_record(root)
+    phase25_run.atomic_write_json(out, record)
+    print(f"EMITTED {record['status']} {out}", flush=True)
+    return record

@@ -136,6 +136,7 @@ def rig(tmp_path, monkeypatch, gate_ranks, references, committed_digests):
         log=[],
         crash=None,
         table=_fake_table(gate_ranks, references),
+        cpu_table={},
         digests=dict(committed_digests),
     )
     # The GITIGNORED run inputs (absent on ubuntu CI) are tmp stand-ins; tracked ones stay real.
@@ -169,6 +170,8 @@ def rig(tmp_path, monkeypatch, gate_ranks, references, committed_digests):
         rig.log.append((model.reading, slot, value))
         if rig.crash is not None and rig.crash(model.reading, slot, value):
             raise RuntimeError("scorer died mid-scoring")
+        if device == "cpu" and (model.reading, slot, value) in rig.cpu_table:
+            return rig.cpu_table[(model.reading, slot, value)]
         return rig.table.get((model.reading, slot, value), 1.0 + _offset(model.reading, value))
 
     monkeypatch.setattr(phase19_erasure, "value_span_nll_mean", nll)
@@ -750,6 +753,275 @@ def test_a_refusal_inside_run_writes_no_ledger_line(rig, monkeypatch):
     assert not rig.paths["ledger_path"].exists()
     assert not rig.paths["heartbeat_path"].exists()
     assert rig.log == [] and rig.models == []
+
+
+# =================================================================================================
+# (4b) crosscheck, build_record, emit (plan 38-07 Task 1): the record arithmetic through the
+# phase38_prereg definitions, recomputed here from the NLL sidecars.
+# =================================================================================================
+
+
+def _scored(rig, **shape):
+    assert phase38_rank.run(root=rig.root, **rig.paths, **shape) == "SCORED"
+    phase38_rank.crosscheck(root=rig.root)
+    return _sidecar(phase38_rank.run_sidecar(rig.root))
+
+
+def _recomputed_curve(row, sizes, exclude=()):
+    nll = {row["taught"]: row["taught_nll"], **dict(zip(row["minted"], row["minted_nll"]))}
+    out = {}
+    for size in sizes:
+        members = [v for i, v in enumerate(row["minted"][: size - 1]) if i not in exclude]
+        rank = phase38_prereg.rank_in_prefix(nll, row["taught"], members)
+        n = len(members) + 1
+        out[str(size)] = {"size": n, "rank": rank, "bits": phase38_prereg.exposure_bits(rank, n)}
+    return out
+
+
+def _jsonable(blob):
+    return json.loads(json.dumps(blob))
+
+
+def test_curve_for_reads_the_nested_prefixes():
+    curve = phase38_rank.curve_for("t", 1.0, ["a", "b", "c"], [0.5, 2.0, 0.7], [2, 4])
+    assert curve == {
+        "2": {"size": 2, "rank": 2, "bits": 0.0},
+        "4": {"size": 4, "rank": 3, "bits": 2 - phase38_prereg.math.log2(3)},
+    }
+    trimmed = phase38_rank.curve_for(
+        "t", 1.0, ["a", "b", "c"], [0.5, 2.0, 0.7], [2, 4], exclude=[0]
+    )
+    assert trimmed == {
+        "2": {"size": 1, "rank": 1, "bits": 0.0},
+        "4": {"size": 3, "rank": 2, "bits": phase38_prereg.math.log2(3) - 1},
+    }
+
+
+def test_crosscheck_writes_the_cpu_sidecar_once(rig, capsys):
+    with pytest.raises(SystemExit, match=r"^\[phase38_rank\] .*phase38_rank_run\.json is missing"):
+        phase38_rank.crosscheck(root=rig.root)
+    blob = _scored(rig)
+    assert "CROSSCHECK DONE" in capsys.readouterr().out
+    cpu = _sidecar(phase38_rank.cpu_sidecar(rig.root))
+    assert cpu["device"] == "cpu" and "torch_version" in cpu
+    assert [r for r, d in rig.models if d == "cpu"] == list(READINGS)
+    gate = _sidecar(phase38_rank.gate_sidecar(rig.root))
+    assert cpu["gate"] == {
+        r: {s: row["rank"] for s, row in rows.items()} for r, rows in gate["rows"].items()
+    }
+    for reading in READINGS:
+        side = _sidecar(phase38_rank.nll_sidecar(rig.root, reading))["slots"]
+        for slot in SLOTS:
+            sizes = list(phase38_prereg.nested_sizes(blob["sizes"][slot]))
+            curve = _recomputed_curve(side[slot], sizes)
+            assert cpu["ranks"][reading][slot] == {s: c["rank"] for s, c in curve.items()}
+    before = phase38_rank.cpu_sidecar(rig.root).read_bytes()
+    with pytest.raises(SystemExit, match=r"^\[phase38_rank\] .*phase38_rank_cpu\.json exists"):
+        phase38_rank.crosscheck(root=rig.root)
+    assert phase38_rank.cpu_sidecar(rig.root).read_bytes() == before
+
+
+def test_emit_writes_the_record_once_through_the_prereg_definitions(rig, capsys):
+    # cat_name at k0: every minted value below the taught one, so rank_0 = |R| at every size:
+    # "moved" is UNREACHABLE_AT_SIZE and "left the top eighth" is ALREADY_AT_K0 (WR-01).
+    cat_minted = phase38_rank.scoring_plan(slots=("cat_name",))["cat_name"]["minted"]
+    rig.table.update({("k0", "cat_name", v): 0.1 for v in cat_minted})
+    blob = _scored(rig)
+    record = phase38_rank.emit(root=rig.root)
+    assert f"EMITTED SCORED {rig.root / phase38_prereg.RANK_RECORD}" in capsys.readouterr().out
+    on = _sidecar(rig.root / phase38_prereg.RANK_RECORD)
+    assert on == _jsonable(record)
+    assert (on["front"], on["run_id"], on["status"]) == ("E5", phase38_rank.RUN_ID, "SCORED")
+    assert on["approval"] == _jsonable(phase38_prereg.approval_block())
+    assert on["minting_record"] == {
+        "path": phase38_prereg.MINTING_RECORD,
+        "sha256": hashlib.sha256((_REPO / phase38_prereg.MINTING_RECORD).read_bytes()).hexdigest(),
+    }
+    assert on["set_sizes"] == blob["sizes"] and on["reconstruction"] == blob["reconstruction"]
+    gate = _sidecar(phase38_rank.gate_sidecar(rig.root))
+    assert on["gate"] == gate and on["committed_reference_sets"] == gate["rows"]
+    assert on["descriptive_readings"] == ["M2", "adapter_off"]
+    assert set(on["readings"]) == set(READINGS)
+    sides = {r: _sidecar(phase38_rank.nll_sidecar(rig.root, r))["slots"] for r in READINGS}
+    sizes = {s: list(phase38_prereg.nested_sizes(blob["sizes"][s])) for s in SLOTS}
+    for reading in READINGS:
+        assert set(on["readings"][reading]) == set(SLOTS)
+        for slot in SLOTS:
+            cell, side = on["readings"][reading][slot], sides[reading][slot]
+            assert cell["curve"] == _recomputed_curve(side, sizes[slot])
+            assert (cell["taught_nll"], cell["minted_nll"]) == (
+                side["taught_nll"],
+                side["minted_nll"],
+            )
+    a2 = phase38_prereg.a2_counts()
+    for slot in SLOTS:
+        counts, n = a2[slot]["counts"], a2[slot]["n_questions"]
+        collapse = phase38_prereg.first_collapse(counts)
+        damage = phase38_prereg.first_damage(counts, n)
+        assert on["a2"][slot] == {
+            "n_questions": n,
+            "counts": {str(k): c for k, c in counts.items()},
+            "first_collapse": collapse,
+            "first_damage": damage,
+            "margin": phase38_prereg.MARGIN,
+        }
+        assert set(on["events"][slot]) == {str(size) for size in sizes[slot]}
+        for size in sizes[slot]:
+            ranks = {
+                k: on["readings"][f"k{k}"][slot]["curve"][str(size)]["rank"]
+                for k in phase38_prereg.PREFIXES
+            }
+            rank_0 = ranks[0]
+            expected = {
+                "moved": (
+                    {k: phase38_prereg.moved(r, rank_0) for k, r in ranks.items()},
+                    phase38_prereg.moved_reachable(rank_0, size),
+                ),
+                "left_top_eighth": (
+                    {k: phase38_prereg.left_top_eighth(r, size) for k, r in ranks.items()},
+                    True,
+                ),
+            }
+            events = on["events"][slot][str(size)]
+            assert set(events) == set(expected)
+            for name, (flags, reachable) in expected.items():
+                first = phase38_prereg.first_event(flags)
+                assert set(events[name]["flags"]) == {str(k) for k in phase38_prereg.PREFIXES}
+                assert not {"M2", "adapter_off", "kM2"} & set(events[name]["flags"])  # D-16
+                assert events[name] == {
+                    "flags": {str(k): f for k, f in flags.items()},
+                    "first": first,
+                    "rank_0": rank_0,
+                    "reachable": reachable,
+                    "vs_collapse": phase38_prereg.relation(first, collapse, reachable=reachable),
+                    "vs_damage": phase38_prereg.relation(first, damage, reachable=reachable),
+                }
+    for size in sizes["cat_name"]:
+        cat = on["events"]["cat_name"][str(size)]
+        assert cat["moved"]["rank_0"] == size
+        assert cat["moved"]["vs_collapse"] == cat["moved"]["vs_damage"] == "UNREACHABLE_AT_SIZE"
+        assert cat["left_top_eighth"]["vs_damage"] == "ALREADY_AT_K0"
+    relations = {
+        e[name][side]
+        for by_size in on["events"].values()
+        for e in by_size.values()
+        for name in e
+        for side in ("vs_collapse", "vs_damage")
+    }
+    assert relations - {"UNREACHABLE_AT_SIZE", "ALREADY_AT_K0"}  # the reachable path is exercised
+    # D-27: the numeric slots without their distance-1 neighbours, descriptive.
+    minting = _read(phase38_prereg.MINTING_RECORD)["slots"]
+    numeric = {s for s in SLOTS if "neighbour_d1" in minting[s]}
+    assert numeric == {"birth_year", "house_number"} == set(on["sensitivity_numeric"])
+    for slot in numeric:
+        excluded = set(minting[slot]["neighbour_d1"])
+        sens = on["sensitivity_numeric"][slot]
+        assert sens["descriptive"] is True
+        for reading in READINGS:
+            curve = _recomputed_curve(sides[reading][slot], sizes[slot], excluded)
+            assert sens["curves"][reading] == curve
+            assert any(c["size"] < int(s) for s, c in curve.items())
+    # D-33
+    audit = on["drop_formula_audit"]
+    assert audit == _jsonable(phase38_prereg.drop_formula_audit(a2))
+    assert audit["flips"] == [] and audit["exact_ties"] == [["person_name", 8]]
+    # D-19, descriptive
+    cpu = on["cpu_crosscheck"]
+    assert cpu["criterion"] is False and cpu["device"] == "cpu"
+    assert (cpu["differing"], cpu["differing_cells"]) == (0, [])
+    assert cpu["cells"] == len(READINGS) * sum(len(v) for v in sizes.values())
+    assert (cpu["gate_cells"], cpu["gate_differing"]) == (len(READINGS) * len(SLOTS), 0)
+    assert on["cost"]["e5_stop_hours"] == phase38_prereg.E5_STOP_HOURS
+    assert on["cost"]["e5_projection_hours"] == phase38_prereg.E5_PROJECTION_HOURS
+    assert 0 <= on["cost"]["run_hours"] < 1
+    prov = on["provenance"]
+    assert prov["run"] == {key: blob[key] for key in phase38_rank.RUN_PROVENANCE_KEYS}
+    assert prov["run"]["device"] == blob["device"] == "mps"
+    assert prov["module_sha256_at_launch"] == blob["module_sha256_at_launch"]
+    assert prov["module_sha256"] == phase38_rank.module_sha256()
+    assert prov["modules_changed_since_launch"] == []
+    assert prov["sidecar_sha256"]["cpu"] == phase38_rank._sha256(phase38_rank.cpu_sidecar(rig.root))
+    # The helpers, called directly: build_record is a pure function of the sidecars.
+    rebuilt = _jsonable(phase38_rank.build_record(rig.root))
+    for blob_ in (rebuilt, on):
+        blob_["provenance"].pop("written_utc")
+    assert rebuilt == on
+    assert _jsonable(phase38_rank._events(record["readings"], SLOTS, sizes, a2)) == on["events"]
+    cpu_side = phase38_rank._load(phase38_rank.cpu_sidecar(rig.root))
+    assert cpu_side == _sidecar(phase38_rank.cpu_sidecar(rig.root))
+    block = phase38_rank._cpu_block(cpu_side, on["readings"], gate["rows"], SLOTS, sizes)
+    assert block == on["cpu_crosscheck"]
+    assert on["cost"]["run_hours"] == phase38_rank._hours(blob["started_utc"], blob["finished_utc"])
+    assert phase38_rank._hours("2026-10-04T10:00:00+00:00", "2026-10-04T11:30:00+00:00") == 1.5
+    before = (rig.root / phase38_prereg.RANK_RECORD).read_bytes()
+    with pytest.raises(SystemExit, match=r"REFUSING to overwrite"):
+        phase38_rank.emit(root=rig.root)
+    assert (rig.root / phase38_prereg.RANK_RECORD).read_bytes() == before
+
+
+def test_a_perturbed_cpu_nll_is_counted_and_a_subset_has_no_events(rig):
+    value = phase38_rank.scoring_plan(slots=("pet_name",), max_size=8)["pet_name"]["minted"][0]
+    mps = rig.table.get(("k0", "pet_name", value), 1.0 + _offset("k0", value))
+    rig.cpu_table[("k0", "pet_name", value)] = 5.0 if mps < 1.0 else 0.0
+    _scored(rig, readings=("k0",), slots=("pet_name",), max_size=8)
+    record = phase38_rank.emit(root=rig.root)
+    cpu = record["cpu_crosscheck"]
+    assert (cpu["cells"], cpu["differing"], cpu["differing_cells"]) == (
+        1,
+        1,
+        [["k0", "pet_name", 8]],
+    )
+    assert (cpu["gate_cells"], cpu["gate_differing"]) == (1, 0)
+    assert record["events"] is None and "k8" in record["events_reason"]
+    assert record["set_sizes"] == {"pet_name": 8}
+
+
+def test_a_gate_failed_run_emits_the_gate_rows_only(rig):
+    rig.table[("k32", "street", TAUGHT["street"])] = 3.0
+    assert phase38_rank.run(root=rig.root, **rig.paths) == "GATE_FAILED"
+    with pytest.raises(SystemExit, match=r"^\[phase38_rank\] .*not SCORED"):
+        phase38_rank.crosscheck(root=rig.root)
+    record = phase38_rank.emit(root=rig.root)  # no CPU sidecar needed
+    assert record["status"] == "GATE_FAILED"
+    assert record["gate"] == _sidecar(phase38_rank.gate_sidecar(rig.root))
+    assert record["gate"]["passed"] is False
+    assert not {"readings", "events", "sensitivity_numeric", "cpu_crosscheck", "a2"} & set(record)
+    assert record["approval"] == phase38_prereg.approval_block()
+    assert (rig.root / phase38_prereg.RANK_RECORD).exists()
+
+
+def test_emit_refusals_write_nothing(rig, monkeypatch):
+    out = rig.root / phase38_prereg.RANK_RECORD
+    with pytest.raises(SystemExit, match=r"^\[phase38_rank\] .*phase38_rank_run\.json is missing"):
+        phase38_rank.emit(root=rig.root)
+    shape = {"readings": ("k0", "k8"), "slots": ("pet_name",), "max_size": 8}
+    assert phase38_rank.run(root=rig.root, **rig.paths, **shape) == "SCORED"
+    with pytest.raises(SystemExit, match=r"^\[phase38_rank\] .*phase38_rank_cpu\.json is missing"):
+        phase38_rank.emit(root=rig.root)
+    phase38_rank.crosscheck(root=rig.root)
+    for path in (phase38_rank.gate_sidecar(rig.root), phase38_rank.nll_sidecar(rig.root, "k8")):
+        original = path.read_bytes()
+        path.write_bytes(original + b" ")
+        with pytest.raises(SystemExit, match=r"^\[phase38_rank\] .*not the bytes the run wrote"):
+            phase38_rank.emit(root=rig.root)
+        path.write_bytes(original)
+
+    def dirty(**kw):
+        raise SystemExit("[phase38_rank] dirty tree")
+
+    monkeypatch.setattr(phase38_rank, "refuse_if_dirty", dirty)
+    with pytest.raises(SystemExit, match=r"dirty tree"):
+        phase38_rank.emit(root=rig.root)
+    monkeypatch.setattr(phase38_rank, "refuse_if_dirty", lambda **kw: rig.dirty.append(kw))
+    monkeypatch.setattr(phase38_rank, "_ROOT", rig.root)  # the real-root branch: full shape only
+    with pytest.raises(SystemExit, match=r"^\[phase38_rank\] .*full"):
+        phase38_rank.emit(root=rig.root)
+    assert not out.exists()
+    monkeypatch.undo()
+    out.write_text("{}", encoding="utf-8")
+    with pytest.raises(SystemExit, match=r"REFUSING to overwrite"):
+        phase38_rank.emit(root=rig.root)
+    assert out.read_text(encoding="utf-8") == "{}"
 
 
 # =================================================================================================
