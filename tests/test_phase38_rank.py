@@ -23,9 +23,11 @@ import ast
 import contextlib
 import datetime
 import hashlib
+import inspect
 import json
 import pathlib
 import re
+import subprocess
 import sys
 import types
 
@@ -1193,6 +1195,279 @@ def test_the_real_root_record_carries_the_disclosure(rig, monkeypatch, gate_fail
     assert disclosure["commits"] == [] and disclosure["driver_changed"] is False
     assert disclosure["slice_read"]["slots"] == ["pet_name", "birth_year"]
     assert (rig.root / phase38_prereg.RANK_RECORD).exists()
+
+
+# =================================================================================================
+# (4d) render_report, report, main (plan 38-07 Task 3): the report is the record rendered, nothing
+# else; the CLI calls each command with no argument from the repository root.
+# =================================================================================================
+
+_SECTIONS = [
+    "# Phase 38 — E5 exposure rank at larger minted sets",
+    "## Status",
+    "## Approval and cost (D-21/D-22/D-23)",
+    "## Gate: committed reference sets (D-18, D-11a)",
+    "## A2 counts, collapse and damage (D-13, D-14)",
+    "## Drop formula audit (D-33)",
+    "## Rank curves (D-15)",
+    "## Did the rank move before generation collapsed? (D-12, D-29, D-30)",
+    "## Numeric neighbour sensitivity (D-27, descriptive)",
+    "## CPU cross-check (D-19, descriptive)",
+    "## Rehearsal disclosure (D-34)",
+    "## Limitations (D-36)",
+    "## Provenance",
+]
+_LIMITATION_SENTENCES = (
+    "The name/place candidates are grammar syllables while the taught values look like English "
+    "compound words, so at the same token count the base model may prefer the taught values.",
+    'Read each curve beside the "adapter-off (descriptive)" column of the same slot and size.',
+)
+_COLUMNS = (*(f"k{k}" for k in phase38_prereg.PREFIXES), "M2", "adapter_off")
+
+
+def _emitted(rig):
+    cat_minted = phase38_rank.scoring_plan(slots=("cat_name",))["cat_name"]["minted"]
+    rig.table.update({("k0", "cat_name", v): 0.1 for v in cat_minted})
+    _scored(rig)
+    phase38_rank.emit(root=rig.root)
+    return _sidecar(rig.root / phase38_prereg.RANK_RECORD)
+
+
+def _headings(text):
+    return re.findall(r"^#{1,2} .+$", text, flags=re.M)
+
+
+def _section(text, heading):
+    start = text.index(heading + "\n")
+    end = text.find("\n## ", start + len(heading))
+    return text[start : end if end != -1 else len(text)]
+
+
+def _rows(section):
+    """Table body rows (header and separator dropped) as lists of cell strings."""
+    lines = [line for line in section.splitlines() if line.startswith("|")]
+    return [[c.strip() for c in line.strip("|").split("|")] for line in lines[2:]]
+
+
+def test_render_report_renders_the_scored_record(rig):
+    record = _emitted(rig)
+    text = phase38_rank.render_report(record)
+    assert _headings(text) == _SECTIONS
+    assert record["approval"]["ruling"] in text  # D-21, verbatim
+    # Curves: parsed back and compared with the record, cell by cell.
+    curves = _section(text, "## Rank curves (D-15)")
+    header = [line for line in curves.splitlines() if line.startswith("|")][0]
+    assert "M2 (descriptive)" in header and "adapter-off (descriptive)" in header
+    rows = _rows(curves)
+    expected_rows = [
+        (slot, str(size))
+        for slot in SLOTS
+        for size in phase38_prereg.nested_sizes(record["set_sizes"][slot])
+    ]
+    assert [(r[0], r[1]) for r in rows] == expected_rows
+    for row in rows:
+        slot, size = row[0], row[1]
+        for reading, cell in zip(_COLUMNS, row[2:]):
+            rank, bits = re.fullmatch(r"(\d+) \((.+)\)", cell).groups()
+            curve = record["readings"][reading][slot]["curve"][size]
+            assert (int(rank), float(bits)) == (curve["rank"], curve["bits"])
+    # Relations: one row per slot x size x event, WR-01 outcomes by name with rank_0.
+    relations = _rows(_section(text, _SECTIONS[7]))
+    events = record["events"]
+    assert len(relations) == 2 * sum(len(by_size) for by_size in events.values())
+    cat = [r for r in relations if r[0] == "cat_name"]
+    for r in cat:
+        size = r[1]
+        if r[2].startswith("moved"):
+            assert r[6] == r[8] == f"UNREACHABLE_AT_SIZE (rank_0 = {size})"
+        else:
+            assert r[6] == r[8] == f"ALREADY_AT_K0 (rank_0 = {size})"
+    by_year = [r for r in relations if r[0] == "birth_year"]  # never collapsed (A2 counts)
+    assert all(r[5] == "never within the grid" for r in by_year)
+    assert any(r[6] == "never collapsed within the grid" for r in by_year)
+    # A2 counts and the D-33 audit.
+    a2_rows = _rows(_section(text, "## A2 counts, collapse and damage (D-13, D-14)"))
+    assert [r[0] for r in a2_rows] == list(SLOTS)
+    audit = record["drop_formula_audit"]
+    d33 = _section(text, "## Drop formula audit (D-33)")
+    assert [(r[0], int(r[1])) for r in _rows(d33)] == [tuple(c) for c in audit["differing"]]
+    assert "No damage event changes between the two formulas." in d33
+    assert "`person_name` k = 8: exact margin tie decided by D-14's strict >" in d33
+    assert "margin tie decided by rounding" not in d33
+    sens = _section(text, "## Numeric neighbour sensitivity (D-27, descriptive)")
+    assert {r[0] for r in _rows(sens)} == {"birth_year", "house_number"}
+    cpu = _section(text, "## CPU cross-check (D-19, descriptive)")
+    assert f"{record['cpu_crosscheck']['differing']} of {record['cpu_crosscheck']['cells']}" in cpu
+    assert "This record IS the CPU rehearsal" in _section(text, "## Rehearsal disclosure (D-34)")
+    limitations = _section(text, "## Limitations (D-36)")
+    assert all(sentence in limitations for sentence in _LIMITATION_SENTENCES)
+    assert record["provenance"]["run"]["git_sha_at_launch"] in _section(text, "## Provenance")
+    # The other branches, chosen from the record's data.
+    flipped = json.loads(json.dumps(record))
+    flipped["drop_formula_audit"]["flips"] = [["street", 16]]
+    first = next(iter(flipped["events"]["pet_name"]))
+    flipped["events"]["pet_name"][first]["moved"]["vs_damage"] = "REFERENCE_NEVER_IN_GRID"
+    other = phase38_rank.render_report(flipped)
+    assert "`street` k = 16: margin tie decided by rounding" in other
+    assert "No damage event changes" not in other
+    assert "never damaged within the grid" in other
+    subset = json.loads(json.dumps(record))
+    subset.update(events=None, events_reason="a rehearsal subset without the readings ['k8']")
+    assert "a rehearsal subset without the readings ['k8']" in phase38_rank.render_report(subset)
+
+
+def test_render_helpers():
+    assert phase38_rank._table(("a", "b"), [[1, "x"]]) == [
+        "| a | b |",
+        "|---|---|",
+        "| 1 | x |",
+        "",
+    ]
+    event = {"rank_0": 3, "vs_collapse": "REFERENCE_NEVER_IN_GRID", "vs_damage": "ALREADY_AT_K0"}
+    assert phase38_rank._relation_text(event, "vs_collapse") == "never collapsed within the grid"
+    assert phase38_rank._relation_text(event, "vs_damage") == "ALREADY_AT_K0 (rank_0 = 3)"
+    event["vs_damage"] = "UNREACHABLE_AT_SIZE"
+    assert phase38_rank._relation_text(event, "vs_damage") == "UNREACHABLE_AT_SIZE (rank_0 = 3)"
+    event["vs_damage"] = "BEFORE"
+    assert phase38_rank._relation_text(event, "vs_damage") == "BEFORE"
+    assert phase38_rank._first_text(None, "never") == "never"
+    assert phase38_rank._first_text(16, "never") == "k = 16"
+    assert phase38_rank._slots({"street": 1, "pet_name": 2}) == ["pet_name", "street"]
+    assert phase38_rank._sizes(["128", "32", "512", "8"]) == ["8", "32", "128", "512"]
+    curves = {"k0": {"pet_name": {"32": {"rank": 2, "bits": 4.0}, "8": {"rank": 1, "bits": 3.0}}}}
+    assert phase38_rank._curve_rows(curves, ["pet_name"], ["k0", "M2"]) == [
+        ["pet_name", "8", "1 (3.0)", "—"],
+        ["pet_name", "32", "2 (4.0)", "—"],
+    ]
+    lines = phase38_rank._disclosure_lines({"this_is_the_rehearsal": True})
+    assert lines[0].startswith("This record IS the CPU rehearsal (D-34)")
+
+
+def test_render_report_renders_the_disclosure_branches(rig):
+    record = _emitted(rig)
+    disclosure = {
+        "statement": "The CPU rehearsal read pet_name at |R| 8 under 8 readings.",
+        "slice_read": {"readings": list(READINGS), "slots": ["pet_name"], "max_size": 8},
+        "rehearsal_git_sha": "a" * 40,
+        "rehearsal_module_sha256": {rel: "1" * 64 for rel in _DISCLOSED},
+        "launch_git_sha": "b" * 40,
+        "launch_module_sha256": {rel: "1" * 64 for rel in _DISCLOSED},
+        "changed": {rel: False for rel in _DISCLOSED},
+        "driver_changed": False,
+        "commits": [],
+    }
+    empty = phase38_rank.render_report({**record, "rehearsal_disclosure": disclosure})
+    section = _section(empty, "## Rehearsal disclosure (D-34)")
+    assert disclosure["statement"] in section and "a" * 40 in section and "b" * 40 in section
+    assert (
+        "No commit touched scripts/phase38_rank.py or scripts/phase38_sizes_prereg.py between the "
+        "rehearsal and the launch." in section
+    )
+    assert len(_rows(section)) == len(_DISCLOSED)
+    commit = {"sha": "c" * 40, "reason": "fix(38-07): why", "modules": [_DISCLOSED[0]]}
+    changed = {
+        **disclosure,
+        "changed": {_DISCLOSED[0]: True, _DISCLOSED[1]: False},
+        "driver_changed": True,
+        "commits": [commit],
+    }
+    listed = _section(
+        phase38_rank.render_report({**record, "rehearsal_disclosure": changed}),
+        "## Rehearsal disclosure (D-34)",
+    )
+    assert f"`{'c' * 40}` fix(38-07): why (touched: {_DISCLOSED[0]})" in listed
+    assert "No commit touched" not in listed
+
+
+def test_render_report_on_a_gate_failed_record(rig):
+    rig.table[("k32", "street", TAUGHT["street"])] = 3.0
+    phase38_rank.run(root=rig.root, **rig.paths)
+    record = _jsonable(phase38_rank.emit(root=rig.root))
+    text = phase38_rank.render_report(record)
+    assert _headings(text) == [
+        "# Phase 38 — E5 exposure rank at larger minted sets",
+        "## Status",
+        "## Approval and cost (D-21/D-22/D-23)",
+        "## Gate: committed reference sets (D-18, D-11a)",
+        "## Rehearsal disclosure (D-34)",
+        "## Limitations (D-36)",
+        "## Provenance",
+    ]
+    assert "GATE_FAILED" in _section(text, "## Status")
+    gate_rows = _rows(_section(text, "## Gate: committed reference sets (D-18, D-11a)"))
+    assert len(gate_rows) == len(READINGS) * len(SLOTS)
+    assert [r[:2] for r in gate_rows if r[5] == "False"] == [["k32", "street"]]
+    assert all(sentence in text for sentence in _LIMITATION_SENTENCES)
+
+
+def test_report_writes_once_and_the_real_root_needs_a_committed_record(rig, monkeypatch, capsys):
+    with pytest.raises(SystemExit, match=r"^\[phase38_rank\] .*phase38_rank\.json is missing"):
+        phase38_rank.report(root=rig.root)
+    record = _emitted(rig)
+    out = rig.root / phase38_prereg.REPORT_RECORD
+    monkeypatch.setattr(phase38_rank, "_ROOT", rig.root)
+    monkeypatch.setattr(phase38_rank, "_tracked_and_clean", lambda rel: False)
+    with pytest.raises(SystemExit, match=r"^\[phase38_rank\] .*committed and unmodified"):
+        phase38_rank.report()
+    assert not out.exists()
+    monkeypatch.undo()
+    assert phase38_rank.report(root=rig.root) == out
+    assert f"REPORT {out}" in capsys.readouterr().out
+    assert out.read_text(encoding="utf-8") == phase38_rank.render_report(record)
+    before = out.read_bytes()
+    with pytest.raises(SystemExit, match=r"REFUSING to overwrite"):
+        phase38_rank.report(root=rig.root)
+    assert out.read_bytes() == before
+
+
+def test_tracked_and_clean_reads_git():
+    assert phase38_rank._tracked_and_clean("scripts/phase38_prereg.py") is True
+    assert phase38_rank._tracked_and_clean("results/phase38_never_written.json") is False
+
+
+def test_the_full_fake_chain_through_the_commands(rig):
+    assert phase38_rank.run(root=rig.root, **rig.paths) == "SCORED"
+    phase38_rank.crosscheck(root=rig.root)
+    phase38_rank.emit(root=rig.root)
+    out = phase38_rank.report(root=rig.root)
+    artifacts = (
+        phase38_rank.run_sidecar(rig.root),
+        phase38_rank.cpu_sidecar(rig.root),
+        rig.root / phase38_prereg.RANK_RECORD,
+        out,
+    )
+    assert all(path.exists() for path in artifacts)
+    record = json.loads((rig.root / phase38_prereg.RANK_RECORD).read_text(encoding="utf-8"))
+    assert out.read_text(encoding="utf-8") == phase38_rank.render_report(record)
+
+
+@pytest.mark.parametrize("command", ["preflight", "run", "crosscheck", "emit", "report"])
+def test_main_dispatches_with_no_arguments_from_the_repo(tmp_path, monkeypatch, command):
+    real = getattr(phase38_rank, command)
+    seen = []
+
+    def recorder(*args, **kwargs):
+        inspect.signature(real).bind(*args, **kwargs)
+        seen.append((args, kwargs, pathlib.Path.cwd()))
+
+    monkeypatch.setattr(phase38_rank, command, recorder)
+    monkeypatch.chdir(tmp_path)
+    assert phase38_rank.main([command]) == 0
+    assert seen == [((), {}, phase38_rank._REPO)]
+
+
+@pytest.mark.parametrize("argv", [[], ["bogus"], ["run", "x"]])
+def test_main_refuses_anything_else(argv):
+    with pytest.raises(SystemExit) as raised:
+        phase38_rank.main(argv)
+    assert raised.value.code == phase38_rank.__doc__
+
+
+def test_the_cli_exits_non_zero_on_a_bogus_command():
+    done = subprocess.run(
+        [sys.executable, "scripts/phase38_rank.py", "bogus"], cwd=_REPO, capture_output=True
+    )
+    assert done.returncode != 0
 
 
 # =================================================================================================

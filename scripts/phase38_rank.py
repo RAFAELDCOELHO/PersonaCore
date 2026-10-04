@@ -2,9 +2,9 @@
 
     .venv/bin/python scripts/phase38_rank.py preflight   # every refusal, writes nothing
     .venv/bin/python scripts/phase38_rank.py run         # THE run: gate, then one scoring pass
-    .venv/bin/python scripts/phase38_rank.py crosscheck  # (plan 38-07) CPU cross-check
-    .venv/bin/python scripts/phase38_rank.py emit        # (plan 38-07) the record from the sidecars
-    .venv/bin/python scripts/phase38_rank.py report      # (plan 38-07) the report
+    .venv/bin/python scripts/phase38_rank.py crosscheck  # D-19 CPU cross-check (descriptive)
+    .venv/bin/python scripts/phase38_rank.py emit        # the write-once record from the sidecars
+    .venv/bin/python scripts/phase38_rank.py report      # the report, from the committed record
 
 WHAT E5 MEASURES. For each of the eight locked slots, the taught value's rank among one maximum
 minted set (results/phase38_minting.json, sizes from phase38_sizes_prereg.E5_SET_SIZES, D-07/D-31),
@@ -32,6 +32,11 @@ reading; a crash leaves an open start that `phase36_ledger.reconcile` closes wit
 A partial shape (readings / slots / max_size) and a CPU device exist only for a rehearsal into a
 tmp root outside the repository; the real root runs the full READINGS x SLOTS x E5_SET_SIZES shape.
 
+REHEARSAL DISCLOSURE (D-34). The CPU rehearsal reads a slice of the real result before the MPS
+run. `run(rehearsal_identity=...)` writes its identity (git sha, the DISCLOSED_MODULES digests, the
+slice) write-once BEFORE the first value is scored; the real root refuses to launch without it,
+and the record lists every later commit to a DISCLOSED_MODULES file with its subject as reason.
+
 Torch-free at import: phase38_sizes_prereg loads torch through its caps call (38-05), so it and
 every torch-importing module are imported inside the functions that need them.
 """
@@ -41,6 +46,7 @@ import datetime
 import gc
 import hashlib
 import json
+import os
 import pathlib
 import subprocess
 import sys
@@ -899,3 +905,366 @@ def emit(*, root=None):
     phase25_run.atomic_write_json(out, record)
     print(f"EMITTED {record['status']} {out}", flush=True)
     return record
+
+
+# The report (SC2): the record rendered, nothing else. No number is typed in the template text.
+_LIMITATIONS = (
+    "The name/place candidates are grammar syllables while the taught values look like English "
+    "compound words, so at the same token count the base model may prefer the taught values.",
+    'Read each curve beside the "adapter-off (descriptive)" column of the same slot and size.',
+)
+_DESCRIPTIVE = {"M2": "M2 (descriptive)", "adapter_off": "adapter-off (descriptive)"}
+_EVENT_NAMES = {"moved": "moved (D-12)", "left_top_eighth": "left the top eighth (D-29)"}
+_NEVER_IN_GRID = {
+    "vs_collapse": "never collapsed within the grid",
+    "vs_damage": "never damaged within the grid",
+}
+
+
+def _table(header, rows):
+    lines = ["| " + " | ".join(header) + " |", "|" + "---|" * len(header)]
+    return [*lines, *("| " + " | ".join(str(c) for c in row) + " |" for row in rows), ""]
+
+
+def _relation_text(event, side):
+    name = event[side]
+    if name == "REFERENCE_NEVER_IN_GRID":
+        return _NEVER_IN_GRID[side]
+    if name in ("ALREADY_AT_K0", "UNREACHABLE_AT_SIZE"):
+        return f"{name} (rank_0 = {event['rank_0']})"
+    return name
+
+
+def _first_text(k, never):
+    return never if k is None else f"k = {k}"
+
+
+def _slots(keys):
+    """The record's slots in the locked SLOTS order (the JSON keys are sorted)."""
+    return [slot for slot in prereg.SLOTS if slot in keys]
+
+
+def _sizes(keys):
+    """Nested sizes or prefixes in numeric order (the JSON keys are sorted as strings)."""
+    return sorted(keys, key=int)
+
+
+def _curve_rows(curves_by_reading, slots, columns):
+    rows = []
+    for slot in slots:
+        for size in _sizes(next(iter(curves_by_reading.values()))[slot]):
+            cells = [
+                f"{c[slot][size]['rank']} ({c[slot][size]['bits']!r})"
+                if (c := curves_by_reading.get(reading)) is not None
+                else "—"
+                for reading in columns
+            ]
+            rows.append([slot, size, *cells])
+    return rows
+
+
+def _disclosure_lines(disclosure):
+    if disclosure.get("this_is_the_rehearsal"):
+        return [
+            "This record IS the CPU rehearsal (D-34): it read a slice of the real result before "
+            "the driver review and the MPS run. The real record lists every later commit to a "
+            "scoring module with its reason.",
+            "",
+        ]
+    slice_read = disclosure["slice_read"]
+    lines = [
+        disclosure["statement"],
+        "",
+        f"- slice read: slots {', '.join(slice_read['slots'])}, |R| {slice_read['max_size']}, "
+        f"readings {', '.join(slice_read['readings'])}",
+        f"- rehearsal git sha: `{disclosure['rehearsal_git_sha']}`",
+        f"- launch git sha: `{disclosure['launch_git_sha']}`",
+        f"- driver changed: {disclosure['driver_changed']}",
+        "",
+        *_table(
+            ("module", "rehearsal sha256", "launch sha256", "changed"),
+            [
+                [
+                    rel,
+                    f"`{disclosure['rehearsal_module_sha256'][rel]}`",
+                    f"`{disclosure['launch_module_sha256'][rel]}`",
+                    disclosure["changed"][rel],
+                ]
+                for rel in disclosure["changed"]
+            ],
+        ),
+    ]
+    if not disclosure["commits"]:
+        modules = " or ".join(disclosure["changed"])
+        return [*lines, f"No commit touched {modules} between the rehearsal and the launch.", ""]
+    return [
+        *lines,
+        *(
+            f"- `{c['sha']}` {c['reason']} (touched: {', '.join(c['modules'])})"
+            for c in disclosure["commits"]
+        ),
+        "",
+    ]
+
+
+def render_report(record):
+    """The markdown report, from the record alone (SC2)."""
+    run, approval, cost = record["provenance"]["run"], record["approval"], record["cost"]
+    out = [
+        "# Phase 38 — E5 exposure rank at larger minted sets",
+        "",
+        "## Status",
+        "",
+        f"Status: **{record['status']}** — run `{record['run_id']}`, front {record['front']}, "
+        f"device `{run['device']}`, launched at `{run['git_sha_at_launch']}`.",
+        "",
+    ]
+    if record["status"] == "GATE_FAILED":
+        out += [
+            "The D-18 gate did not reproduce every committed rank, so no minted value was scored: "
+            "this record carries the gate rows and no curves.",
+            "",
+        ]
+    out += [
+        "## Approval and cost (D-21/D-22/D-23)",
+        "",
+        f'D-21 ruling (verbatim): "{approval["ruling"]}" ({approval["source"]}).',
+        "",
+        *(
+            f"- {key}: {approval[key]!r}"
+            for key in (
+                "approved_prefixes",
+                "committed_prefix_cap",
+                "e5_projection_hours",
+                "committed_front_hours_e5",
+                "e5_total_hours",
+                "committed_total_hours",
+                "e5_stop_hours",
+                "budget_record",
+            )
+        ),
+        f"- run_hours (this run's clock): {cost['run_hours']!r}",
+        "",
+        "## Gate: committed reference sets (D-18, D-11a)",
+        "",
+        f"Passed: {record['gate']['passed']}. The rank on each committed reference set (|R| as "
+        "committed) against the committed rank, before any minted value was scored.",
+        "",
+        *_table(
+            ("reading", "slot", "|R|", "rank", "committed rank", "equal", "taught NLL", "abs diff"),
+            [
+                [
+                    reading,
+                    slot,
+                    row["n_references"],
+                    row["rank"],
+                    row["committed_rank"],
+                    row["equal"],
+                    repr(row["taught_nll"]),
+                    repr(row["abs_nll_diff"]),
+                ]
+                for reading in record["gate"]["readings"]
+                for slot in _slots(record["gate"]["rows"][reading])
+                for row in [record["gate"]["rows"][reading][slot]]
+            ],
+        ),
+    ]
+    if record["status"] == "SCORED":
+        a2, audit = record["a2"], record["drop_formula_audit"]
+        slots = _slots(a2)
+        ks = _sizes(next(iter(a2.values()))["counts"])
+        margin = next(iter(a2.values()))["margin"]
+        out += [
+            "## A2 counts, collapse and damage (D-13, D-14)",
+            "",
+            f"Committed A2 answered counts per prefix over n questions. Damage: the first k > 0 "
+            f"with a rate drop strictly above the margin {margin!r}; collapse: the first k with "
+            "0 answered.",
+            "",
+            *_table(
+                ("slot", *(f"k{k}" for k in ks), "first damage", "first collapse"),
+                [
+                    [
+                        slot,
+                        *(f"{a2[slot]['counts'][k]}/{a2[slot]['n_questions']}" for k in ks),
+                        _first_text(a2[slot]["first_damage"], "never within the grid"),
+                        _first_text(a2[slot]["first_collapse"], "never within the grid"),
+                    ]
+                    for slot in slots
+                ],
+            ),
+            "## Drop formula audit (D-33)",
+            "",
+            f"The committed drop is {audit['formula']}; each cell where (pre - post)/n differs "
+            f"from it, with the damage verdict under each (margin {audit['margin']!r}). "
+            "Description, never a criterion.",
+            "",
+            *_table(
+                ("slot", "k", "rate_drop", "count_drop", "damaged (rate)", "damaged (count)"),
+                [
+                    [
+                        c["slot"],
+                        c["k"],
+                        repr(c["rate_drop"]),
+                        repr(c["count_drop"]),
+                        c["damaged_rate"],
+                        c["damaged_count"],
+                    ]
+                    for c in audit["cells"]
+                    if c["differs"]
+                ],
+            ),
+            *(
+                [f"- `{slot}` k = {k}: {audit['flip_name']}" for slot, k in audit["flips"]]
+                or ["No damage event changes between the two formulas."]
+            ),
+            *(f"- `{slot}` k = {k}: {audit['exact_tie_name']}" for slot, k in audit["exact_ties"]),
+            "",
+        ]
+        curves = {
+            r: {s: v["curve"] for s, v in by_slot.items()}
+            for r, by_slot in record["readings"].items()
+        }
+        columns = [*(f"k{k}" for k in ks), "M2", "adapter_off"]
+        header = ["slot", "|R|", *(_DESCRIPTIVE.get(c, c) for c in columns)]
+        out += [
+            "## Rank curves (D-15)",
+            "",
+            "Each cell is rank (exposure bits = log2(|R| / rank)) of the taught value among the "
+            "first |R| - 1 minted values plus itself. The M2 and adapter-off columns are "
+            "descriptive (D-11, D-16).",
+            "",
+            *_table(header, _curve_rows(curves, slots, columns)),
+            "## Did the rank move before generation collapsed? (D-12, D-29, D-30)",
+            "",
+        ]
+        if record["events"] is None:
+            out += [f"No events: {record['events_reason']}.", ""]
+        else:
+            out += _table(
+                (
+                    "slot",
+                    "|R|",
+                    "event",
+                    "rank_0",
+                    "first k",
+                    "first collapse",
+                    "vs collapse",
+                    "first damage",
+                    "vs damage",
+                ),
+                [
+                    [
+                        slot,
+                        size,
+                        _EVENT_NAMES[name],
+                        event["rank_0"],
+                        _first_text(event["first"], "never"),
+                        _first_text(a2[slot]["first_collapse"], "never within the grid"),
+                        _relation_text(event, "vs_collapse"),
+                        _first_text(a2[slot]["first_damage"], "never within the grid"),
+                        _relation_text(event, "vs_damage"),
+                    ]
+                    for slot in _slots(record["events"])
+                    for size in _sizes(record["events"][slot])
+                    for name in _EVENT_NAMES
+                    for event in [record["events"][slot][size][name]]
+                ],
+            )
+        sensitivity = record["sensitivity_numeric"]
+        trimmed = []
+        for slot in _slots(sensitivity):
+            by_reading = sensitivity[slot]["curves"]
+            sizes = next(iter(by_reading.values()))
+            for row in _curve_rows({r: {slot: c} for r, c in by_reading.items()}, [slot], columns):
+                trimmed.append([slot, row[1], sizes[row[1]]["size"], *row[2:]])
+        out += [
+            "## Numeric neighbour sensitivity (D-27, descriptive)",
+            "",
+            "The numeric slots read again without the distance-1 neighbours of a taught value; "
+            "descriptive only, never in any definition.",
+            "",
+            *_table(["slot", "|R|", "|R| without neighbours", *header[2:]], trimmed),
+        ]
+        cpu = record["cpu_crosscheck"]
+        out += [
+            "## CPU cross-check (D-19, descriptive)",
+            "",
+            f"Criterion: {cpu['criterion']} (descriptive only). The CPU rank ({cpu['device']}, "
+            f"torch {cpu['torch_version']}) differs from the run's rank in {cpu['differing']} of "
+            f"{cpu['cells']} (reading, slot, size) cells and in {cpu['gate_differing']} of "
+            f"{cpu['gate_cells']} gate cells.",
+            "",
+            *(f"- differing cell: {cell}" for cell in cpu["differing_cells"]),
+            *(f"- differing gate cell: {cell}" for cell in cpu["gate_differing_cells"]),
+            "",
+        ]
+    provenance = record["provenance"]
+    out += [
+        "## Rehearsal disclosure (D-34)",
+        "",
+        *_disclosure_lines(record["rehearsal_disclosure"]),
+        "## Limitations (D-36)",
+        "",
+        *_LIMITATIONS,
+        "",
+        "## Provenance",
+        "",
+        *(f"- {key}: `{value}`" for key, value in run.items()),
+        f"- minting record: `{record['minting_record']['path']}` sha256 "
+        f"`{record['minting_record']['sha256']}`",
+        f"- modules changed since launch: {provenance['modules_changed_since_launch']}",
+        f"- head at write: `{provenance['head_at_write']}`; written {provenance['written_utc']}",
+        "",
+    ]
+    return "\n".join(out)
+
+
+def _tracked_and_clean(rel):
+    """True iff ``rel`` is tracked and unmodified against HEAD (cwd _REPO)."""
+    return all(
+        subprocess.run(("git", *args), cwd=_REPO, capture_output=True).returncode == 0
+        for args in (("ls-files", "--error-unmatch", rel), ("diff", "--quiet", "HEAD", "--", rel))
+    )
+
+
+def report(*, root=None):
+    """Write results/phase38_rank_report.md ONCE from the record (on the real root only from a
+    tracked, unmodified record: Pitfall 12)."""
+    root = pathlib.Path(root) if root is not None else _ROOT
+    record_path = root / prereg.RANK_RECORD
+    _prove(record_path.exists(), f"{record_path} is missing: emit the record first")
+    _prove(
+        not _is_real(root) or _tracked_and_clean(prereg.RANK_RECORD),
+        f"{prereg.RANK_RECORD} must be committed and unmodified before the report renders it",
+    )
+    out = root / prereg.REPORT_RECORD
+    _prove(
+        not out.exists(),
+        f"{out} exists — REFUSING to overwrite it. The report is write-once; corrections are "
+        "dated continuations",
+    )
+    out.write_text(render_report(_load(record_path)), encoding="utf-8")
+    print(f"REPORT {out}", flush=True)
+    return out
+
+
+def main(argv=None):
+    argv = sys.argv[1:] if argv is None else list(argv)
+    commands = {
+        "preflight": preflight,
+        "run": run,
+        "crosscheck": crosscheck,
+        "emit": emit,
+        "report": report,
+    }
+    if len(argv) != 1 or argv[0] not in commands:
+        raise SystemExit(__doc__)
+    # git_sha() reads the process cwd: every command runs at the repository root.
+    os.chdir(_REPO)
+    commands[argv[0]]()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))
