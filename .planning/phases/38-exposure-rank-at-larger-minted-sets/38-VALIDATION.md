@@ -1,8 +1,8 @@
 ---
 phase: 38
 slug: exposure-rank-at-larger-minted-sets
-status: draft
-nyquist_compliant: false
+status: planned
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-10-04
 ---
@@ -76,14 +76,14 @@ No framework install needed.
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 180 s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 180 s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** plan-checker iteration 3 (final): 0 blockers, 1 warning accepted (38-07 has 4 tasks), 4 info — 3 fixed by the orchestrator (I-1, I-2, I-3, narrow-checked), I-4 accepted (38-08 Task 2 previews the disclosure by hand before launch). 2026-10-04
 
 ---
 
@@ -91,3 +91,23 @@ No framework install needed.
 
 | Iteration | Finding | Origin (revision-introduced / pre-existing at HEAD) |
 |---|---|---|
+| 1 | BLOCKER 38-01 T1: tie example expects rank 2, `exposure_rank` gives 3 (re-verified by orchestrator) | initial |
+| 1 | WARNING 38-06/07: rig lacks stand-ins for gitignored run_inputs; `_device` untested without patch (ubuntu latent red) | initial |
+| 1 | WARNING 38-07 T3: verify uses unset `$T` | initial |
+| 1 | WARNING RESEARCH Open Questions not marked RESOLVED (fixed by orchestrator) | initial |
+| 1 | WARNING 38-01 T1 scope too large | initial |
+| 1 | INFO ×5: 57,811 mislabel (plan measures 58,195), D-20 commit cite, sidecar watch, 38-08 routing, sign-off open | initial |
+| 2 | All 9 iteration-1 findings resolved (checker re-measured) | — |
+| 2 | BLOCKER 38-07: D-34 identity recorded last and read from the run sidecar, so a failed first rehearsal goes unrecorded (re-verified by orchestrator, 38-07 :103/:168) | revision-introduced |
+| 2 | WARNING 38-01 T1: three dangling "Task 2 proves" refs after the split (one lands in the frozen file) | revision-introduced |
+| 2 | WARNING 38-07 T1: emit under patched `_ROOT` runs git/module digests in a non-repo tmp dir | revision-introduced + pre-existing |
+| 2 | WARNING 38-07: D-34 disclosure tracks only phase38_rank.py, though 38-08 allows sizes-file fixes | revision-introduced |
+| 2 | WARNING 38-07 T1 scope grew with D-34 | revision-introduced |
+| 2 | WARNING `ls <glob> 2>/dev/null` guards false-red / blind under zsh NOMATCH (38-01/03/06/07) | pre-existing |
+| 2 | INFO ×5: T-38-43 "five" vs 7, 38-09 checklist lacks D-33/D-34, identity-path call + equal-sha test, identity tamper check, sign-off | 4 revision-introduced, 1 pre-existing |
+| 3 | All iteration-2 findings resolved (B-1, W-1..W-5, I-1..I-4) | — |
+| 3 | WARNING 38-07 has 4 auto tasks after the W-4 split (accepted) | revision-introduced |
+| 3 | INFO 38-07 objective/verification said nothing written in the real tree (fixed by orchestrator) | revision-introduced |
+| 3 | INFO 38-07 "reached scoring" over-approximates; fixed statement text (fixed by orchestrator: "passed preflight", statement built from slice_read) | revision-introduced |
+| 3 | INFO 38-02 "Task 2 proves" in a frozen-file comment (fixed by orchestrator: named test_max_value_tokens_matches_phase17) | pre-existing |
+| 3 | INFO 38-07 disclosure validated only at emit (accepted; 38-08 T2 previews by hand) | revision-introduced |

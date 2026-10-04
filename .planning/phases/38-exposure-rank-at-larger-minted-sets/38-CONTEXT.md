@@ -139,6 +139,26 @@ quoted). Facts marked "measured" were measured by Claude this session before the
   `results/phase36_probe_e1.json` `configuration.components_sha256` = sha256(json.dumps(ordered_prefix))
   = `a7cc22715d64…` (re-measured by Claude, 78 entries). Verify against it.
 
+### Rulings after the first plan set (2026-10-04; pasted reply, proposto pelo Claude (claude.ai), adotado por Rafael)
+- **D-33 (drop formula).** The committed formula stands: drop = pre/n − post/n (the rate difference
+  stored in `delta`). In the cells where (pre − post)/n differs from it, the report records BOTH
+  values and states whether the "damage" event (drop > margin, D-14) changes in any of them; if it
+  changes, that cell is a margin tie decided by rounding and is NAMED as such.
+  **Measured by Claude (2026-10-04):** 5 of 28 k=8..64 non-target cells differ, all in
+  `results/erasure_kstar_summary.json` (hometown k=8 and k=16, sibling_name k=16, street k=16,
+  person_name k=32), by ≤ 6e-17; the k=78 cells (`results/phase19_target_scores.json`) show none.
+  "Damage" changes in NONE of the five. **Planner measurement, re-verified by Claude:** the TARGET
+  pet_name also differs at k=8 (0.11111111111111116 vs 0.1111111111111111) and k=16
+  (0.33333333333333337 vs 0.3333333333333333), so the audit covers 7 differing cells in all;
+  damage changes in none of the 7. Separately, person_name k=8 sits EXACTLY on the margin
+  (8/27 == 0.2962962962962963 bit-for-bit under both formulas): an exact tie decided by D-14's
+  strict ">", not by rounding. The report should name it as such.
+- **D-34 (rehearsal disclosure).** 38-07's CPU rehearsal reads a slice of the real result (pet_name
+  and birth_year, size 8, minted candidates) BEFORE the driver review and the MPS run. The report
+  declares this, and every driver change after the rehearsal is listed with its reason.
+- **D-35 (planner defaults confirmed).** `MAX_DRAWS = 400_000` as the finite bound that makes the
+  D-26 STOP decidable; the MPS run is launched with `nohup caffeinate -dims`, no LaunchAgent.
+
 ### Claude's Discretion
 - The prefix order inside the run, the record layout and file names (within `results/phase38_*`, minting records matching `results/phase38_minting*.json`), and how the fill files split. Phase 35 needs at least two fill files: rule + definitions before the minting record, and set sizes after it and before scoring.
 - The syllable grammar's concrete alphabet and syllable inventory, subject to D-01..D-03, provided the rule text is complete before any candidate exists.

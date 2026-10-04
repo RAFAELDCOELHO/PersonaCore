@@ -1672,7 +1672,48 @@ generation collapses
      result records are write-once and committed only after Rafael writes approved. (RANK-01,
      RANK-02)
 
-**Plans**: TBD
+**Plans**: 10 plans in 10 waves (the commit order is load-bearing: the whole rule in `scripts/phase38_prereg.py` and its review before `results/phase38_minting.json`; the sizes fill after it and before any scoring record; every record committed only after Rafael's approved)
+
+Plans:
+**Wave 1**
+
+- [ ] 38-01-PLAN.md — `scripts/phase38_prereg.py` + ancestry test: paths, D-21 approval and the 8-prefix projection/total/stop read from the budget, the full written minting rule, both input-free fills, moved/top-eighth/collapse/damage/relation definitions, committed gate ranks and A2 counts
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 38-02-PLAN.md — the executable minting rule in the prereg: report parser (D-24), exclusions, global-stop name grammar, numeric enumerate + Fisher-Yates, neighbour screen/flags, D-31 sizes
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 38-03-PLAN.md — `scripts/phase38_mint.py`: the one CPU minting command, Phase 17 filter proof, D-26 STOP, write-once record then verify mode
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 38-04-PLAN.md — code review of prereg + mint driver, real mint (>= 2048 per name/place slot), Rafael's approved, single-path commit (freezes the prereg)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 38-05-PLAN.md — `scripts/phase38_sizes_prereg.py`: e5_set_sizes from the committed minting record (512; birth_year 220), caps without prefixes
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 38-06-PLAN.md — `scripts/phase38_rank.py` part 1: preflight refusals, D-20 digests, the D-18 gate on all 64 committed ranks before scoring, one-pass scoring of 8 readings under the ledger
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [ ] 38-07-PLAN.md — `scripts/phase38_rank.py` part 2: CPU cross-check, write-once rank record, report renderer, main; CPU rehearsal on the real checkpoints fed to the report
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
+- [ ] 38-08-PLAN.md — code review of the driver, pre-launch gate, Rafael's approved, the E5 MPS run + crosscheck + emit (no commits)
+
+**Wave 9** *(blocked on Wave 8 completion)*
+
+- [ ] 38-09-PLAN.md — rank record: Rafael's approved, ledger then record in single-path commits, full suite
+
+**Wave 10** *(blocked on Wave 9 completion)*
+
+- [ ] 38-10-PLAN.md — report from the committed record, Rafael's approved, single-path commit, SC1-SC4 evidence
 
 ### Phase 39: Instrument × Context 2×2
 
@@ -1915,7 +1956,7 @@ Next (v5.0): `/gsd:plan-phase 29`.
 | 35. v6.0 Pre-Registration and the Research It Rests On | v6.0 | 5/5 | Complete | 2026-10-01 — verification passed 5/5 SC (a4c7beb); Rafael's review corrections f13ad62/d850d0c + code-review fixes 1e1e1c5/3805beb; suite 3487/4/0 at bbcec95; zero gsd-sdk mutation handlers |
 | 36. MPS Cost Probes and Budget Commitment | v6.0 | 8/8 | Complete | 2026-10-02 — verification passed 4/4 SC (ecdce31); probe records + ledger f7b9962..0d59b6d; Rafael's ruling (spread_scaled, E6 a2_regenerated_entries = 0, no cuts) + approved → fill 9a5718a, budget 6b57231 (77.72 h, stop line 90 h, S = 5); review fixes b3ab341; suite 3782/4/0 at e72c17a; zero gsd-sdk mutation handlers |
 | 37. Clean Reproduction of the Phase 19 Verdict | v6.0 | 7/7 | Complete | 2026-10-04 — verification passed 4/4 SC; review eeeb804 (0/5/6) fixed 2781bd6..5896ae3 before the prereg freeze; R1a record fe715c5 (FAILURE re-derived on CPU); R1b one MPS attempt 4104 s → REPLICATED, ledger 3f87acf, arm 57dcd4b, record 8a289fc; Rafael approved each; suite 3928/4/0 at 8a289fc; zero gsd-sdk mutation handlers |
-| 38. Exposure Rank at Larger Minted Sets | v6.0 | 0/TBD | Not started | - |
+| 38. Exposure Rank at Larger Minted Sets | v6.0 | 0/10 | Planned | - |
 | 39. Instrument × Context 2×2 | v6.0 | 0/TBD | Not started | - |
 | 40. M2 Seed Noise Floor | v6.0 | 0/TBD | Not started | - |
 | 41. Erasure Across Facts, Orderings and Seeds | v6.0 | 0/TBD | Not started | - |

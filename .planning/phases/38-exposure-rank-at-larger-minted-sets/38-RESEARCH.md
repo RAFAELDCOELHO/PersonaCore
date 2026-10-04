@@ -672,7 +672,7 @@ cleared = phase14_factset.exact_match_clean(completions_by_slot[slot], candidate
 | A2 | CPU clearance generation cost is of the same order as MPS (~2 min) | M4 | Low: not measured; matters only if Q1 picks CPU regeneration. |
 | A3 | E4's canary count `m` is unknown, so the slack beyond 512 cannot be derived | Q2 | Medium: too little slack forces a second minting, a new record, for Phase 43. |
 
-## Open Questions (rulings needed before the rule freezes)
+## Open Questions (RESOLVED — ruled in 38-CONTEXT.md: Q1→D-24, Q2→D-25, Q3→D-31, Q4→D-26, Q5→D-27 (Rafael chose a names-only fifth filter, not this section's recommended (b)), Q6→D-32)
 
 1. **Q1. Which completions clear the candidates?**
    - (A) The 416 committed Phase 17 completions, parsed from `results/phase17_personas_report.md`: zero compute, the exact Phase 17 evidence (MPS, base `04e724c`), reproducible on CPU by anyone.
