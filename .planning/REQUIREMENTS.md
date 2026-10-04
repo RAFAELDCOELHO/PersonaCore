@@ -763,9 +763,9 @@ reproducible by an outsider. No closed verdict is reopened; v6.0 publishes besid
 
 ### Exposure rank at larger sets (RANK) — E5
 
-- [ ] **RANK-01**: A minting rule is pre-registered: numeric slots are enumerated; name and place slots receive candidates minted by rule and cleared against the base as in Phase 17; the set sizes (up to 512, as far as minting allows) are declared before any scoring
-- [ ] **RANK-02**: The prefixes k = 0, 8, 16, 32, 64, 78 are re-scored with the `ans1` frame and mean reduction, reconstructed from `persona_adapter.pt` and the committed `ordered_prefix` with SHA-256 verified; the report states whether the rank moves before generation collapses, against the committed A2 counts
-- [ ] **RANK-03**: `reference_set_for` and `phase18_extraction.py` stay untouched; the larger sets live in a new module that imports them
+- [x] **RANK-01**: A minting rule is pre-registered: numeric slots are enumerated; name and place slots receive candidates minted by rule and cleared against the base as in Phase 17; the set sizes (up to 512, as far as minting allows) are declared before any scoring
+- [x] **RANK-02**: The prefixes k = 0, 8, 16, 32, 64, 78 are re-scored with the `ans1` frame and mean reduction, reconstructed from `persona_adapter.pt` and the committed `ordered_prefix` with SHA-256 verified; the report states whether the rank moves before generation collapses, against the committed A2 counts
+- [x] **RANK-03**: `reference_set_for` and `phase18_extraction.py` stay untouched; the larger sets live in a new module that imports them
 
 ### Instrument × context (CTX) — E6
 
@@ -834,9 +834,9 @@ reproducible by an outsider. No closed verdict is reopened; v6.0 publishes besid
 | AUDIT-01 | Phase 43 | Pending |
 | AUDIT-02 | Phase 43 | Pending |
 | AUDIT-03 | Phase 43 | Pending |
-| RANK-01 | Phase 38 | Pending |
-| RANK-02 | Phase 38 | Pending |
-| RANK-03 | Phase 38 | Pending |
+| RANK-01 | Phase 38 | Complete |
+| RANK-02 | Phase 38 | Complete |
+| RANK-03 | Phase 38 | Complete |
 | CTX-01 | Phase 39 | Pending |
 | CTX-02 | Phase 39 | Pending |
 | CTX-03 | Phase 39 | Pending |
