@@ -93,6 +93,52 @@ quoted). Facts marked "measured" were measured by Claude this session before the
   - Whatever mechanism lets the E5 driver run 8 readings must leave `check_unit_caps` and the budget untouched. For example, the driver checks `prefixes` against the approved 8 recorded in `phase38_prereg.py`, citing D-21.
   - The planner designs this mechanism; it must not edit a pinned module.
 
+### Rulings at plan time (2026-10-04, after 38-RESEARCH.md; Rafael, in Portuguese, paraphrased faithfully)
+- **D-24 (Q1, clearance source).** Clear against the 416 committed Phase 17 completions in
+  `results/phase17_personas_report.md`. The rule ALSO pins that report's SHA-256, beside the parser
+  invariants (416 total, 52 per slot, question order = `held_out_by_slot()`). The minting record
+  reports, per slot, how many candidates each filter and the clearance removed; a clearance that
+  removes zero in a slot is published as zero.
+- **D-25 (Q2, slack).** 2048 cleared per name/place slot, with ONE global stop (the first draw after
+  which every name/place slot holds >= 2048). If Phase 43 needs more, the extension is the
+  continuation of the SAME generator (same seed, same filters) from the stop point, registered in
+  Phase 43's pre-registration before any E4 record, and the first 2048 of each slot do not change.
+- **D-26 (Q4, uniqueness).** Each string belongs to at most one slot, and substring-disjointness
+  holds across ALL slots. Rafael's condition: confirm every name/place slot reaches 2048 under the
+  global rule; if any does not, STOP and bring him the number, never reduce the slack alone.
+  **Measured by Claude (2026-10-04, scratch `m7_yield2048_nb.py`, global rule + D-27 screen):** all six
+  slots reach 2048 at 57,811 draws, 17.4 s CPU (rejections: token_count 37762, duplicate 2437,
+  substring_minted 1759, substring_forbidden 46, neighbour_d1 5, excluded 1, clearance 1). That
+  scratch run used per-slot "slot full" skipping, which research showed is NOT prefix-stable; the
+  real driver uses the global stop. The executor must re-measure with the real driver and STOP on
+  any slot < 2048.
+- **D-27 (Q5, neighbour screen).**
+  - A FIFTH filter on the six name/place slots: reject any candidate at edit distance 1 from any
+    taught value. The minting record counts these rejections per slot.
+  - Numeric slots are exempt, declared as a deviation from Phase 17 (which rejected `1971`). The
+    record marks, per slot and per size, which numeric candidates are distance-1 neighbours.
+  - Sensitivity reading on the numeric slots: rank curves are ALSO reported without the neighbours
+    (in `birth_year`, the 118 remaining; measured: 101 of 219 are distance-1 neighbours of a taught
+    value). Descriptive only; never enters the definitions.
+- **D-28 (area 3 addendum, before the freeze).** The primary "moved" stays D-12 (rank_k >= 2 x
+  rank_0, 1 bit). Record that with rank_0 = 1, rank 2 already counts.
+- **D-29.** A second NAMED, descriptive event: "left the top eighth" = rank_k > |R| / 8. At |R| = 8 it
+  coincides with the published criterion (left rank 1).
+- **D-30.** The before / same prefix / after / never answer (D-15) is given for BOTH events (D-12 and
+  D-29), per slot and per set size.
+
+### Defaults taken without a ruling (forced or following an existing decision; flagged to Rafael)
+- **D-31 (Q3, |R| counts the taught value).** |R_n| = n INCLUDING the taught value (n - 1 minted),
+  sizes 8/32/128/512; `birth_year` maximum |R| = 220 (219 + taught). Forced: `reference_set_for`
+  appends the taught value (`phase18_extraction.py:1203`), and a taught value on top of 512 minted
+  gives |R| = 513, which both `ENTRIES["e5_max_set_size"]` (512) and `unit_caps.E5.max_set_size`
+  refuse.
+- **D-32 (Q6, filter 4's questions).** The same 104 `core_held_out` questions Phase 17 used
+  (`phase17_isolation.held_out_by_slot()`), per D-03/D-04 "as in Phase 17".
+- **D-20 correction (measured).** A committed digest of `ordered_prefix` DOES exist:
+  `results/phase36_probe_e1.json` `configuration.components_sha256` = sha256(json.dumps(ordered_prefix))
+  = `a7cc22715d64…` (re-measured by Claude, 78 entries). Verify against it.
+
 ### Claude's Discretion
 - The prefix order inside the run, the record layout and file names (within `results/phase38_*`, minting records matching `results/phase38_minting*.json`), and how the fill files split. Phase 35 needs at least two fill files: rule + definitions before the minting record, and set sizes after it and before scoring.
 - The syllable grammar's concrete alphabet and syllable inventory, subject to D-01..D-03, provided the rule text is complete before any candidate exists.
