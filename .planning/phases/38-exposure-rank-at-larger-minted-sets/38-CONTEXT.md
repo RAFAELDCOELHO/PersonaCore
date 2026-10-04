@@ -158,6 +158,15 @@ quoted). Facts marked "measured" were measured by Claude this session before the
   declares this, and every driver change after the rehearsal is listed with its reason.
 - **D-35 (planner defaults confirmed).** `MAX_DRAWS = 400_000` as the finite bound that makes the
   D-26 STOP decidable; the MPS run is launched with `nohup caffeinate -dims`, no LaunchAgent.
+- **D-36 (report limitation, declared at the minting approval 2026-10-04, after 7357577 and before
+  any rank; proposto pelo Claude (claude.ai), adotado por Rafael).** The name/place candidates are
+  grammar syllables while the taught values look like English compound words; at the same token
+  count the base model may prefer the taught values. The report states this in a "Limitations"
+  section and tells the reader to read each curve beside the "adapter-off" column of the same slot
+  and size. No change to any rule or definition (the prereg is frozen at 7357577).
+- **WR-01 (review ruling at 38-04, d33986c).** `relation` has two more named outcomes:
+  ALREADY_AT_K0 (event already true at k = 0) and UNREACHABLE_AT_SIZE (moved with 2 x rank_0 > |R|,
+  via `moved_reachable`); both recorded with rank_0; NEVER means "could have moved and did not".
 
 ### Claude's Discretion
 - The prefix order inside the run, the record layout and file names (within `results/phase38_*`, minting records matching `results/phase38_minting*.json`), and how the fill files split. Phase 35 needs at least two fill files: rule + definitions before the minting record, and set sizes after it and before scoring.
