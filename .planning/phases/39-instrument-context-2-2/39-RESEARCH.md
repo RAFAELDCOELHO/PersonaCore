@@ -415,7 +415,7 @@ def e6_projection_hours(adapters, anchor_adapters, extra_nlls=0):
 | A3 | Rafael's "the full A2 question" means B1 (question prompt without the injected tail, whole value scored) | Open Q1 | HIGH: it changes what R_q measures. Ask before the freeze |
 | A4 | The recommended 7-plan split fits the sequential-wave practice (`parallelization: false`) | Plan split | Low |
 
-## Open Questions (rule before `scripts/phase39_prereg.py` is frozen; Phase 38 precedent: plan-time rulings D-24..D-32)
+## Open Questions (RESOLVED — Q1→D-23 (B1, + D-23a..d), Q2→D-24 (n1, not median), Q3→D-25, Q4→D-26, Q5→D-27, Q6→D-28, Q7→D-29, per-token gap→D-30/D-30a in 39-CONTEXT.md; original text kept below) (rule before `scripts/phase39_prereg.py` is frozen; Phase 38 precedent: plan-time rulings D-24..D-32)
 
 1. **Context (b) ids for NLL/rank.** What we know: the A2 prompt = `build_recall_prompt(question)` + the injected ⌊0.25·|ids|⌋ value ids. The per-candidate injected reading is infeasible (M7). The options are:
    - **B1:** `_guarded_span(entry)` + whole value. This is the literal "A2 question". It differs from (a) by the question AND the missing preamble.

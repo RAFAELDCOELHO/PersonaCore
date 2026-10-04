@@ -1736,7 +1736,48 @@ measured on the same adapters at the answer anchor and at the full A2 question
   4. No record exists before the pre-registration module and its ancestry test are committed;
      result records are write-once and committed only after Rafael writes approved. (CTX-02)
 
-**Plans**: TBD
+**Plans**: 10 plans in 10 waves (the commit order is load-bearing: the whole rule in `scripts/phase39_prereg.py` and its review before any driver code reads real data (D-27); the CPU rehearsal pins the prereg sha256 before the MPS run; every record committed only after Rafael's approved, the ledger before the record)
+
+Plans:
+**Wave 1**
+
+- [ ] 39-01-PLAN.md — `scripts/phase39_prereg.py` + ancestry test: paths, the eight A2 record pins, the D-11/D-26/D-30 approval and projection (0.7294 h <= stop 0.7424 h, computed), twenty ENTRIES with the written decomposition rule, both fills (e6_entry_subset = all 216, e6_decomposition_rule)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 39-02-PLAN.md — the pure E6 definitions in the prereg: gate 2 on the committed A2 draws, statuses, the per-cell classifier with the WR-01 precedence, class counts with denominators, rank summaries, D-07 rates, D-17 prediction, anchor seed index, minted members
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 39-03-PLAN.md — code review of the prereg; Rafael confirms D-27..D-29, D-30a and the planner's D-25 readings; full suite (the prereg is frozen from here, D-27)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 39-04-PLAN.md — `scripts/phase39_ctx.py` part 1: the D-30 copy (per-token + suffix sum) proved bitwise on CPU, anchor ids and draws, gate cells, question scoring, preflight refusals (caps without adapters, D-20 digests, A2 SHA-256, gate 2)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 39-05-PLAN.md — `scripts/phase39_ctx.py` part 2: run (gate 1 with the bitwise STOP, then anchor/(b)/(ii) per reading), ledger lines, rehearsal identity with the D-27 prereg pin and the 38-REVIEW DR-01..03 fixes, AST censuses
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 39-06-PLAN.md — `scripts/phase39_ctx.py` part 3: CPU cross-check (NLL/rank, suffix equality), the per-cell readings and classification for collapse and damage, descriptive blocks, build_record, emit
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [ ] 39-07-PLAN.md — `scripts/phase39_ctx.py` part 4: report renderer and CLI; CPU rehearsal on the real checkpoints (8 readings x pet_name, birth_year) fed to the report
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
+- [ ] 39-08-PLAN.md — code review of the driver, pre-launch gate, Rafael's approved, the E6 MPS run + crosscheck + emit (no commits)
+
+**Wave 9** *(blocked on Wave 8 completion)*
+
+- [ ] 39-09-PLAN.md — E6 record: Rafael's approved, ledger then record in single-path commits, full suite
+
+**Wave 10** *(blocked on Wave 9 completion)*
+
+- [ ] 39-10-PLAN.md — report from the committed record, Rafael's approved, single-path commit, SC1-SC4 evidence; STATE/ROADMAP/REQUIREMENTS closed by hand
 
 ### Phase 40: M2 Seed Noise Floor
 
