@@ -262,7 +262,63 @@ def test_first_event_and_relation():
         "AFTER",
         "NEVER",
         "REFERENCE_NEVER_IN_GRID",
+        "ALREADY_AT_K0",
+        "UNREACHABLE_AT_SIZE",
     }
+
+
+def test_left_top_eighth_already_true_at_k0_is_its_own_outcome():
+    # WR-01, Rafael's ruling: birth_year at |R| = 220 with rank_0 >= 28 starts outside the top
+    # eighth; that is ALREADY_AT_K0 against both references, never BEFORE.
+    size = 220
+    assert phase38_prereg.left_top_eighth(28, size) is True
+    assert phase38_prereg.left_top_eighth(27, size) is False
+    event = phase38_prereg.first_event(
+        {k: phase38_prereg.left_top_eighth(28, size) for k in phase38_prereg.PREFIXES}
+    )
+    assert event == 0
+    for reference in (8, 32, 64, None):
+        assert phase38_prereg.relation(event, reference) == "ALREADY_AT_K0"
+    # rank_0 = 27 is inside the top eighth at k = 0; leaving it at k = 8 is an ordinary event.
+    ranks = {0: 27, 8: 28, 16: 28, 32: 40, 64: 90, 78: 100}
+    later = phase38_prereg.first_event(
+        {k: phase38_prereg.left_top_eighth(r, size) for k, r in ranks.items()}
+    )
+    assert later == 8
+    assert phase38_prereg.relation(later, 64) == "BEFORE"
+
+
+def test_moved_that_cannot_fire_at_the_size_is_unreachable_not_never():
+    # WR-01, Rafael's ruling: at |R| = 8 with rank_0 >= 5, 2 x rank_0 > |R| and "moved" cannot
+    # fire; that is UNREACHABLE_AT_SIZE, and NEVER stays "could have moved and did not".
+    size = 8
+    assert phase38_prereg.moved_reachable(5, size) is False
+    assert phase38_prereg.moved_reachable(4, size) is True
+    assert phase38_prereg.moved_reachable(1, 512) is True
+    flags = {k: phase38_prereg.moved(size, 5) for k in phase38_prereg.PREFIXES}
+    event = phase38_prereg.first_event(flags)
+    assert event is None
+    reachable = phase38_prereg.moved_reachable(5, size)
+    for reference in (64, None):
+        assert phase38_prereg.relation(event, reference, reachable=reachable) == (
+            "UNREACHABLE_AT_SIZE"
+        )
+    assert phase38_prereg.relation(None, 64, reachable=True) == "NEVER"
+    assert phase38_prereg.relation(16, 64, reachable=True) == "BEFORE"
+    with pytest.raises(SystemExit, match=r"^\[phase38_prereg\]"):
+        phase38_prereg.relation(16, 64, reachable=False)
+    for rank_0 in (0, 9):
+        with pytest.raises(SystemExit, match=r"^\[phase38_prereg\]"):
+            phase38_prereg.moved_reachable(rank_0, size)
+
+
+def test_the_two_wr01_outcomes_are_stated_in_d12_and_d29():
+    moved = phase38_prereg.ENTRIES["rank_moved"]["derivation"]
+    eighth = phase38_prereg.ENTRIES["left_top_eighth"]["derivation"]
+    relation = phase38_prereg.ENTRIES["event_relation"]["derivation"]
+    assert "UNREACHABLE_AT_SIZE" in moved and "rank_0" in moved
+    assert "ALREADY_AT_K0" in eighth and "rank_0" in eighth
+    assert "UNREACHABLE_AT_SIZE" in relation and "ALREADY_AT_K0" in relation
 
 
 def test_components_sha256_reproduces_the_probe_e1_digest():

@@ -312,6 +312,7 @@ _CONTEXT = "38-CONTEXT D-{} (255380f)"
 _PLAN_TIME = "38-CONTEXT D-{} (1a2ce83)"
 _CONFIRMED = "38-CONTEXT D-{} (f7ad285)"
 _LATER = "38-CONTEXT D-33/D-34/D-35 (rulings after the first plan set, 2026-10-04)"
+_REVIEW = "38-REVIEW WR-01 (Rafael's ruling at the 38-04 review checkpoint, 2026-10-04)"
 
 _ENTRIES = {
     "e5_minting_rule": {
@@ -483,10 +484,12 @@ _ENTRIES = {
         "derivation": (
             "D-12: the rank moved at prefix k iff exposure fell by at least 1 bit relative to "
             "k = 0. D-28: with rank_0 = 1, rank 2 already counts; at the committed sets this is "
-            "'left rank 1'. The 1-bit threshold is a preference."
+            "'left rank 1'. The 1-bit threshold is a preference. If 2 x rank_0 > |R| the event "
+            "cannot fire at that size: its relation is UNREACHABLE_AT_SIZE, recorded with rank_0, "
+            "and NEVER means it could have moved and did not."
         ),
         "kind": "preference",
-        "source": f"{_CONTEXT.format('12')}; {_PLAN_TIME.format('28')}",
+        "source": f"{_CONTEXT.format('12')}; {_PLAN_TIME.format('28')}; {_REVIEW}",
     },
     "generation_collapsed": {
         "value": types.MappingProxyType(
@@ -519,21 +522,34 @@ _ENTRIES = {
         "value": "rank_k * 8 > |R|",
         "derivation": (
             "D-29: a second named, descriptive event, 'left the top eighth' = rank_k > |R| / 8, "
-            "in integer form. At |R| = 8 it coincides with left rank 1."
+            "in integer form. At |R| = 8 it coincides with left rank 1. If it already holds at "
+            "k = 0 the taught value started outside the top eighth at that size: its relation is "
+            "ALREADY_AT_K0, recorded with rank_0, never BEFORE."
         ),
         "kind": "preference",
-        "source": _PLAN_TIME.format("29"),
+        "source": f"{_PLAN_TIME.format('29')}; {_REVIEW}",
     },
     "event_relation": {
-        "value": ("BEFORE", "SAME", "AFTER", "NEVER", "REFERENCE_NEVER_IN_GRID"),
+        "value": (
+            "BEFORE",
+            "SAME",
+            "AFTER",
+            "NEVER",
+            "REFERENCE_NEVER_IN_GRID",
+            "ALREADY_AT_K0",
+            "UNREACHABLE_AT_SIZE",
+        ),
         "derivation": (
             "D-15 / D-30: for both events (D-12 moved, D-29 left the top eighth) against both "
             "references (collapse, damage), per slot and per set size: the event's first prefix "
             "before, at the same prefix as, or after the reference's, or never; a reference that "
-            "never occurs in the grid is its own outcome. The whole curves are published."
+            "never occurs in the grid is its own outcome. The whole curves are published. WR-01: "
+            "an event that cannot fire at the size (D-12 moved with 2 x rank_0 > |R|) is "
+            "UNREACHABLE_AT_SIZE and one already true at k = 0 is ALREADY_AT_K0, each against "
+            "both references and recorded with rank_0; the per-prefix flags are unchanged."
         ),
         "kind": "preference",
-        "source": f"{_CONTEXT.format('15')}; {_PLAN_TIME.format('30')}",
+        "source": f"{_CONTEXT.format('15')}; {_PLAN_TIME.format('30')}; {_REVIEW}",
     },
     "extra_readings": {
         "value": ("M2", "adapter_off"),
@@ -747,8 +763,23 @@ def first_damage(counts, n_questions):
     )
 
 
-def relation(event_k, reference_k):
-    """D-15 / D-30: where an event's first prefix sits against a reference's first prefix."""
+def moved_reachable(rank_0, size):
+    """D-12 / WR-01: 'moved' can fire at this size only if 2 x rank_0 <= |R|."""
+    _prove(1 <= rank_0 <= size, f"rank_0 {rank_0} outside 1..{size}")
+    return 2 * rank_0 <= size
+
+
+def relation(event_k, reference_k, *, reachable=True):
+    """D-15 / D-30 / WR-01: where an event's first prefix sits against a reference's first prefix.
+
+    An event that cannot fire at the size is UNREACHABLE_AT_SIZE and one already true at k = 0
+    is ALREADY_AT_K0, whatever the reference; both come before the reference outcomes.
+    """
+    if not reachable:
+        _prove(event_k is None, f"an unreachable event fired at k = {event_k}")
+        return "UNREACHABLE_AT_SIZE"
+    if event_k == PREFIXES[0]:
+        return "ALREADY_AT_K0"
     if reference_k is None:
         return "REFERENCE_NEVER_IN_GRID"
     if event_k is None:
