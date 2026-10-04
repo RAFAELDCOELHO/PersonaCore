@@ -151,6 +151,35 @@ Decided by Rafael in discuss-phase 39 (2026-10-04), except where marked as carri
   stop (a) 0.7424221732238463 h. These numbers are computed in the prereg, never typed. D-11's other
   terms are unchanged: descriptive only, caps checked without the raised counts, no second stop rule.
 
+- **D-30 (D-23a implementation path; Rafael, after 39-PATTERNS found that no per-token path exists).**
+  `span_nll_from_ids` (`phase18_extraction.py:1050`) returns only `{n_scored, nll_sum, nll_mean}`, and
+  per-token output through it would take one call per token (≈ +0.67 h, over stop (a)). Rafael chose
+  Option 1 with two conditions:
+  - The driver holds a COPY of `span_nll_from_ids`: same forward pass, same mask, same `_prove` checks,
+    and the same two `cross_entropy` calls (sum, mean), plus a third `cross_entropy(reduction='none')`
+    on the same logits for the per-token values. One forward pass per NLL.
+  - **Condition 1 (equality on the real device):** in Gate 1, every gate cell is scored by BOTH the
+    pinned function (via `value_span_nll`) and the copy, on MPS. `nll_sum` and `nll_mean` must be
+    bitwise equal in every cell. If a single cell differs, STOP before any new scoring.
+    - Projection with the gate scored twice, priced as the formula prices the gate (8 adapters × 8
+      anchor_slots × 8 `e5_candidates_per_slot_max` = 512 extra NLLs at `e5_nll_high`):
+      0.7293568082878159 h. At the actual 56 cells per adapter (448 NLLs) it is 0.7285258345864714 h.
+      Both are <= stop (a) 0.7424221732238463 h. Checked at plan time; the prereg computes it and never
+      types it.
+  - **Condition 2:** the per-token values are DESCRIPTIVE ONLY. Ranks, n1 and every event read
+    `nll_sum` / `nll_mean`, never a sum rebuilt from the tokens.
+  - **D-30a (default taken at plan time, not yet confirmed by Rafael): the D-23b suffix sum costs no
+    extra forward pass.** For the taught value under (b), `_guarded_span(e) + encode(taught)` is the
+    SAME id sequence as the committed `prompt_ids + encode(taught)[realized_injection:]` (measured: 216 /
+    216). The copy therefore computes the suffix sum in the same forward pass as a separate
+    `cross_entropy(reduction='sum')` over a mask holding only the suffix targets. It is never a slice of
+    the per-token values. A CPU test proves it bitwise equal to the pinned `span_nll_from_ids(model,
+    prompt_ids, suffix_ids)`, and so does the CPU cross-check. Why not a separate pinned call: that is
+    216 × 8 = 1,728 extra NLLs (+0.0224 h), which takes the projection to ≈ 0.7518 h, over stop (a)
+    0.7424 h. The suffix sum feeds only D-17/D-23c (descriptive), never a rank, n1 or event.
+  - The report declares that context (b) was scored with the copy, and cites the condition-1 equality
+    result (cells compared, cells equal).
+
 ### Defaults taken at plan time (39-RESEARCH Open Questions 5-7; not yet confirmed by Rafael)
 - **D-27 (Q5, the prereg is frozen before the rehearsal).** The prereg's code review runs BEFORE the CPU
   rehearsal. The rehearsal identity records `sha256(scripts/phase39_prereg.py)`, and the real-root
