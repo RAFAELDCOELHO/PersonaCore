@@ -48,6 +48,7 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "src"))
 
+import phase25_run  # noqa: E402  — beat, start_heartbeat, atomic_write_json
 import phase36_caps  # noqa: E402
 import phase36_ledger  # noqa: E402
 import phase36_probe  # noqa: E402  — adapted_model, e1_components, silenced (torch-free)
@@ -396,3 +397,119 @@ def preflight(*, root=None, ledger_path=None, device=None, readings=None):
         "reconstruction": reconstruction,
         "readings": readings,
     }
+
+
+def _write_once(path, blob):
+    _prove(not path.exists(), f"{path} exists: the sidecars are write-once")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    phase25_run.atomic_write_json(path, blob)
+
+
+def run(
+    *,
+    root=None,
+    ledger_path=None,
+    heartbeat_path=None,
+    device=None,
+    readings=None,
+    slots=None,
+    max_size=None,
+):
+    """THE run: preflight, ledger start, the D-18 gate pass, the scoring pass, sidecars, ledger
+    end. No in-run stop timer: the committed stop is checked by require_launch (D-23)."""
+    import phase18_extraction
+    import torch
+
+    root = pathlib.Path(root) if root is not None else _ROOT
+    _prove(
+        not _is_real(root) or (readings is None and slots is None and max_size is None),
+        "the real root runs the full READINGS x SLOTS x E5_SET_SIZES shape only; a partial shape "
+        "is a rehearsal into a tmp root outside the repository",
+    )
+    pre = preflight(root=root, ledger_path=ledger_path, device=device, readings=readings)
+    readings, device = pre["readings"], pre["device"]
+    plan = scoring_plan(slots=slots, max_size=max_size)
+    phase36_ledger.append("start", run_id=RUN_ID, phase=38, front=FRONT, ledger_path=ledger_path)
+    heartbeat_path = heartbeat_path or phase36_ledger.HEARTBEAT_PATH
+    state = {"point": RUN_ID, "stage": "gate", "shape": None, "draw_index": None}
+    phase25_run.beat(heartbeat_path, **state)  # the thread's first beat waits a full period
+    stop, thread = phase25_run.start_heartbeat(heartbeat_path, state)
+    started = _now()
+    try:
+        # D-18: every committed rank is reproduced BEFORE any minted value is scored.
+        rows = {}
+        for reading in readings:
+            state.update(stage=f"gate_{reading}")
+            with reading_model(reading, device) as (model, tok):
+                nll_by_slot = {}
+                for slot in plan:
+                    references = phase18_extraction.reference_set_for(slot)
+                    nlls = score_values(model, tok, device, slot, references, state)
+                    nll_by_slot[slot] = dict(zip(references, nlls))
+            rows[reading] = gate_reading(reading, nll_by_slot)
+        passed = all(row["equal"] for by_slot in rows.values() for row in by_slot.values())
+        _write_once(
+            gate_sidecar(root),
+            {"run_id": RUN_ID, "readings": list(readings), "rows": rows, "passed": passed},
+        )
+        scored = []
+        if passed:
+            for reading in readings:
+                state.update(stage=f"score_{reading}")
+                by_slot = {}
+                with reading_model(reading, device) as (model, tok):
+                    for slot, row in plan.items():
+                        values = [row["taught"], *row["minted"]]
+                        nlls = score_values(model, tok, device, slot, values, state)
+                        by_slot[slot] = {
+                            "taught": row["taught"],
+                            "taught_nll": nlls[0],
+                            "minted": row["minted"],
+                            "minted_nll": nlls[1:],
+                        }
+                # Write-once BEFORE the next reading: a crash keeps every reading already scored.
+                _write_once(
+                    nll_sidecar(root, reading),
+                    {"run_id": RUN_ID, "reading": reading, "slots": by_slot},
+                )
+                scored.append(reading)
+        status = "SCORED" if passed else "GATE_FAILED"
+        end_sha = git_sha()
+        if end_sha != pre["git_sha"]:
+            print(f"WARN HEAD moved during the run: {pre['git_sha']} -> {end_sha}", flush=True)
+        _write_once(
+            run_sidecar(root),
+            {
+                "run_id": RUN_ID,
+                "status": status,
+                "readings": list(readings),
+                "slots": list(plan),
+                "max_size": max_size,
+                "sizes": {slot: row["size"] for slot, row in plan.items()},
+                "git_sha_at_launch": pre["git_sha"],
+                "git_sha_at_end": end_sha,
+                "head_moved_during_run": end_sha != pre["git_sha"],
+                "module_sha256_at_launch": pre["module_sha256"],
+                "device": device,
+                "torch_version": torch.__version__,
+                "started_utc": started,
+                "finished_utc": _now(),
+                "reconstruction": pre["reconstruction"],
+                "gate_sha256": _sha256(gate_sidecar(root)),
+                "nll_sha256": {r: _sha256(nll_sidecar(root, r)) for r in scored},
+            },
+        )
+        state.update(stage="done")
+    finally:
+        stop.set()
+        thread.join()
+    phase36_ledger.append(
+        "end",
+        run_id=RUN_ID,
+        phase=38,
+        front=FRONT,
+        record=prereg.RANK_RECORD,
+        ledger_path=ledger_path,
+    )
+    print(f"RUN {status} — next: crosscheck, then emit", flush=True)
+    return status
