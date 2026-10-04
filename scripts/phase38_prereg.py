@@ -23,6 +23,7 @@ torch and is never called here at import.
 
 import collections.abc
 import fnmatch
+import hashlib
 import json
 import math
 import pathlib
@@ -691,3 +692,230 @@ E5_RANK_MOVES_AND_GENERATION_COLLAPSES = phase35_prereg.fill(
     moves=ENTRIES["rank_moved"],
     collapses=ENTRIES["generation_collapsed"],
 )
+
+# =================================================================================================
+# (9) THE DEFINITIONS, MECHANICAL (D-12..D-15, D-18, D-20, D-28..D-30, D-33). Pure and torch-free;
+# every output is JSON-serialisable.
+# =================================================================================================
+
+
+def rank_in_prefix(nll, taught, members):
+    """D-18: the taught value's rank among ``members`` plus itself, by ascending NLL with ties
+    broken by the candidate string: phase18_extraction.exposure_rank's sort key, at any size."""
+    _prove(taught in nll, f"the taught value {taught!r} has no NLL")
+    _prove(taught not in members, "the taught value is listed among the members")
+    _prove(len(set(members)) == len(members), "the members are not distinct")
+    _prove(all(c in nll for c in members), "a member has no NLL")
+    key = (nll[taught], taught)
+    return 1 + sum((nll[c], c) < key for c in members)
+
+
+def exposure_bits(rank, size):
+    """Exposure in bits, ``log2(size) - log2(rank)`` in that order (exposure_rank's expression)."""
+    _prove(1 <= rank <= size, f"rank {rank!r} is outside 1..{size!r}")
+    return math.log2(size) - math.log2(rank)
+
+
+def moved(rank_k, rank_0):
+    """D-12 / D-28: the rank moved iff it at least doubled (exposure fell by >= 1 bit)."""
+    return rank_k >= 2 * rank_0
+
+
+def left_top_eighth(rank, size):
+    """D-29: the taught value left the top eighth iff rank > size / 8, in integer form."""
+    return rank * 8 > size
+
+
+def first_event(flags):
+    """The first prefix, in PREFIXES order, whose flag is True; None if the event never occurs."""
+    _prove(set(flags) == set(PREFIXES), f"flags keyed {sorted(flags)}, not the prefixes {PREFIXES}")
+    return next((k for k in PREFIXES if flags[k]), None)
+
+
+def first_collapse(counts):
+    """D-13: the first prefix with 0 answered; None means never collapsed within the grid."""
+    return first_event({k: counts[k] == 0 for k in PREFIXES})
+
+
+def first_damage(counts, n_questions):
+    """D-14: the first prefix k > 0 whose rate drop counts[0]/n - counts[k]/n is strictly above
+    MARGIN (D-33: the committed formula)."""
+    return first_event(
+        {k: k > 0 and counts[0] / n_questions - counts[k] / n_questions > MARGIN for k in PREFIXES}
+    )
+
+
+def relation(event_k, reference_k):
+    """D-15 / D-30: where an event's first prefix sits against a reference's first prefix."""
+    if reference_k is None:
+        return "REFERENCE_NEVER_IN_GRID"
+    if event_k is None:
+        return "NEVER"
+    if event_k < reference_k:
+        return "BEFORE"
+    return "SAME" if event_k == reference_k else "AFTER"
+
+
+def components_sha256(components):
+    """D-20: the ordered_prefix digest, phase36_probe's components_sha256 formula."""
+    return hashlib.sha256(json.dumps([list(c) for c in components]).encode("utf-8")).hexdigest()
+
+
+def drop_formula_audit(a2, *, margin=None):
+    """D-33: the committed drop pre/n - post/n against (pre - post)/n, cell by cell.
+
+    A cell where the two differ is listed with both values; a cell where the damage event changes
+    between them is a "flip", a margin tie decided by rounding; a rate drop exactly equal to the
+    margin is an exact tie decided by D-14's strict >. Description, never a criterion.
+    """
+    margin = MARGIN if margin is None else margin
+    cells, differing, flips, exact_ties = [], [], [], []
+    for slot in SLOTS:
+        counts, n = a2[slot]["counts"], a2[slot]["n_questions"]
+        for k in PREFIXES[1:]:
+            rate_drop = counts[0] / n - counts[k] / n
+            count_drop = (counts[0] - counts[k]) / n
+            cell = {
+                "slot": slot,
+                "k": k,
+                "rate_drop": rate_drop,
+                "count_drop": count_drop,
+                "differs": rate_drop != count_drop,
+                "damaged_rate": rate_drop > margin,
+                "damaged_count": count_drop > margin,
+                "flip": (rate_drop > margin) != (count_drop > margin),
+                "exact_margin_tie": rate_drop == margin,
+            }
+            cells.append(cell)
+            for flag, bucket in (
+                ("differs", differing),
+                ("flip", flips),
+                ("exact_margin_tie", exact_ties),
+            ):
+                if cell[flag]:
+                    bucket.append([slot, k])
+    return {
+        "criterion": False,
+        "formula": "pre/n - post/n",
+        "margin": margin,
+        "cells": cells,
+        "differing": differing,
+        "flips": flips,
+        "flip_name": "margin tie decided by rounding",
+        "exact_ties": exact_ties,
+        "exact_tie_name": "exact margin tie decided by D-14's strict >",
+    }
+
+
+def _exposure_rows(rows):
+    """{slot: {rank, n_references, nll_mean}} from a committed exposure[] list."""
+    out = {
+        row["slot"]: {
+            "rank": row["rank"],
+            "n_references": row["n_references"],
+            "nll_mean": row["nll"]["ans1"]["mean"],
+        }
+        for row in rows
+    }
+    _prove(set(out) == set(SLOTS), f"exposure rows cover {sorted(out)}, not {SLOTS}")
+    return out
+
+
+def committed_gate_ranks():
+    """D-18: the 64 committed ranks (READINGS x SLOTS) the new rank function must reproduce."""
+    erased = _read(ERASED_RECORD)
+    by_reading = {"k0": _exposure_rows(erased["pre_erasure"]["exposure"])}
+    summary = _read(KSTAR_SUMMARY)["checkpoints"]
+    curve = {row["prefix"]: row for row in _read(CURVE_RECORD)["checkpoints"]}
+    middle = PREFIXES[1:-1]
+    _prove(
+        set(summary) == {str(k) for k in middle},
+        f"{KSTAR_SUMMARY} checkpoints {sorted(summary)} are not the prefixes {middle}",
+    )
+    for k in middle:
+        checkpoint = summary[str(k)]
+        target = checkpoint["target"]
+        rows = {
+            target["slot"]: (
+                target["exposure_rank_this_run"],
+                target["value_span_nll_committed_curve"],
+            )
+        }
+        for slot, row in checkpoint["nontarget"].items():
+            rows[slot] = (row["exposure_rank_this_run"], row["value_span_nll_committed_curve"])
+        _prove(set(rows) == set(SLOTS), f"k{k}: rows cover {sorted(rows)}, not {SLOTS}")
+        curve_row = curve[k]
+        curve_ranks = {slot: cell["rank"] for slot, cell in curve_row["slots"].items()}
+        curve_ranks[target["slot"]] = curve_row["target_rank"]
+        _prove(
+            curve_ranks == {slot: rank for slot, (rank, _) in rows.items()},
+            f"k{k}: {KSTAR_SUMMARY} ranks disagree with {CURVE_RECORD}",
+        )
+        by_reading[f"k{k}"] = {
+            slot: {
+                "rank": rank,
+                "n_references": by_reading["k0"][slot]["n_references"],
+                "nll_mean": nll,
+            }
+            for slot, (rank, nll) in rows.items()
+        }
+    by_reading[f"k{PREFIXES[-1]}"] = _exposure_rows(erased["exposure"])
+    by_reading["M2"] = _exposure_rows(_read(RETRAIN_RECORD)["exposure"])
+    by_reading["adapter_off"] = _exposure_rows(_read(ADAPTER_OFF_RECORD)["exposure"])
+    _prove(set(by_reading) == set(READINGS), f"readings {sorted(by_reading)} are not {READINGS}")
+    return {reading: {slot: by_reading[reading][slot] for slot in SLOTS} for reading in READINGS}
+
+
+def a2_counts():
+    """D-13 / D-14: the committed A2 counts at K = 48 per slot and prefix, read from records only.
+
+    k = 0 is re-derived from Phase 18's adapter-on draws with phase19_run._pooled_rows (no JSON
+    field holds the target's); k = 8..64 come from the k* summary; the last prefix from the
+    committed target scores, never the erased arm's per_fact (defect C, 14-question rows).
+    """
+    import phase18_extraction  # torch at import: lazy, so this module stays CPU-only
+    import phase19_run  # same
+
+    values = {fact.id: fact.value for fact in phase14_factset.LOCKED_FACTS}
+    pooled = phase19_run._pooled_rows(
+        _read(ADAPTER_ON_RECORD)["draws"], values, "A2", phase18_extraction.CORPUS_TIERS
+    )
+    counts = {slot: {} for slot in SLOTS}
+    n_questions = {slot: set() for slot in SLOTS}
+    for fact in phase14_factset.LOCKED_FACTS:
+        row = pooled[fact.id]
+        _prove(row["slot"] == fact.slot, f"{fact.id}: pooled slot {row['slot']!r}")
+        counts[fact.slot][0] = row["n_answerable"]
+        n_questions[fact.slot].add(row["n_questions"])
+
+    def _nontarget(slot, row, k):
+        _prove(
+            row["pre_answerable"] == counts[slot][0],
+            f"k{k} {slot}: pre_answerable {row['pre_answerable']} is not the k0 count",
+        )
+        counts[slot][k] = row["post_answerable"]
+        n_questions[slot].add(row["n_questions"])
+
+    summary = _read(KSTAR_SUMMARY)["checkpoints"]
+    for k in PREFIXES[1:-1]:
+        target = summary[str(k)]["target"]
+        counts[target["slot"]][k] = target["successes"]
+        n_questions[target["slot"]].add(target["n_questions"])
+        for slot, row in summary[str(k)]["nontarget"].items():
+            _nontarget(slot, row, k)
+    scores = _read(TARGET_SCORES)["target_scores"]
+    last = PREFIXES[-1]
+    counts[scores["target"]["slot"]][last] = scores["target"]["successes"]
+    n_questions[scores["target"]["slot"]].add(scores["target"]["n_questions"])
+    for row in scores["nontarget"].values():
+        _nontarget(row["slot"], row, last)
+
+    out = {}
+    for slot in SLOTS:
+        _prove(set(counts[slot]) == set(PREFIXES), f"{slot}: counts at {sorted(counts[slot])}")
+        _prove(len(n_questions[slot]) == 1, f"{slot}: n_questions {sorted(n_questions[slot])}")
+        out[slot] = {
+            "n_questions": n_questions[slot].pop(),
+            "counts": {k: counts[slot][k] for k in PREFIXES},
+        }
+    return out
