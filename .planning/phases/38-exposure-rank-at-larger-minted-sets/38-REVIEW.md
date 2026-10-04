@@ -13,7 +13,8 @@ findings:
   warning: 4
   info: 4
   total: 8
-status: resolved
+status: issues_found
+second_review: {critical: 0, warning: 3, info: 5, total: 8}
 ---
 
 # Phase 38: Code Review Report
@@ -216,3 +217,165 @@ _Depth: standard_
 | IN-01..IN-04 | Not fixed: informational | — |
 
 Downstream: the 38-07 record builder must pass `reachable=prereg.moved_reachable(rank_0, size)` for the moved event and record rank_0 beside every relation; 38-09/38-10 present the two new outcomes alongside BEFORE / SAME / AFTER / NEVER.
+
+# Second review (2026-10-04): scoring driver and sizes fill (38-08 Task 1)
+
+**Reviewed:** 2026-10-04
+**Depth:** standard
+**Files reviewed (4):** `scripts/phase38_rank.py`, `scripts/phase38_sizes_prereg.py`, `tests/test_phase38_rank.py`, `tests/test_phase38_sizes_prereg.py` (diff base 7f4f4a0; HEAD at review bb54beb, which differs from d57248f only by a docs(state) commit that touches no DISCLOSED_MODULES file)
+**Status:** issues_found
+
+**Counts:** critical 0, warning 3, info 5, total 8
+
+## Summary
+
+Severity rule (Rafael's): a finding is a BLOCKER only if it changes a read value or an emitted verdict or record in the real run, or can corrupt or brick the ledger in a plausible crash. Deliberate bypass is a WARNING or a known limitation.
+
+**No BLOCKER.** I traced the real run path, the real-root shape and the 38-08 crash rules line by line. These hold:
+
+- **Ledger and recovery (focus 1).** Every refusal runs before the start line: preflight, then `scoring_plan`, then `append("start")` (`:530-533`). Each failure point after the start line leaves a state that one crash rule handles:
+  - A crash before the first beat leaves an open start. `reconcile` closes it at 0 s with NO_BEAT_FLAG.
+  - A crash in the gate, or mid-scoring, leaves no run sidecar, so rule (ii) applies. Already-written NLL sidecars are atomic and stay intact, and preflight then refuses on them (tested at `:731-753`).
+  - A crash after the run sidecar but before the end line is rule (i). The run sidecar is written last inside `try`, and the end line comes after `finally`.
+  - A crash in `emit` is atomic (`atomic_write_json`), so emit can simply be retried.
+  - Nothing in the driver rewrites or removes a ledger line.
+- **D-18 (focus 2).** All readings are gated, each with its own model build, before the `if passed:` scoring loop. `passed` is `all(...)` over 8 x 8 rows on the real root, which is forced to the full shape (`:524-529` and `:428`). Any rank or `n_references` mismatch gives GATE_FAILED and scores no minted value.
+- **D-20, D-23 (focus 3).** Preflight proves three digests against committed records: the persona adapter against `adapter_in_sha256`, the components against `phase36_probe_e1.configuration.components_sha256`, and M2 against `retrain_scores.adapter_sha256`. `require_launch("E5")` is the only stop and there is no in-run timer. Both `check_unit_caps` calls pass `counts_for("e5_set_sizes", ...)`, so `sets` and `max_set_size` only, never `prefixes`.
+- **Record arithmetic (focus 4).** Everything goes through `phase38_prereg`. The functions used are `rank_in_prefix`, `exposure_bits`, `moved`, `left_top_eighth`, `first_event`, `first_collapse`, `first_damage`, and `relation`. For moved, `relation` gets `reachable=moved_reachable(rank_0, size)`. Every event carries `rank_0`. Events are keyed by the six PREFIXES only, so M2 and adapter_off never enter them.
+  - D-27 `neighbour_d1` holds indices into `cleared`, and `curve_for`'s `i not in excluded` reads them as indices. Measured: the counts at `i < size - 1` reproduce the record's `neighbour_counts` exactly (birth_year 2/11/59/101, house_number 1/2/10/19).
+- **D-34 (focus 5).** The committed identity's digests are the git blobs at 91553d9: `git show 91553d9:scripts/phase38_rank.py | shasum -a 256` gives `f887d437…` and the sizes file gives `18f37b0b…`. Since then exactly one commit touches a DISCLOSED_MODULES file (1e68330), and the disclosure lists it.
+- **Write-once and report (focus 6, 7).** The 13 sections render in order. D-36 Limitations appears on both statuses. WR-01 outcomes render by name with `(rank_0 = N)`.
+- **Sizes fill.** `max_set_size(n_cleared)` equals the record's `max_set_size` for all 8 slots. The sizes fit the caps with no `prefixes`.
+- **Tests.** `.venv/bin/pytest -q -p no:cacheprovider tests/test_phase38_rank.py tests/test_phase38_sizes_prereg.py` gives `96 passed in 23.94s`.
+
+The three warnings are all on the **rehearsal and disclosure** side. 38-08 Task 1 explicitly schedules a re-rehearsal whenever a fix touches the run path, and on that path the driver's defaults can write into the real milestone ledger (DR-01) or under-disclose what was read (DR-02).
+
+## Warnings
+
+### DR-01: A rehearsal root silently uses the REAL milestone ledger and heartbeat when `ledger_path` / `heartbeat_path` are omitted
+
+**File:** `scripts/phase38_rank.py:507-539` (`append("start", ..., ledger_path=ledger_path)` at `:533`, `heartbeat_path or phase36_ledger.HEARTBEAT_PATH` at `:534`, `append("end")` at `:609-616`)
+
+**Issue:** `run()` routes a non-real (tmp) root, CPU device, to whatever ledger it is given. `None` means `ledger/v6_mps_ledger.jsonl`. The 38-07 rehearsal passed tmp paths, but nothing enforces that. 38-08 Task 1 requires a CPU re-rehearsal into a fresh root if any fix touches the run path. If that re-rehearsal omits `ledger_path`, the append-only real ledger gets a `start` and an `end` line for `v6/38/E5/rank` naming `results/phase38_rank.json` from a CPU run. The consequences:
+
+- E5 spend counts that CPU span. It is superseded only by its own ledger span (CR-01) once the real end line names the same record.
+- Task 4's check of "exactly one start and one end line for v6/38/E5/rank" can never pass again.
+- The rehearsal's beats land in the real heartbeat file under the real point.
+
+This is not a crash, so it is a WARNING under the rule. It becomes a ledger-integrity defect the moment a re-rehearsal is run without the two kwargs.
+
+**Experiment (run; `append` stubbed to stop before any write; real ledger bytes asserted unchanged):**
+```
+.venv/bin/python <scratch>/rv/e1.py
+# PREFLIGHT OK bb54beb… device=cpu readings=1 …
+# append called with ('start', None) -> ledger_path None means /Users/juliorcoelho/PersonaCore/ledger/v6_mps_ledger.jsonl
+# heartbeat default: /Users/juliorcoelho/PersonaCore/data/v6_mps_heartbeat.jsonl
+# real ledger unchanged
+```
+(`e1.py`: `phase36_ledger.append = <raise SystemExit, record ledger_path>`, then `phase38_rank.run(root=<tmp>, device='cpu', readings=('k0',), slots=('pet_name',), max_size=8)`.)
+
+**Fix:** Put this beside the existing shape `_prove`, before preflight. The real run is untouched, and the rig tests already pass both paths.
+```python
+if not _is_real(root):
+    real = {
+        (phase36_ledger._ROOT / phase36_ledger.LEDGER_PATH).resolve(),
+        pathlib.Path(phase36_ledger.HEARTBEAT_PATH).resolve(),
+    }
+    _prove(
+        ledger_path is not None
+        and heartbeat_path is not None
+        and real.isdisjoint({pathlib.Path(ledger_path).resolve(), pathlib.Path(heartbeat_path).resolve()}),
+        "a rehearsal root writes its own ledger and heartbeat, never the milestone ones (D-17)",
+    )
+```
+Alternative if not fixed: rule that a re-rehearsal reuses the 38-07 Task 4 kwargs script verbatim, and record that ruling as a known limitation.
+
+### DR-02: `record_rehearsal` keeps the first identity even when a later rehearsal reads a different (wider) slice, so the D-34 disclosure under-states what was read
+
+**File:** `scripts/phase38_rank.py:165-172` (kept branch); `:537-538`; test `tests/test_phase38_rank.py:1074-1076` asserts this behaviour
+
+**Issue:** The `kept` branch returns without comparing `readings`, `slots` or `max_size` with the kept identity. The record's `rehearsal_disclosure.slice_read` and `statement` come only from the kept identity (`:224-230`). A 38-08 re-rehearsal that reads more could still happen, for example all slots, or `max_size=32`. Then the real record says the rehearsal read only `pet_name, birth_year at |R| 8`, an emitted D-34 field that is wrong. Today the record is right, because both 38-07 rehearsals read the same slice. That makes this conditional on the re-rehearsal, hence a WARNING. The existing test `_identity(path, slots=["street"], max_size=32)` -> `kept` encodes the gap as intended behaviour.
+
+**Experiment (run, tmp only):**
+```
+.venv/bin/python -c "import sys,pathlib,tempfile; sys.path[:0]=['scripts','src']; import phase38_rank as r; p=pathlib.Path(tempfile.mkdtemp(dir='/private/tmp/claude-501'))/'id.json'; r.record_rehearsal(p,readings=['k0'],slots=['pet_name'],max_size=8); k=r.record_rehearsal(p,readings=list(r.prereg.READINGS),slots=list(r.prereg.SLOTS),max_size=None); print(k['status'],k['slots'],k['max_size']); print(r.rehearsal_disclosure(r._load(p),launch_git_sha=r.git_sha(),launch_module_sha256=r.module_sha256())['statement'])"
+# kept ['pet_name'] 8
+# The CPU rehearsal (38-07) read pet_name at |R| 8 under 1 readings, …
+```
+
+**Fix:** Refuse a different slice in the kept branch. Change the test at `:1074` to expect `SystemExit` for the different slice and `kept` for the same one.
+```python
+if path.exists():
+    kept = _load(path)
+    _prove(
+        (kept["readings"], kept["slots"], kept["max_size"]) == (list(readings), list(slots), max_size),
+        f"{path} recorded a different slice; a wider rehearsal would go undisclosed (D-34)",
+    )
+```
+`record_rehearsal` is on the run path, so per 38-08 Task 1 this fix itself needs the re-rehearsal (which then prints `REHEARSAL KEPT`).
+
+### DR-03: Preflight checks only that the D-34 identity file EXISTS; the disclosure that can refuse is first computed at `emit`, after the MPS hours are spent
+
+**File:** `scripts/phase38_rank.py:440-444` (`.exists()` only); `:775-782` (`build_record` -> `rehearsal_disclosure`); `:186-223` (KeyError on a malformed identity; `_prove` "changed after the rehearsal without a commit")
+
+**Issue:** The identity under `data/` is gitignored. A malformed, truncated or foreign identity passes the real-root preflight. The MPS run then completes, and only `emit` hits `KeyError` or `SystemExit` in `rehearsal_disclosure`. Recovering the record then means hand-restoring a gitignored file after the run, or changing the driver after launch, which would show in `modules_changed_since_launch`. 38-08 Task 2 step 5 compares the identity with the SUMMARY copy by hand, so the real run is covered by procedure. Hence a WARNING.
+
+**Experiment (run):**
+```
+.venv/bin/python -c "import sys; sys.path[:0]=['scripts','src']; import phase38_rank as r; r.rehearsal_disclosure({}, launch_git_sha=r.git_sha(), launch_module_sha256=r.module_sha256())"
+# KeyError: 'git_sha'      (preflight's check at :441 is `rehearsal_identity_path().exists()`)
+```
+
+**Fix:** In preflight, after `launch_modules = module_sha256()` (`:468`), compute the disclosure once on the real root. It only reads git and writes nothing, and it turns the post-run refusals into pre-launch ones. It also mechanises most of Task 2 step 5.
+```python
+if _is_real(root):
+    rehearsal_disclosure(
+        _load(rehearsal_identity_path()), launch_git_sha=launch_sha, launch_module_sha256=launch_modules
+    )
+```
+
+## Info
+
+### DI-01: `LAUNCH_PATHSPEC` leaves out `artifacts/`, and the run reads the tracked `artifacts/tokenizer.json`
+
+**File:** `scripts/phase38_rank.py:71`, `:257-260` (`phase14_recall.TOKENIZER_PATH` = `artifacts/tokenizer.json`)
+
+This is the mint's WR-03 class. A modified tokenizer is invisible to `refuse_if_dirty`, and the record would name a `git_sha` it cannot be regenerated from. Rafael ruled WR-03 a known limitation because the plan's porcelain check covers it, and 38-08 Task 2 step 1 checks `artifacts` too. Listed only for completeness. A one-line fix is available: `LAUNCH_PATHSPEC = ("scripts", "src", "results", "artifacts")`.
+
+### DI-02: An empty `readings=()` passes the gate vacuously, and `slots=()` silently means all eight slots (rehearsal roots only)
+
+**File:** `scripts/phase38_rank.py:428-433`, `:553`, `:336`
+
+The D-21 I/O-free check accepts `()`, and `all([])` is True, so a rehearsal with no readings reports SCORED. `slots or prereg.SLOTS` turns `()` into the full slot set, which on a rehearsal root reads more of the real result than was asked for. That also feeds DR-02. The real root is forced to `None`/full shape, so the real run is unaffected.
+
+**Experiment (run):** `scoring_plan(slots=(), max_size=8)` gives all 8 slots, and the readings check on `()` gives `True`.
+
+**Fix:** `_prove(readings, ...)`; use `slots if slots is not None else prereg.SLOTS` and `_prove(slots)`.
+
+### DI-03: `report()` writes non-atomically but refuses an existing file
+
+**File:** `scripts/phase38_rank.py:1245-1251`
+
+`out.write_text(...)` interrupted mid-write leaves a torn `results/phase38_rank_report.md`. The write-once refusal then blocks re-rendering until someone deletes the file by hand. Nothing is lost, because the report renders from the committed record. **Fix:** `phase25_run.atomic_write_json` is JSON-only, so write to a sibling `.tmp` and `os.replace`. Mind the ISO-06 `os.replace` census in the tests, or reuse an existing text-atomic helper if one exists.
+
+### DI-04: `reading_model`'s "released on exit" does not hold, because the caller's `as (model, tok)` binding keeps the previous model alive while the next one is built
+
+**File:** `scripts/phase38_rank.py:349-377`; callers `:546`, `:563`, `:656`
+
+`model = None` inside the generator drops only the generator's own reference. `run`'s local `model` still holds it until the next `with` rebinds it, which happens after the new model is loaded. So two models are resident at each reading boundary, and `gc.collect()` / `torch.mps.empty_cache()` free nothing. This is harmless at ~15M parameters.
+
+**Experiment (run):** a weakref through the same contextmanager shape prints `after exit, previous model alive: True`.
+
+**Fix:** add `del model, tok` after each `with` block, or correct the docstring.
+
+### DI-05: `MODULES` and D-20 leave out code and inputs the run executes or reads
+
+**File:** `scripts/phase38_rank.py:74-86`, `:296-320`
+
+`src/personacore/lora.py` (`adapter_disabled`, `load_adapter_weights`), the model code, `phase25_run.py` and `phase14_factset.py` are not hashed. Neither is the base checkpoint `checkpoints/convbase_slim.pt`, which is gitignored and so invisible to `refuse_if_dirty`. D-20 specifies only the adapters and `ordered_prefix`, so this conforms. The 64-cell gate is the de facto check on the base. Same class as the mint's IN-02. **Fix:** optionally add the base checkpoint's sha256 to `reconstruction` (descriptive), and list the src modules in `MODULES`.
+
+---
+
+_Reviewed: 2026-10-04_
+_Reviewer: Claude (gsd-code-reviewer)_
+_Depth: standard_
