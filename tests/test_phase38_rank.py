@@ -1243,6 +1243,27 @@ def _section(text, heading):
     return text[start : end if end != -1 else len(text)]
 
 
+def _gfm_cells(line):
+    return re.split(r"(?<!\\)\|", line.strip())[1:-1]
+
+
+def _assert_gfm_tables(text):
+    """Every table's header, delimiter and body rows have the same cell count, so GFM renders
+    them as tables (an unescaped pipe inside a cell, e.g. |R|, adds cells)."""
+    lines = text.splitlines()
+    tables = 0
+    for i, line in enumerate(lines[:-1]):
+        if line.startswith("|") and re.fullmatch(r"\|(---\|)+", lines[i + 1]):
+            tables += 1
+            width = len(_gfm_cells(lines[i + 1]))
+            assert len(_gfm_cells(line)) == width, line
+            body = lines[i + 2 :]
+            end = next((j for j, x in enumerate(body) if not x.startswith("|")), len(body))
+            for row in body[:end]:
+                assert len(_gfm_cells(row)) == width, row
+    assert tables
+
+
 def _rows(section):
     """Table body rows (header and separator dropped) as lists of cell strings."""
     lines = [line for line in section.splitlines() if line.startswith("|")]
@@ -1253,6 +1274,7 @@ def test_render_report_renders_the_scored_record(rig):
     record = _emitted(rig)
     text = phase38_rank.render_report(record)
     assert _headings(text) == _SECTIONS
+    _assert_gfm_tables(text)
     assert record["approval"]["ruling"] in text  # D-21, verbatim
     # Curves: parsed back and compared with the record, cell by cell.
     curves = _section(text, "## Rank curves (D-15)")
@@ -1323,6 +1345,8 @@ def test_render_helpers():
         "| 1 | x |",
         "",
     ]
+    escaped = phase38_rank._table(("|R|",), [["a|b"]])
+    assert (escaped[0], escaped[2]) == ("| \\|R\\| |", "| a\\|b |")
     event = {"rank_0": 3, "vs_collapse": "REFERENCE_NEVER_IN_GRID", "vs_damage": "ALREADY_AT_K0"}
     assert phase38_rank._relation_text(event, "vs_collapse") == "never collapsed within the grid"
     assert phase38_rank._relation_text(event, "vs_damage") == "ALREADY_AT_K0 (rank_0 = 3)"
@@ -1394,6 +1418,7 @@ def test_render_report_on_a_gate_failed_record(rig):
         "## Provenance",
     ]
     assert "GATE_FAILED" in _section(text, "## Status")
+    _assert_gfm_tables(text)
     gate_rows = _rows(_section(text, "## Gate: committed reference sets (D-18, D-11a)"))
     assert len(gate_rows) == len(READINGS) * len(SLOTS)
     assert [r[:2] for r in gate_rows if r[5] == "False"] == [["k32", "street"]]

@@ -922,8 +922,12 @@ _NEVER_IN_GRID = {
 
 
 def _table(header, rows):
-    lines = ["| " + " | ".join(header) + " |", "|" + "---|" * len(header)]
-    return [*lines, *("| " + " | ".join(str(c) for c in row) + " |" for row in rows), ""]
+    """A GFM table; a pipe inside a cell (|R|) is escaped, else it would add cells."""
+
+    def line(cells):
+        return "| " + " | ".join(str(c).replace("|", "\\|") for c in cells) + " |"
+
+    return [line(header), "|" + "---|" * len(header), *(line(row) for row in rows), ""]
 
 
 def _relation_text(event, side):
