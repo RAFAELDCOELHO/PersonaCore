@@ -1438,7 +1438,7 @@ never over them.
 
 - [x] **Phase 35: v6.0 Pre-Registration and the Research It Rests On** - Every front's rule, record paths and thresholds committed and ancestry-guarded before any v6.0 record exists, with the one-run-audit bound and E3 selection-accounting research on record before any E3/E4 threshold is locked (completed 2026-10-01; verification passed 5/5 SC, a4c7beb; suite 3487/4/0 at bbcec95)
 - [x] **Phase 36: MPS Cost Probes and Budget Commitment** - Every MPS front priced by a probe on the M3; the v6.0 budget and stop line committed inside the 90 h MPS ceiling, or the work halts and the cut options go to Rafael (completed 2026-10-02; verification passed 4/4 SC, ecdce31; budget 77.72 h, stop line 90 h, approved by Rafael; suite 3782/4/0 at e72c17a)
-- [ ] **Phase 37: Clean Reproduction of the Phase 19 Verdict** - R1a: one CPU command re-derives the Phase 19 verdict exactly; R1b: an MPS replica of k = 78 under a pre-registered tolerance, published beside the verdict
+- [x] **Phase 37: Clean Reproduction of the Phase 19 Verdict** - R1a: one CPU command re-derives the Phase 19 verdict exactly; R1b: an MPS replica of k = 78 under a pre-registered tolerance, published beside the verdict (completed 2026-10-04; verification passed 4/4 SC; R1a fe715c5 re-derives FAILURE; R1b 8a289fc REPLICATED, all four keys abs_diff 0, draws bit-identical; approved by Rafael; suite 3928/4/0 at 8a289fc)
 - [ ] **Phase 38: Exposure Rank at Larger Minted Sets** - E5: the committed ablation prefixes re-scored against same-slot sets minted by a pre-registered rule
 - [ ] **Phase 39: Instrument × Context 2×2** - E6: NLL, rank and generation at the answer anchor and the full A2 question on the same adapters
 - [ ] **Phase 40: M2 Seed Noise Floor** - E2: M2 retrained at S seeds, published beside v3.0's sampling floor
@@ -1624,28 +1624,28 @@ replica of k = 78 is published beside the verdict under a tolerance fixed before
 Plans:
 **Wave 1**
 
-- [ ] 37-01-PLAN.md — `scripts/phase37_prereg.py` + ancestry test: the slot fill (k/target/non-target tolerance 0 as preferences, destroyed_pct 0.8396 pp derived from the records), "replicated", D-04/D-07/D-11/D-12/D-14 rules, D-06 cost guard
+- [x] 37-01-PLAN.md — `scripts/phase37_prereg.py` + ancestry test: the slot fill (k/target/non-target tolerance 0 as preferences, destroyed_pct 0.8396 pp derived from the records), "replicated", D-04/D-07/D-11/D-12/D-14 rules, D-06 cost guard
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 37-02-PLAN.md — `scripts/phase37_routes.py`: route_a..route_d + `rederive`, the defect-E/ERASE-08 wrapper `select_target_prefix`, natural reds on the committed records, pin and gate byte-unchanged
+- [x] 37-02-PLAN.md — `scripts/phase37_routes.py`: route_a..route_d + `rederive`, the defect-E/ERASE-08 wrapper `select_target_prefix`, natural reds on the committed records, pin and gate byte-unchanged
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 37-03-PLAN.md — `scripts/phase37_r1a.py`: the one CPU command (REPRO-01 exact assertions, (b) floor, recorded verdict), write-once record then verify mode
-- [ ] 37-04-PLAN.md — `scripts/phase37_r1b.py` + LaunchAgent: ledger gate, defect-E sweep, D-07 branch, erased arm at K = 48, REPLICATED/NOT_REPLICATED record; CPU-tested on the committed arm record
+- [x] 37-03-PLAN.md — `scripts/phase37_r1a.py`: the one CPU command (REPRO-01 exact assertions, (b) floor, recorded verdict), write-once record then verify mode
+- [x] 37-04-PLAN.md — `scripts/phase37_r1b.py` + LaunchAgent: ledger gate, defect-E sweep, D-07 branch, erased arm at K = 48, REPLICATED/NOT_REPLICATED record; CPU-tested on the committed arm record
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 37-05-PLAN.md — R1a record: suite green, one command, Rafael's approved, single-path commit (freezes the prereg)
+- [x] 37-05-PLAN.md — R1a record: suite green, one command, Rafael's approved, single-path commit (freezes the prereg)
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 37-06-PLAN.md — R1b launch: preflight + cost line, Rafael's approved, the one MPS attempt under the LaunchAgent, outputs verified (no commits)
+- [x] 37-06-PLAN.md — R1b launch: preflight + cost line, Rafael's approved, the one MPS attempt under the LaunchAgent, outputs verified (no commits)
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 37-07-PLAN.md — R1b records: Rafael's approved, ledger then arm record then summary record, full suite
+- [x] 37-07-PLAN.md — R1b records: Rafael's approved, ledger then arm record then summary record, full suite
 
 ### Phase 38: Exposure Rank at Larger Minted Sets
 
@@ -1914,7 +1914,7 @@ Next (v5.0): `/gsd:plan-phase 29`.
 | ----- | --------- | -------------- | ------ | --------- |
 | 35. v6.0 Pre-Registration and the Research It Rests On | v6.0 | 5/5 | Complete | 2026-10-01 — verification passed 5/5 SC (a4c7beb); Rafael's review corrections f13ad62/d850d0c + code-review fixes 1e1e1c5/3805beb; suite 3487/4/0 at bbcec95; zero gsd-sdk mutation handlers |
 | 36. MPS Cost Probes and Budget Commitment | v6.0 | 8/8 | Complete | 2026-10-02 — verification passed 4/4 SC (ecdce31); probe records + ledger f7b9962..0d59b6d; Rafael's ruling (spread_scaled, E6 a2_regenerated_entries = 0, no cuts) + approved → fill 9a5718a, budget 6b57231 (77.72 h, stop line 90 h, S = 5); review fixes b3ab341; suite 3782/4/0 at e72c17a; zero gsd-sdk mutation handlers |
-| 37. Clean Reproduction of the Phase 19 Verdict | v6.0 | 0/7 | Planned | - |
+| 37. Clean Reproduction of the Phase 19 Verdict | v6.0 | 7/7 | Complete | 2026-10-04 — verification passed 4/4 SC; review eeeb804 (0/5/6) fixed 2781bd6..5896ae3 before the prereg freeze; R1a record fe715c5 (FAILURE re-derived on CPU); R1b one MPS attempt 4104 s → REPLICATED, ledger 3f87acf, arm 57dcd4b, record 8a289fc; Rafael approved each; suite 3928/4/0 at 8a289fc; zero gsd-sdk mutation handlers |
 | 38. Exposure Rank at Larger Minted Sets | v6.0 | 0/TBD | Not started | - |
 | 39. Instrument × Context 2×2 | v6.0 | 0/TBD | Not started | - |
 | 40. M2 Seed Noise Floor | v6.0 | 0/TBD | Not started | - |

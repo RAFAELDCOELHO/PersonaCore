@@ -712,9 +712,9 @@ reproducible by an outsider. No closed verdict is reopened; v6.0 publishes besid
 
 ### Reproduction of the Phase 19 verdict (REPRO) — R1
 
-- [ ] **REPRO-01**: One command on CPU re-derives the Phase 19 verdict from the committed draws, importing the pin and the gate, and asserts exactly k = 78, target 0/27, 7/7 non-targets beyond 0.2962962962962963, and 77.6370113463966% of the adaptation destroyed; any divergence halts the run with a root-cause investigation, never an adjustment
-- [ ] **REPRO-02**: Each of defects A–E is routed by a named function, and removing any routing turns a test red (a natural red, not a planted one)
-- [ ] **REPRO-03**: An MPS replica of k = 78 runs under a tolerance and a definition of "replicated" pre-registered before it runs, and is published as a replica beside the verdict, never over it
+- [x] **REPRO-01**: One command on CPU re-derives the Phase 19 verdict from the committed draws, importing the pin and the gate, and asserts exactly k = 78, target 0/27, 7/7 non-targets beyond 0.2962962962962963, and 77.6370113463966% of the adaptation destroyed; any divergence halts the run with a root-cause investigation, never an adjustment
+- [x] **REPRO-02**: Each of defects A–E is routed by a named function, and removing any routing turns a test red (a natural red, not a planted one)
+- [x] **REPRO-03**: An MPS replica of k = 78 runs under a tolerance and a definition of "replicated" pre-registered before it runs, and is published as a replica beside the verdict, never over it
 
 ### Public deposit package (PKG) — R2
 
@@ -804,9 +804,9 @@ reproducible by an outsider. No closed verdict is reopened; v6.0 publishes besid
 | PREREG-07 | Phase 35 | Complete |
 | PREREG-08 | Phase 35 | Complete |
 | PREREG-09 | Phase 35 | Complete |
-| REPRO-01 | Phase 37 | Pending |
-| REPRO-02 | Phase 37 | Pending |
-| REPRO-03 | Phase 37 | Pending |
+| REPRO-01 | Phase 37 | Complete |
+| REPRO-02 | Phase 37 | Complete |
+| REPRO-03 | Phase 37 | Complete |
 | PKG-01 | Phase 44 | Pending |
 | PKG-02 | Phase 44 | Pending |
 | PKG-03 | Phase 44 | Pending |
