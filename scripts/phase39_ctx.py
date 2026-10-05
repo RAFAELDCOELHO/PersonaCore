@@ -260,3 +260,192 @@ def reading_model(reading, device):
         gc.collect()
         if torch.backends.mps.is_available():  # never reached on a CPU-only host (ubuntu CI)
             torch.mps.empty_cache()
+
+
+def span_nll_tokens(model, context_ids, value_ids, device, *, suffix_from=None):
+    """D-30 (Rafael's Option 1): the driver-held COPY of phase18_extraction.span_nll_from_ids.
+
+    Line for line the pinned body — the same ``_prove`` checks, the same single forward, the same
+    span mask, the same two ``cross_entropy`` calls (sum, mean) in the same order — plus, on the
+    SAME logits, ``cross_entropy(reduction='none')`` for the per-token values (D-23a) and, when
+    ``suffix_from`` is given, a separate ``cross_entropy(reduction='sum')`` over a mask holding only
+    the value targets from ``suffix_from`` on (D-30a: never a slice or sum of ``per_token``).
+
+    Condition 1: gate 1 scores every cell through both this copy and the pinned value_span_nll and
+    requires nll_sum and nll_mean bitwise equal. Condition 2: ``per_token`` and ``suffix_nll_sum``
+    are descriptive only; ranks, n1 and every event read ``nll_mean`` / ``nll_sum``.
+    """
+    import torch
+    import torch.nn.functional as F
+
+    _prove(
+        len(context_ids) >= 1,
+        "a span NLL with an empty context has nothing to predict its first value token FROM; "
+        "every frame is anchored on the assistant-turn opening precisely so this cannot happen",
+    )
+    _prove(
+        len(value_ids) >= 1,
+        "a span NLL over zero value tokens has no denominator, and its mean would be a "
+        "ZeroDivisionError dressed up as a missing fact",
+    )
+    _prove(
+        suffix_from is None or 1 <= suffix_from < len(value_ids),
+        f"suffix_from {suffix_from!r} must leave at least one value id on each side "
+        f"(1 <= suffix_from < {len(value_ids)}) (D-30a)",
+    )
+    ids = list(context_ids) + list(value_ids)
+    with torch.no_grad():
+        x = torch.tensor([ids[:-1]], dtype=torch.long, device=device)
+        y = torch.tensor([ids[1:]], dtype=torch.long, device=device)
+        # Target index i predicts ids[i+1], so the value targets start at len(context_ids) - 1.
+        span = torch.zeros_like(y, dtype=torch.bool)
+        span[:, len(context_ids) - 1 :] = True
+        targets = y
+        y = y.masked_fill(~span, -100)
+        logits, _ = model(x)
+        flat_logits = logits.view(-1, logits.size(-1))
+        flat_y = y.reshape(-1)
+        nll_sum = F.cross_entropy(flat_logits, flat_y, reduction="sum", ignore_index=-100)
+        nll_mean = F.cross_entropy(flat_logits, flat_y, reduction="mean", ignore_index=-100)
+        n_scored = int((flat_y != -100).sum())
+        per = F.cross_entropy(flat_logits, flat_y, reduction="none", ignore_index=-100)
+        per_token = [float(v) for v in per[flat_y != -100]]
+        suffix_nll_sum = None
+        if suffix_from is not None:
+            suffix = torch.zeros_like(targets, dtype=torch.bool)
+            suffix[:, len(context_ids) - 1 + suffix_from :] = True
+            y_suffix = targets.masked_fill(~suffix, -100)
+            suffix_nll_sum = float(
+                F.cross_entropy(
+                    flat_logits, y_suffix.reshape(-1), reduction="sum", ignore_index=-100
+                )
+            )
+    _prove(
+        n_scored == len(value_ids),
+        f"the span mask scored {n_scored} targets against {len(value_ids)} value ids. The count IS "
+        "the claim: a mask off by one to the left scores the preamble's last token and reports a "
+        "number about the frame as evidence about the value",
+    )
+    return {
+        "n_scored": n_scored,
+        "nll_sum": float(nll_sum),
+        "nll_mean": float(nll_mean),
+        "per_token": per_token,
+        "suffix_from": suffix_from,
+        "suffix_nll_sum": suffix_nll_sum,
+    }
+
+
+def _same_bits(a, b):
+    return float(a).hex() == float(b).hex()
+
+
+def anchor_ids(tok, slot):
+    """Context (a): byte for byte the context phase18_extraction.value_span_nll builds at the
+    admissible frame (D-04)."""
+    import phase14_factset
+    import phase18_extraction
+
+    from personacore.dialogue import ASSISTANT_ID
+
+    preamble = phase18_extraction._frame_preamble(
+        phase14_factset.SLOT_FORMS[slot], phase18_extraction.ADMISSIBLE_NLL_FRAME
+    )
+    return [ASSISTANT_ID] + list(tok.encode(preamble))
+
+
+def gate_cells(model, tok, device, slot, state):
+    """D-18 + D-30 condition 1: every committed reference of ``slot`` scored by BOTH the pinned
+    value_span_nll and the copy; a cell is equal only when both sums and both means are bitwise
+    equal."""
+    import phase18_extraction
+
+    frame = phase18_extraction.ADMISSIBLE_NLL_FRAME
+    context = anchor_ids(tok, slot)
+    cells = {}
+    with phase36_probe.silenced():
+        for i, candidate in enumerate(phase18_extraction.reference_set_for(slot)):
+            state["draw_index"] = i
+            row = phase18_extraction.value_span_nll(
+                model, tok, device, slot=slot, value=candidate, frame=frame
+            )
+            pinned = {key: row[key] for key in ("n_scored", "nll_sum", "nll_mean")}
+            copy = span_nll_tokens(model, context, list(tok.encode(candidate)), device)
+            cells[candidate] = {
+                "pinned": pinned,
+                "copy": copy,
+                "equal": _same_bits(pinned["nll_sum"], copy["nll_sum"])
+                and _same_bits(pinned["nll_mean"], copy["nll_mean"]),
+            }
+    return cells
+
+
+def anchor_draws(model, tok, device, forbid, slot, reading):
+    """G_a (D-05 / D-06 / D-08 / D-28): K draws from the anchor ids, every draw kept.
+
+    Undecorated and asserting in place: tests/test_phase14_scoring.py's draw_all census."""
+    import phase14_factset
+    import phase14_recall
+    import phase16_persistence
+    import phase19_erasure
+
+    prereg = _prereg()
+    _prove(
+        phase16_persistence.forbid_digest(forbid) == phase19_erasure.FORBID_IDS_SHA256,
+        f"{reading}: the forbid mask is not the committed one (FORBID_IDS_SHA256)",
+    )
+    ids = anchor_ids(tok, slot)
+    # PERS-06: nothing draws unchecked, on the ids actually dispatched.
+    phase14_recall.assert_no_value_in_prompt(tok, tok.decode(ids), _guard_values(), prompt_ids=ids)
+    with phase36_probe.silenced():
+        completions, stopped = phase14_recall.draw_all(
+            model, tok, ids, device, forbid, prereg.anchor_seed_index(slot), n_samples=prereg.K - 1
+        )
+    _prove(
+        len(completions) == len(stopped) == prereg.K,
+        f"{reading}/{slot}: {len(completions)} anchor draws, not K = {prereg.K} (D-05)",
+    )
+    fact_id = next(f.id for f in phase14_factset.LOCKED_FACTS if f.slot == slot)
+    return {
+        "family": "anchor",
+        "dose": None,
+        "fact_id": fact_id,
+        "slot": slot,
+        "tier": None,
+        "arm": reading,
+        "seed_index": prereg.SLOTS.index(slot),
+        "prefix_text": None,
+        "completions": list(completions),
+        "stopped": list(stopped),
+        "prompt_ids": ids,
+    }
+
+
+def score_question(model, tok, device, entry, candidates, *, taught, state):
+    """Context (b) (D-23): each candidate scored by the copy after ``_guarded_span(entry)``, one
+    call per candidate, never batched; only the taught value gets the D-23b suffix sum."""
+    import phase14_recall
+    import phase18_extraction
+
+    context = phase18_extraction._guarded_span(entry)
+    realized = entry["realized_injection"]
+    _prove(
+        list(entry["prompt_ids"]) == context + list(tok.encode(taught))[:realized],
+        f"D-23b premise broken for {entry['fact_id']!r}/{entry['seed_index']}: prompt_ids are not "
+        "the guarded span plus the taught value's first realized_injection ids",
+    )
+    phase14_recall.assert_no_value_in_prompt(
+        tok, tok.decode(context), _guard_values(), prompt_ids=context
+    )
+    rows = {}
+    with phase36_probe.silenced():
+        for i, candidate in enumerate(candidates):
+            state["draw_index"] = i
+            rows[candidate] = span_nll_tokens(
+                model,
+                context,
+                list(tok.encode(candidate)),
+                device,
+                suffix_from=realized if candidate == taught else None,
+            )
+    return rows

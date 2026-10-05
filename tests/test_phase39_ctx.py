@@ -316,3 +316,273 @@ def test_private_helpers(tmp_path, monkeypatch):
     assert phase39_ctx._is_real(tmp_path) is False
     monkeypatch.setattr(phase39_ctx, "_ROOT", tmp_path)
     assert phase39_ctx._is_real(tmp_path) is True
+
+
+# =================================================================================================
+# (2) Task 2: the D-30 copy, the anchor ids and draws, the gate cells, the question scoring.
+# =================================================================================================
+
+
+@pytest.fixture(scope="module")
+def tiny_gpt():
+    import torch
+
+    from personacore.config import ModelConfig
+    from personacore.model.gpt import GPT
+
+    torch.manual_seed(0)
+    return GPT(ModelConfig(n_layer=1, n_head=2, n_embd=32)).eval()
+
+
+def _cases(seed, n=24):
+    """Seeded random (context, value) id lists: context 1-60 ids, value 1-8 ids, ids < 8184."""
+    import random
+
+    rng = random.Random(seed)
+    return [
+        (
+            [rng.randrange(8184) for _ in range(rng.randint(1, 60))],
+            [rng.randrange(8184) for _ in range(rng.randint(1, 8))],
+        )
+        for _ in range(n)
+    ]
+
+
+@pytest.fixture(params=["fake_lm", "tiny_gpt"])
+def cpu_model(request):
+    return request.getfixturevalue(request.param)
+
+
+def test_copy_equality_with_the_pinned_function(cpu_model):
+    cases = _cases(39)
+    assert len(cases) >= 20
+    for context, value in cases:
+        pinned = phase18_extraction.span_nll_from_ids(cpu_model, context, value, "cpu")
+        copy = phase39_ctx.span_nll_tokens(cpu_model, context, value, "cpu")
+        assert copy["nll_sum"].hex() == pinned["nll_sum"].hex()
+        assert copy["nll_mean"].hex() == pinned["nll_mean"].hex()
+        assert copy["n_scored"] == pinned["n_scored"] == len(value)
+        assert phase39_ctx._same_bits(copy["nll_sum"], pinned["nll_sum"])
+    assert not phase39_ctx._same_bits(1.0, 1.0 + 2**-52)
+
+
+def test_per_token_values_are_descriptive_sums(cpu_model):
+    import math
+
+    for context, value in _cases(40):
+        copy = phase39_ctx.span_nll_tokens(cpu_model, context, value, "cpu")
+        per_token = copy["per_token"]
+        assert len(per_token) == len(value)
+        assert all(math.isfinite(v) and v >= 0 for v in per_token)
+        assert math.isclose(math.fsum(per_token), copy["nll_sum"], rel_tol=1e-5)
+
+
+def test_suffix_sum_is_bitwise_the_pinned_call(cpu_model):
+    checked = 0
+    for context, value in _cases(41):
+        plain = phase39_ctx.span_nll_tokens(cpu_model, context, value, "cpu")
+        assert plain["suffix_from"] is None and plain["suffix_nll_sum"] is None
+        for r in range(1, len(value)):
+            copy = phase39_ctx.span_nll_tokens(cpu_model, context, value, "cpu", suffix_from=r)
+            pinned = phase18_extraction.span_nll_from_ids(
+                cpu_model, context + value[:r], value[r:], "cpu"
+            )
+            assert copy["suffix_from"] == r
+            assert copy["suffix_nll_sum"].hex() == pinned["nll_sum"].hex()
+            assert copy["nll_sum"].hex() == plain["nll_sum"].hex()
+            assert copy["nll_mean"].hex() == plain["nll_mean"].hex()
+            checked += 1
+    assert checked >= 20
+
+
+def test_copy_refuses(fake_lm):
+    for context, value, kwargs, reason in (
+        ([], [5], {}, "empty context"),
+        ([5], [], {}, "zero value tokens"),
+        ([5], [6, 7], {"suffix_from": 0}, "suffix_from"),
+        ([5], [6, 7], {"suffix_from": 2}, "suffix_from"),
+    ):
+        with pytest.raises(SystemExit, match=r"^\[phase39_ctx\] .*" + reason):
+            phase39_ctx.span_nll_tokens(fake_lm, context, value, "cpu", **kwargs)
+
+
+def test_anchor_ids_are_the_value_span_nll_context(monkeypatch, tok):
+    seen = []
+
+    def record(model, context_ids, value_ids, device):
+        seen.append(list(context_ids))
+        return {"n_scored": len(value_ids), "nll_sum": 0.0, "nll_mean": 0.0}
+
+    monkeypatch.setattr(phase18_extraction, "span_nll_from_ids", record)
+    for slot in SLOTS:
+        phase18_extraction.value_span_nll(
+            None, tok, "cpu", slot=slot, value=TAUGHT[slot], frame="ans1"
+        )
+        assert seen[-1] == phase39_ctx.anchor_ids(tok, slot), slot
+    assert len(seen) == len(SLOTS) == 8
+    assert phase18_extraction.ADMISSIBLE_NLL_FRAME == "ans1"
+
+
+@pytest.fixture
+def anchor_rig(monkeypatch, tok):
+    import phase16_persistence
+    import phase19_erasure
+
+    rig = types.SimpleNamespace(draws=[], guards=[], digest=phase19_erasure.FORBID_IDS_SHA256)
+    real_guard = phase14_recall.assert_no_value_in_prompt
+
+    def guard(tok_, question, values, *, prompt_ids=None):
+        rig.guards.append((question, list(values), prompt_ids))
+        real_guard(tok_, question, values, prompt_ids=prompt_ids)
+
+    def draw_all(model, tok_, prompt_ids, device, forbid, index, **kwargs):
+        rig.draws.append((list(prompt_ids), index, kwargs))
+        k = kwargs["n_samples"] + 1
+        return [f"draw {i}" for i in range(k - 1)] + [TAUGHT[rig.slot]], [True] * k
+
+    monkeypatch.setattr(phase16_persistence, "forbid_digest", lambda forbid: rig.digest)
+    monkeypatch.setattr(phase14_recall, "assert_no_value_in_prompt", guard)
+    monkeypatch.setattr(phase14_recall, "draw_all", draw_all)
+    return rig
+
+
+def test_anchor_draws_dispatch_the_anchor_ids_at_the_d28_index(anchor_rig, tok):
+    K = phase39_prereg.K
+    for slot in ("house_number", "person_name"):  # one slot alone keeps its LOCKED_FACTS index
+        anchor_rig.slot = slot
+        record = phase39_ctx.anchor_draws("model", tok, "cpu", "forbid", slot, "k8")
+        ids = phase39_ctx.anchor_ids(tok, slot)
+        prompt_ids, index, kwargs = anchor_rig.draws[-1]
+        assert prompt_ids == ids
+        assert index == phase39_prereg.anchor_seed_index(slot) == SLOTS.index(slot) * K
+        assert kwargs == {"n_samples": K - 1}
+        assert anchor_rig.guards[-1] == (tok.decode(ids), phase39_ctx._guard_values(), ids)
+        assert set(phase18_extraction.DRAW_RECORD_KEYS) | {"stopped"} <= set(record)
+        assert record["family"] == "anchor" and record["arm"] == "k8"
+        assert record["prefix_text"] is None and record["tier"] is None
+        assert record["slot"] == slot and record["seed_index"] == SLOTS.index(slot)
+        assert len(record["completions"]) == len(record["stopped"]) == K
+        assert record["prompt_ids"] == ids
+        fact_id = next(f.id for f in phase14_factset.LOCKED_FACTS if f.slot == slot)
+        assert record["fact_id"] == fact_id
+        scored = phase18_extraction.score_records([record], {fact_id: TAUGHT[slot]})
+        hits = scored[0]["hits"]
+        assert len(hits) == K and hits[-1] is True and not any(hits[:-1])
+        # Pitfall 5, in the test only: the anchor unit is the question unit of one record.
+        tier = phase18_extraction.CORPUS_TIERS[0]
+        assert (
+            int(any(hits))
+            == phase18_extraction.aggregate_questions(
+                phase18_extraction.score_records(
+                    [{**record, "tier": tier}], {fact_id: TAUGHT[slot]}
+                ),
+                tier=tier,
+            )[fact_id]["n_answerable"]
+        )
+
+
+def test_anchor_draws_guard_runs_before_any_draw(anchor_rig, tok, monkeypatch):
+    anchor_rig.slot = "street"
+
+    def leak(*args, **kwargs):
+        raise SystemExit("[phase14_recall] leak")
+
+    monkeypatch.setattr(phase14_recall, "assert_no_value_in_prompt", leak)
+    with pytest.raises(SystemExit, match="leak"):
+        phase39_ctx.anchor_draws("model", tok, "cpu", "forbid", "street", "k0")
+    assert anchor_rig.draws == []
+
+
+def test_anchor_draws_refuse_a_wrong_forbid_mask(anchor_rig, tok):
+    anchor_rig.slot = "street"
+    anchor_rig.digest = "0" * 64
+    with pytest.raises(SystemExit, match=r"^\[phase39_ctx\] .*forbid"):
+        phase39_ctx.anchor_draws("model", tok, "cpu", "forbid", "street", "k0")
+    assert anchor_rig.draws == [] and anchor_rig.guards == []
+
+
+def test_gate_cells_mark_bitwise_equality(fake_lm, tok, monkeypatch, capsys):
+    import math
+
+    for slot in ("pet_name", "birth_year"):
+        state = {"draw_index": None}
+        cells = phase39_ctx.gate_cells(fake_lm, tok, "cpu", slot, state)
+        references = list(phase18_extraction.reference_set_for(slot))
+        assert list(cells) == references
+        assert state["draw_index"] == len(references) - 1
+        for value, cell in cells.items():
+            assert cell["equal"] is True, (slot, value)
+            assert set(cell["pinned"]) == {"n_scored", "nll_sum", "nll_mean"}
+            assert cell["copy"]["nll_sum"] == cell["pinned"]["nll_sum"]
+    assert capsys.readouterr().out == ""
+    real = phase18_extraction.value_span_nll
+    bumped = list(phase18_extraction.reference_set_for("street"))[1]
+
+    def nudged(model, tok_, device, *, slot, value, frame):
+        row = real(model, tok_, device, slot=slot, value=value, frame=frame)
+        if value == bumped:
+            row = {**row, "nll_sum": math.nextafter(row["nll_sum"], math.inf)}
+        return row
+
+    monkeypatch.setattr(phase18_extraction, "value_span_nll", nudged)
+    cells = phase39_ctx.gate_cells(fake_lm, tok, "cpu", "street", {})
+    assert cells[bumped]["equal"] is False
+    assert all(cell["equal"] for value, cell in cells.items() if value != bumped)
+
+
+@pytest.fixture(scope="module")
+def entries():
+    return phase39_prereg.e6_entries()
+
+
+def test_question_scoring_uses_the_guarded_span(fake_lm, tok, entries, monkeypatch):
+    calls = []
+    real = phase39_ctx.span_nll_tokens
+
+    def recorded(model, context_ids, value_ids, device, *, suffix_from=None):
+        calls.append((list(context_ids), list(value_ids), suffix_from))
+        return real(model, context_ids, value_ids, device, suffix_from=suffix_from)
+
+    monkeypatch.setattr(phase39_ctx, "span_nll_tokens", recorded)
+    for index in (0, 100, 215):
+        _, entry = entries[index]
+        slot = entry["slot"]
+        taught = TAUGHT[slot]
+        references = list(phase18_extraction.reference_set_for(slot))
+        calls.clear()
+        state = {"draw_index": None}
+        rows = phase39_ctx.score_question(
+            fake_lm, tok, "cpu", entry, references, taught=taught, state=state
+        )
+        context = phase18_extraction._guarded_span(entry)
+        assert list(rows) == references and len(calls) == len(references)
+        for (ctx, value_ids, suffix_from), candidate in zip(calls, references, strict=True):
+            assert ctx == context
+            assert value_ids == list(tok.encode(candidate))
+            expected = entry["realized_injection"] if candidate == taught else None
+            assert suffix_from == expected
+        # D-30a on a real entry: the suffix sum is the pinned NLL in A2's exact context.
+        pinned = phase18_extraction.span_nll_from_ids(
+            fake_lm,
+            list(entry["prompt_ids"]),
+            list(tok.encode(taught))[entry["realized_injection"] :],
+            "cpu",
+        )
+        assert rows[taught]["suffix_nll_sum"].hex() == pinned["nll_sum"].hex()
+        # D-11 (ii): the minted candidates, never the taught value.
+        minted = phase39_prereg.minted_members(slot)
+        assert taught not in minted
+        calls.clear()
+        rows = phase39_ctx.score_question(
+            fake_lm, tok, "cpu", entry, [taught, *minted], taught=taught, state=state
+        )
+        assert [c[2] for c in calls] == [entry["realized_injection"]] + [None] * len(minted)
+
+
+def test_question_scoring_refuses_a_broken_d23b_premise(fake_lm, tok, entries):
+    _, entry = entries[0]
+    broken = {**entry, "prompt_ids": [*entry["prompt_ids"][:-1], entry["prompt_ids"][-1] + 1]}
+    with pytest.raises(SystemExit, match=r"^\[phase39_ctx\] .*D-23b"):
+        phase39_ctx.score_question(
+            fake_lm, tok, "cpu", broken, ["x"], taught=TAUGHT[entry["slot"]], state={}
+        )
