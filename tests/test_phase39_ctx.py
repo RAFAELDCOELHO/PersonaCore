@@ -18,6 +18,7 @@ data/phase39_ctx_*.
 import contextlib
 import hashlib
 import json
+import math
 import pathlib
 import subprocess
 import sys
@@ -836,3 +837,347 @@ def test_preflight_on_a_rehearsal_root_accepts_cpu_and_a_slice(rig, monkeypatch)
     assert pre["device"] == "cpu"
     assert pre["readings"] == ("k0", "k78") and pre["slots"] == ("pet_name", "street")
     assert not rig.paths["ledger_path"].exists()
+
+
+# =================================================================================================
+# (4) Plan 05 Task 1: run() — the gate pass with the D-30 bitwise STOP, the work pass, the
+# sidecars and the ledger lines. All on a fake rig: tmp root, tmp ledger, tmp heartbeat.
+# =================================================================================================
+
+
+class FakeModel:
+    def __init__(self, reading):
+        self.reading = reading
+
+
+_FORBID = object()
+
+
+def _offset(key, value):
+    """A deterministic per-(key, value) offset in (-0.5, 0.5), never exactly 0."""
+    digest = hashlib.sha256(f"{key}|{value}".encode()).hexdigest()
+    return (int(digest[:8], 16) / 2**32 - 0.5) or 0.25
+
+
+@pytest.fixture(scope="module")
+def gate_ranks():
+    return phase38_prereg.committed_gate_ranks()
+
+
+@pytest.fixture(scope="module")
+def references():
+    return {slot: list(phase18_extraction.reference_set_for(slot)) for slot in SLOTS}
+
+
+def _fake_table(gate_ranks, references):
+    """Taught 1.0; the first (committed rank - 1) other references in string order 0.5, the rest
+    2.0: rank_in_prefix then reproduces every committed rank exactly."""
+    table = {}
+    for reading in READINGS:
+        for slot in SLOTS:
+            members = sorted(r for r in references[slot] if r != TAUGHT[slot])
+            rank = gate_ranks[reading][slot]["rank"]
+            for i, member in enumerate(members):
+                table[(reading, slot, member)] = 0.5 if i < rank - 1 else 2.0
+            table[(reading, slot, TAUGHT[slot])] = 1.0
+    return table
+
+
+_HIT_READINGS = ("k0", "k8", "M2")
+
+
+@pytest.fixture
+def run_rig(rig, monkeypatch, tok, gate_ranks, references):
+    """The preflight rig plus the device work: fake models, the pinned scorer from a table, the
+    copy, the draws. Every scored item lands in ``rig.log`` in order."""
+    import phase16_persistence
+    import phase19_erasure
+
+    rig.models, rig.log, rig.crash, rig.ulp = [], [], None, None
+    rig.table = _fake_table(gate_ranks, references)
+    anchors = {tuple(phase39_ctx.anchor_ids(tok, slot)): slot for slot in SLOTS}
+    values = {}
+    for slot in SLOTS:
+        for value in (*references[slot], *phase39_prereg.minted_members(slot)):
+            values[tuple(tok.encode(value))] = value
+
+    @contextlib.contextmanager
+    def reading_model(reading, device):
+        rig.models.append((reading, device))
+        yield FakeModel(reading), tok, _FORBID
+
+    def pinned_row(reading, slot, value):
+        n = len(tok.encode(value))
+        nll = rig.table[(reading, slot, value)]
+        return {"n_scored": n, "nll_sum": nll * n, "nll_mean": nll}
+
+    def value_span_nll(model, tok_, device, *, slot, value, frame):
+        rig.log.append(("gate", model.reading, slot, value))
+        return {**pinned_row(model.reading, slot, value), "frame": frame}
+
+    def copy(model, context_ids, value_ids, device, *, suffix_from=None):
+        value = values[tuple(value_ids)]
+        slot = anchors.get(tuple(context_ids))
+        if slot is not None:
+            rig.log.append(("copy_anchor", model.reading, slot, value))
+            row = pinned_row(model.reading, slot, value)
+            if rig.ulp == (model.reading, slot, value):
+                row["nll_sum"] = math.nextafter(row["nll_sum"], math.inf)
+            n = row["n_scored"]
+            return {**row, "per_token": [row["nll_mean"]] * n, "suffix_from": None}
+        rig.log.append(("question", model.reading, value))
+        if rig.crash is not None and rig.crash(model.reading):
+            raise RuntimeError("copy died mid-scoring")
+        context = hashlib.sha256(repr(list(context_ids)).encode()).hexdigest()
+        nll = 1.0 + _offset(f"{model.reading}|{context}", value)
+        n = len(value_ids)
+        return {
+            "n_scored": n,
+            "nll_sum": nll * n,
+            "nll_mean": nll,
+            "per_token": [nll] * n,
+            "suffix_from": suffix_from,
+            "suffix_nll_sum": None if suffix_from is None else nll * (n - suffix_from),
+        }
+
+    def draw_all(model, tok_, prompt_ids, device, forbid, index, **kwargs):
+        slot = anchors[tuple(prompt_ids)]
+        rig.log.append(("draw", model.reading, slot, index))
+        k = kwargs["n_samples"] + 1
+        hit = [f"it is {TAUGHT[slot]}"] if model.reading in _HIT_READINGS else ["nothing"]
+        return [f"draw {i}" for i in range(k - 1)] + hit, [True] * k
+
+    monkeypatch.setattr(phase39_ctx, "reading_model", reading_model)
+    monkeypatch.setattr(
+        phase16_persistence,
+        "forbid_digest",
+        lambda forbid: phase19_erasure.FORBID_IDS_SHA256 if forbid is _FORBID else "0" * 64,
+    )
+    monkeypatch.setattr(phase18_extraction, "value_span_nll", value_span_nll)
+    monkeypatch.setattr(phase39_ctx, "span_nll_tokens", copy)
+    monkeypatch.setattr(phase14_recall, "draw_all", draw_all)
+    return rig
+
+
+def _sidecar(path):
+    return json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
+
+
+def _lines(rig):
+    return phase36_ledger.read_ledger(rig.paths["ledger_path"])
+
+
+def _kinds(rig, kind):
+    return [entry[1:] for entry in rig.log if entry[0] == kind]
+
+
+def test_run_scores_the_full_shape_gate_first(run_rig, references, entries, capsys):
+    rig = run_rig
+    assert phase39_ctx.run(root=rig.root, **rig.paths) == "SCORED"
+    assert "RUN SCORED — next: crosscheck, then emit" in capsys.readouterr().out
+    lines = _lines(rig)
+    assert [(x["event"], x["run_id"]) for x in lines] == [
+        ("start", phase39_ctx.RUN_ID),
+        ("end", phase39_ctx.RUN_ID),
+    ]
+    assert lines[1]["record"] == phase39_prereg.CTX_RECORD and lines[1]["front"] == "E6"
+    # D-18 / D-30: every gate cell, through both functions, before any draw or question NLL.
+    first_work = min(i for i, e in enumerate(rig.log) if e[0] in ("draw", "question"))
+    gate_part = rig.log[:first_work]
+    expected = [(r, s, v) for r in READINGS for s in SLOTS for v in references[s]]
+    assert [e[1:] for e in gate_part if e[0] == "gate"] == expected
+    assert [e[1:] for e in gate_part if e[0] == "copy_anchor"] == expected
+    assert {e[0] for e in rig.log[first_work:]} == {"draw", "question"}
+    assert [r for r, _ in rig.models] == [*READINGS, *READINGS]
+    assert {d for _, d in rig.models} == {"mps"}
+    gate = _sidecar(phase39_ctx.gate_sidecar(rig.root))
+    assert gate["passed"] is True and gate["run_id"] == phase39_ctx.RUN_ID
+    assert gate["copy_equality"] == {"cells_compared": 8 * 56, "cells_equal": 8 * 56, "unequal": []}
+    assert all(row["equal"] for rows in gate["rows"].values() for row in rows.values())
+    assert set(gate["cells"]) == set(READINGS)
+    K = phase39_prereg.K
+    for reading in READINGS:
+        blob = _sidecar(phase39_ctx.reading_sidecar(rig.root, reading))
+        assert blob["reading"] == reading and blob["run_id"] == phase39_ctx.RUN_ID
+        assert set(blob["anchor"]) == set(SLOTS)
+        for slot, record in blob["anchor"].items():
+            assert len(record["completions"]) == len(record["stopped"]) == K
+            assert record["slot"] == slot and record["arm"] == reading
+        assert set(blob["questions"]) == {str(i) for i, _ in entries}
+        assert len(blob["questions"]) == 216
+        for i, entry in entries:
+            q = blob["questions"][str(i)]
+            slot = entry["slot"]
+            assert q["index"] == i and q["slot"] == slot and q["fact_id"] == entry["fact_id"]
+            assert (q["tier"], q["seed_index"]) == (entry["tier"], entry["seed_index"])
+            assert q["realized_injection"] == entry["realized_injection"]
+            assert set(q["references"]) == set(references[slot])
+            for candidate, row in q["references"].items():
+                if candidate == TAUGHT[slot]:
+                    assert row["suffix_from"] == entry["realized_injection"]
+                    assert row["suffix_nll_sum"] is not None
+                else:
+                    assert row["suffix_from"] is None and row["suffix_nll_sum"] is None
+            # D-26: the minted members only — the taught NLL is shared with R_q.
+            assert set(q["minted"]) == set(phase39_prereg.minted_members(slot))
+    run = _sidecar(phase39_ctx.run_sidecar(rig.root))
+    assert run["status"] == "SCORED" and run["run_id"] == phase39_ctx.RUN_ID
+    assert set(phase39_ctx.RUN_PROVENANCE_KEYS) <= set(run)
+    assert run["git_sha_at_launch"] == run["git_sha_at_end"] == _git("rev-parse", "HEAD")
+    assert run["head_moved_during_run"] is False and run["device"] == "mps"
+    assert run["module_sha256_at_launch"] == phase39_ctx.module_sha256()
+    assert run["reconstruction"] == phase38_rank.reconstruction_checks()
+    assert run["gate2"]["rows"] == rig.gate2["rows"]
+    assert (run["readings"], run["slots"]) == (list(READINGS), list(SLOTS))
+    assert run["entries"] == [i for i, _ in entries]
+    assert run["gate_sha256"] == phase39_ctx._sha256(phase39_ctx.gate_sidecar(rig.root))
+    assert run["reading_sha256"] == {
+        r: phase39_ctx._sha256(phase39_ctx.reading_sidecar(rig.root, r)) for r in READINGS
+    }
+    beats = [json.loads(t) for t in rig.paths["heartbeat_path"].read_text().splitlines()]
+    assert beats and {b["point"] for b in beats} == {phase39_ctx.RUN_ID}
+    assert not (rig.root / phase39_prereg.CTX_RECORD).exists()  # emit is plan 06's
+
+
+def _assert_gate_failed(rig):
+    assert _kinds(rig, "draw") == [] and _kinds(rig, "question") == []
+    assert [r for r, _ in rig.models] == list(READINGS)  # no work pass
+    assert not any(phase39_ctx.reading_sidecar(rig.root, r).exists() for r in READINGS)
+    run = _sidecar(phase39_ctx.run_sidecar(rig.root))
+    assert run["status"] == "GATE_FAILED" and run["reading_sha256"] == {}
+    assert [x["event"] for x in _lines(rig)] == ["start", "end"]
+    return _sidecar(phase39_ctx.gate_sidecar(rig.root))
+
+
+def test_a_gate_rank_mismatch_is_gate_failed(run_rig):
+    rig = run_rig
+    rig.table[("k32", "street", TAUGHT["street"])] = 3.0
+    assert phase39_ctx.run(root=rig.root, **rig.paths) == "GATE_FAILED"
+    gate = _assert_gate_failed(rig)
+    assert gate["passed"] is False
+    assert [
+        (r, s) for r, rows in gate["rows"].items() for s, x in rows.items() if not x["equal"]
+    ] == [("k32", "street")]
+    assert gate["copy_equality"] == {"cells_compared": 8 * 56, "cells_equal": 8 * 56, "unequal": []}
+
+
+def test_a_bitwise_inequality_is_gate_failed(run_rig, references):
+    rig = run_rig
+    bumped = references["street"][1]
+    rig.ulp = ("k16", "street", bumped)
+    assert phase39_ctx.run(root=rig.root, **rig.paths) == "GATE_FAILED"
+    gate = _assert_gate_failed(rig)
+    assert gate["passed"] is False
+    assert all(row["equal"] for rows in gate["rows"].values() for row in rows.values())
+    assert gate["copy_equality"] == {
+        "cells_compared": 8 * 56,
+        "cells_equal": 8 * 56 - 1,
+        "unequal": [["k16", "street", bumped]],
+    }
+    assert gate["cells"]["k16"]["street"][bumped]["equal"] is False
+
+
+def test_the_real_root_refuses_a_partial_shape(tmp_path):
+    ledger, hb = tmp_path / "ledger.jsonl", tmp_path / "hb.jsonl"
+    for kw in (
+        {"readings": ("k0",)},
+        {"slots": ("pet_name",)},
+        {"rehearsal_identity": tmp_path / "id.json"},
+    ):
+        with pytest.raises(SystemExit, match=r"^\[phase39_ctx\] .*full"):
+            phase39_ctx.run(ledger_path=ledger, heartbeat_path=hb, **kw)
+        with pytest.raises(SystemExit, match=r"^\[phase39_ctx\] .*full"):
+            phase39_ctx.run(root=_REPO / "scratch", ledger_path=ledger, heartbeat_path=hb, **kw)
+    assert not ledger.exists() and not hb.exists() and not (tmp_path / "id.json").exists()
+
+
+def test_a_rehearsal_root_needs_its_own_ledger_and_heartbeat(rig):
+    milestone_ledger = phase36_ledger._ROOT / phase36_ledger.LEDGER_PATH
+    milestone_hb = pathlib.Path(phase36_ledger.HEARTBEAT_PATH)
+    ledger, hb = rig.paths["ledger_path"], rig.paths["heartbeat_path"]
+    for kw in (
+        {"ledger_path": None, "heartbeat_path": hb},
+        {"ledger_path": ledger, "heartbeat_path": None},
+        {"ledger_path": milestone_ledger, "heartbeat_path": hb},
+        {"ledger_path": ledger, "heartbeat_path": milestone_hb},
+        {},
+    ):
+        with pytest.raises(SystemExit, match=r"^\[phase39_ctx\] .*DR-01"):
+            phase39_ctx.run(root=rig.root, **kw)
+    assert not ledger.exists() and not hb.exists() and rig.launches == []
+
+
+def test_a_rehearsal_root_runs_a_partial_shape(run_rig, entries):
+    rig = run_rig
+    shape = {"readings": ("k0", "k78"), "slots": ("pet_name", "birth_year")}
+    assert phase39_ctx.run(root=rig.root, **rig.paths, **shape) == "SCORED"
+    written = sorted(p.name for p in (rig.root / "data").iterdir())
+    assert written == [
+        "phase39_ctx_gate.json",
+        "phase39_ctx_k0.json",
+        "phase39_ctx_k78.json",
+        "phase39_ctx_run.json",
+    ]
+    K = phase39_prereg.K
+    in_shape = [i for i, e in entries if e["slot"] in shape["slots"]]
+    assert len(in_shape) == 54
+    for reading in shape["readings"]:
+        blob = _sidecar(phase39_ctx.reading_sidecar(rig.root, reading))
+        assert list(blob["anchor"]) == ["birth_year", "pet_name"]  # sort_keys
+        assert sorted(blob["questions"], key=int) == [str(i) for i in in_shape]
+    # D-28: each slot keeps its LOCKED_FACTS seed index in a slice.
+    assert _kinds(rig, "draw") == [
+        (reading, slot, index)
+        for reading in shape["readings"]
+        for slot, index in (("pet_name", 1 * K), ("birth_year", 6 * K))
+    ]
+    run = _sidecar(phase39_ctx.run_sidecar(rig.root))
+    assert run["readings"] == ["k0", "k78"] and run["slots"] == ["pet_name", "birth_year"]
+    assert run["entries"] == in_shape
+    assert run["device"] == "mps"
+
+
+def test_a_commit_landing_mid_run_is_named(run_rig, monkeypatch):
+    rig = run_rig
+    heads = iter(["a" * 40, "b" * 40])
+    monkeypatch.setattr(phase39_ctx, "git_sha", lambda: next(heads))
+    phase39_ctx.run(root=rig.root, **rig.paths, readings=("k0",), slots=("pet_name",))
+    run = _sidecar(phase39_ctx.run_sidecar(rig.root))
+    assert (run["git_sha_at_launch"], run["git_sha_at_end"]) == ("a" * 40, "b" * 40)
+    assert run["head_moved_during_run"] is True
+
+
+def test_a_crash_mid_scoring_leaves_an_open_start_that_reconcile_closes(run_rig):
+    """The copy dies at the third reading's first question, after two readings landed."""
+    rig = run_rig
+    rig.crash = lambda reading: reading == READINGS[2]
+    with pytest.raises(RuntimeError, match="copy died mid-scoring"):
+        phase39_ctx.run(root=rig.root, **rig.paths)
+    landed = {r: phase39_ctx.reading_sidecar(rig.root, r) for r in READINGS[:2]}
+    digests = {r: phase39_ctx._sha256(p) for r, p in landed.items()}
+    assert not phase39_ctx.reading_sidecar(rig.root, READINGS[2]).exists()
+    assert not phase39_ctx.run_sidecar(rig.root).exists()
+    lines = _lines(rig)
+    assert [(x["event"], x["run_id"]) for x in lines] == [("start", phase39_ctx.RUN_ID)]
+    assert phase39_ctx.RUN_ID in phase36_ledger.open_runs(lines)
+    phase36_ledger.reconcile(**rig.paths)
+    reconciled = _lines(rig)
+    assert [x["event"] for x in reconciled] == ["start", "lost"]
+    assert reconciled[1]["flag"] == phase36_ledger.LOST_FLAG
+    assert phase36_ledger.open_runs(reconciled) == {}
+    for reading, path in landed.items():  # intact after the crash and the reconcile
+        assert phase39_ctx._sha256(path) == digests[reading]
+        assert len(_sidecar(path)["questions"]) == 216
+    with pytest.raises(SystemExit, match=r"phase39_ctx_gate\.json exists"):
+        phase39_ctx.preflight(root=rig.root, ledger_path=rig.paths["ledger_path"])
+    assert _lines(rig) == reconciled
+
+
+def test_a_refusal_inside_run_writes_no_ledger_line(run_rig, monkeypatch):
+    rig = run_rig
+    monkeypatch.setattr(phase39_ctx, "git_sha", lambda: "unknown")
+    with pytest.raises(SystemExit, match=r"^\[phase39_ctx\] .*HEAD"):
+        phase39_ctx.run(root=rig.root, **rig.paths)
+    assert not rig.paths["ledger_path"].exists()
+    assert not rig.paths["heartbeat_path"].exists()
+    assert rig.log == [] and rig.models == []

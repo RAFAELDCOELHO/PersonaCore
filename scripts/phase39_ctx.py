@@ -561,3 +561,192 @@ def preflight(*, root=None, ledger_path=None, device=None, readings=None, slots=
         "slots": slots,
         "gate2": g2,
     }
+
+
+def run(
+    *,
+    root=None,
+    ledger_path=None,
+    heartbeat_path=None,
+    device=None,
+    readings=None,
+    slots=None,
+    rehearsal_identity=None,
+):
+    """THE run: preflight, ledger start, the D-18 / D-30 gate pass over every reading, then (gate
+    passed) one work pass per reading into a write-once sidecar, the run sidecar, ledger end. No
+    in-run stop timer: the committed stop is require_launch's (D-03)."""
+    import phase18_extraction
+    import torch
+
+    prereg = _prereg()
+    root = pathlib.Path(root) if root is not None else _ROOT
+    if _is_real(root):
+        _prove(
+            readings is None and slots is None and rehearsal_identity is None,
+            "the real root runs the full READINGS x SLOTS shape only and records no rehearsal; a "
+            "partial shape is a rehearsal into a tmp root outside the repository (D-21)",
+        )
+    else:
+        milestone = {
+            (phase36_ledger._ROOT / phase36_ledger.LEDGER_PATH).resolve(),
+            pathlib.Path(phase36_ledger.HEARTBEAT_PATH).resolve(),
+        }
+        _prove(
+            ledger_path is not None
+            and heartbeat_path is not None
+            and {
+                pathlib.Path(ledger_path).resolve(),
+                pathlib.Path(heartbeat_path).resolve(),
+            }.isdisjoint(milestone),
+            "a rehearsal root writes its own ledger and heartbeat, never the milestone ones: pass "
+            "tmp ledger_path and heartbeat_path (38-REVIEW DR-01)",
+        )
+    pre = preflight(
+        root=root, ledger_path=ledger_path, device=device, readings=readings, slots=slots
+    )
+    readings, slots, device = pre["readings"], pre["slots"], pre["device"]
+    taught = _taught()
+    entries = [(i, entry) for i, entry in prereg.e6_entries() if entry["slot"] in slots]
+    phase36_ledger.append("start", run_id=RUN_ID, phase=39, front=FRONT, ledger_path=ledger_path)
+    heartbeat_path = heartbeat_path or phase36_ledger.HEARTBEAT_PATH
+    state = {"point": RUN_ID, "stage": "gate", "shape": None, "draw_index": None}
+    phase25_run.beat(heartbeat_path, **state)  # the thread's first beat waits a full period
+    stop, thread = phase25_run.start_heartbeat(heartbeat_path, state)
+    started = _now()
+    try:
+        # D-18 + D-30 condition 1: every committed cell through BOTH functions, every committed
+        # rank reproduced, BEFORE anything new is scored.
+        cells, rows = {}, {}
+        for reading in readings:
+            state.update(stage=f"gate_{reading}")
+            with reading_model(reading, device) as (model, tok, forbid):
+                cells[reading] = {
+                    slot: gate_cells(model, tok, device, slot, state) for slot in slots
+                }
+                del model, tok, forbid  # 38-REVIEW DI-04: released before the next load
+            rows[reading] = phase38_rank.gate_reading(
+                reading,
+                {
+                    slot: {c: cell["pinned"]["nll_mean"] for c, cell in by_c.items()}
+                    for slot, by_c in cells[reading].items()
+                },
+            )
+        unequal = [
+            [reading, slot, candidate]
+            for reading, by_slot in cells.items()
+            for slot, by_c in by_slot.items()
+            for candidate, cell in by_c.items()
+            if not cell["equal"]
+        ]
+        compared = sum(len(by_c) for by_slot in cells.values() for by_c in by_slot.values())
+        copy_equality = {
+            "cells_compared": compared,
+            "cells_equal": compared - len(unequal),
+            "unequal": unequal,
+        }
+        passed = not unequal and all(
+            row["equal"] for by_slot in rows.values() for row in by_slot.values()
+        )
+        _write_once(
+            gate_sidecar(root),
+            {
+                "run_id": RUN_ID,
+                "readings": list(readings),
+                "slots": list(slots),
+                "rows": rows,
+                "cells": cells,
+                "copy_equality": copy_equality,
+                "passed": passed,
+            },
+        )
+        scored = []
+        if passed:
+            for reading in readings:
+                state.update(stage=f"work_{reading}")
+                with reading_model(reading, device) as (model, tok, forbid):
+                    anchor = {
+                        slot: anchor_draws(model, tok, device, forbid, slot, reading)
+                        for slot in slots
+                    }
+                    questions = {}
+                    for i, entry in entries:
+                        slot = entry["slot"]
+                        kw = {"taught": taught[slot], "state": state}
+                        questions[str(i)] = {
+                            "index": i,
+                            **{
+                                key: entry[key]
+                                for key in (
+                                    "slot",
+                                    "fact_id",
+                                    "tier",
+                                    "seed_index",
+                                    "realized_injection",
+                                )
+                            },
+                            "references": score_question(
+                                model,
+                                tok,
+                                device,
+                                entry,
+                                phase18_extraction.reference_set_for(slot),
+                                **kw,
+                            ),
+                            # D-26: the taught NLL is shared with R_q, never re-scored here.
+                            "minted": score_question(
+                                model, tok, device, entry, prereg.minted_members(slot), **kw
+                            ),
+                        }
+                    del model, tok, forbid  # 38-REVIEW DI-04
+                # Write-once BEFORE the next reading: a crash keeps every reading already scored.
+                _write_once(
+                    reading_sidecar(root, reading),
+                    {
+                        "run_id": RUN_ID,
+                        "reading": reading,
+                        "anchor": anchor,
+                        "questions": questions,
+                    },
+                )
+                scored.append(reading)
+        status = "SCORED" if passed else "GATE_FAILED"
+        end_sha = git_sha()
+        if end_sha != pre["git_sha"]:
+            print(f"WARN HEAD moved during the run: {pre['git_sha']} -> {end_sha}", flush=True)
+        _write_once(
+            run_sidecar(root),
+            {
+                "run_id": RUN_ID,
+                "status": status,
+                "readings": list(readings),
+                "slots": list(slots),
+                "entries": [i for i, _ in entries],
+                "git_sha_at_launch": pre["git_sha"],
+                "git_sha_at_end": end_sha,
+                "head_moved_during_run": end_sha != pre["git_sha"],
+                "device": device,
+                "torch_version": torch.__version__,
+                "started_utc": started,
+                "finished_utc": _now(),
+                "module_sha256_at_launch": pre["module_sha256"],
+                "reconstruction": pre["reconstruction"],
+                "gate2": pre["gate2"],
+                "gate_sha256": _sha256(gate_sidecar(root)),
+                "reading_sha256": {r: _sha256(reading_sidecar(root, r)) for r in scored},
+            },
+        )
+        state.update(stage="done")
+    finally:
+        stop.set()
+        thread.join()
+    phase36_ledger.append(
+        "end",
+        run_id=RUN_ID,
+        phase=39,
+        front=FRONT,
+        record=prereg.CTX_RECORD,
+        ledger_path=ledger_path,
+    )
+    print(f"RUN {status} — next: crosscheck, then emit", flush=True)
+    return status
