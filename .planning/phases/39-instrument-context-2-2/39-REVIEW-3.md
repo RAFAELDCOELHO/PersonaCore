@@ -269,4 +269,13 @@ Traga para o "reviewed": a lista de commits, o resultado do novo ensaio (portão
 
 Orchestrator note (2026-10-05): the full suite launched at 45599e3 was stopped at 61% (no failure so far, EXIT=143 by kill) because these fixes supersede that HEAD; it reruns on the fixed, committed state.
 
-Status: fixes pending; "reviewed" not yet given.
+Status: fixes 4f859b3..3590057 (seven commits, one per ruling; IN-04 a known limitation); CPU
+re-rehearsal of the same slice into a fresh root SCORED (identity kept, gate 16/16, copy 120/120,
+IN-02 work-load check 8/8 bitwise equal, cross-check 0 differing, suffix 432/432); final projection
+0.7308777162950072 h <= stop (a) 0.7424221732238463 h; full suite at 3590057: 4300 passed, 4 skipped.
+Rafael replied "reviewed" on 2026-10-05, with this ruling on the disclosure (verbatim):
+
+"Sobre a divulgação: deixe o código como está. O segundo ensaio (mesma fatia, mesmos números) fica registrado no SUMMARY do 39-08. Leve uma frase sobre ele também para o relatório final do milestone."
+
+Carry-forward: the v6.0 milestone's final report must carry one sentence on the 39-08 second CPU
+rehearsal (same slice, same numbers).
