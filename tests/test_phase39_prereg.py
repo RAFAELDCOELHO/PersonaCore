@@ -160,6 +160,10 @@ def test_arithmetic_approval_block_is_fresh_and_reproduces_each_step():
         "scripts/phase36_ledger.py",
         "scripts/phase36_caps.py",
     ]
+    import phase36_ledger
+
+    # IN-04: the paths that have an owning constant come from it.
+    assert first["untouched"][:2] == [phase36_ledger.LEDGER_PATH, phase39_prereg.BUDGET_RECORD]
     first["readings"].append("planted")
     first["not_measured"].clear()
     first["projection_steps"]["d11"] = 0.0
@@ -885,11 +889,39 @@ def test_draw_rate_bounds_and_labels():
 
 
 def test_draw_rate_unit_of():
-    assert phase39_prereg.unit_of([0, 0, 1]) == 1
-    assert phase39_prereg.unit_of([0, 0]) == 0
-    assert phase39_prereg.unit_of([True]) == 1
-    with pytest.raises(SystemExit, match=r"^\[phase39_prereg\]"):
-        phase39_prereg.unit_of([])
+    k = phase35_prereg.FULL_FIDELITY_K
+    assert phase39_prereg.unit_of([0] * (k - 1) + [1]) == 1
+    assert phase39_prereg.unit_of([0] * k) == 0
+    assert phase39_prereg.unit_of([True] + [False] * (k - 1)) == 1
+    for hits in ([], [1], [0] * (k - 1), [0] * (k + 1)):
+        with pytest.raises(SystemExit, match=r"^\[phase39_prereg\] .*D-07"):
+            phase39_prereg.unit_of(hits)
+
+
+def test_input_guards_refuse_zero_n_and_non_integer_counts():
+    """IN-02: n = 0 and non-int (float, bool) counts and ranks are SystemExit, never arithmetic."""
+    refused = (
+        lambda: phase39_prereg.draw_rate(0, 0),
+        lambda: phase39_prereg.draw_rate(1.0, 48),
+        lambda: phase39_prereg.draw_rate(49, 48),
+        lambda: phase39_prereg.count_status("damage", 0, 0, 0),
+        lambda: phase39_prereg.count_status("collapse", 0, 0, 0),
+        lambda: phase39_prereg.count_status("damage", 0.5, 1, 1),
+        lambda: phase39_prereg.count_status("damage", 0, True, 1),
+        lambda: phase39_prereg.count_status("damage", 0, 1, 1.0),
+        lambda: phase39_prereg.damage_reachable(0, 0),
+        lambda: phase39_prereg.rank_status(1.5, 1),
+        lambda: phase39_prereg.rank_status(1, True),
+        lambda: phase39_prereg.rank_of_mean_nll({"t": []}, "t", ()),
+    )
+    for call in refused:
+        with pytest.raises(SystemExit, match=r"^\[phase39_prereg\]"):
+            call()
+    assert phase39_prereg._prove_count("x", 0) is None
+    assert phase39_prereg._prove_count("x", 1, low=1) is None
+    for value, low in ((-1, 0), (0, 1), (False, 0), (2.0, 0), ("2", 0)):
+        with pytest.raises(SystemExit, match=r"^\[phase39_prereg\] x is "):
+            phase39_prereg._prove_count("x", value, low=low)
 
 
 def test_predicted_hit_rate():

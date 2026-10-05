@@ -7,10 +7,10 @@ bindings ``E6_ENTRY_SUBSET`` and ``E6_DECOMPOSITION_RULE``. Under the Phase 35 s
 every commit touching this file must strictly precede the first add of every ``results/phase39_*``
 record, so the rule is written in full before any E6 number exists and cannot be fitted to it.
 
-Plan 39-02 added the pure functions that implement the written rule to this same file (section
-9). D-27: its code review (plan 39-03) runs before any rehearsal, and the rehearsal pins its sha256.
-Any later correction is Rafael's ruling plus a dated continuation (``scripts/_addendum.py``), never
-a silent edit.
+Plan 39-02 added the pure functions that implement the written rule to this same file (sections
+9 and 10). D-27: its code review (plan 39-03) runs before any rehearsal, and the rehearsal pins its
+sha256; Rafael's review rulings (39-REVIEW.md, 2026-10-05) landed before it. Any later correction
+is Rafael's ruling plus a dated continuation (``scripts/_addendum.py``), never a silent edit.
 
 Every entry has exactly four fields, ``value``, ``derivation``, ``kind`` and ``source`` (no
 proposer). The projection and stop hours, the extra NLL counts and the entry count are computed at
@@ -67,6 +67,14 @@ def _prove(condition, message):
 ENTRY_FIELDS = phase35_prereg.ENTRY_FIELDS
 KINDS = phase35_prereg.KINDS
 FORBIDDEN_PHRASE = phase35_prereg.FORBIDDEN_PHRASE
+
+
+def _prove_count(name, value, low=0):
+    """IN-02: an ``int`` (bool excluded) of at least ``low``, never a float out of arithmetic."""
+    _prove(
+        isinstance(value, int) and not isinstance(value, bool) and value >= low,
+        f"{name} is {value!r}, not an int >= {low} (bool excluded)",
+    )
 
 
 def _prove_entry(name, entry):
@@ -246,7 +254,11 @@ def _reference_total():
 # D-26: (ii) on all eight adapters, the taught value's NLL shared with R_q.
 MINTED_EXTRA_NLLS = APPROVED_E6_ADAPTERS * N_ENTRIES * (MINTED_SET_SIZE - 1)
 # D-30 condition 1: the gate scored twice, priced as the formula prices the gate ...
-GATE_EXTRA_NLLS_PRICED = APPROVED_E6_ADAPTERS * _E6_CAPS["anchor_slots"] * MINTED_SET_SIZE
+GATE_EXTRA_NLLS_PRICED = (
+    APPROVED_E6_ADAPTERS
+    * _E6_CAPS["anchor_slots"]
+    * _BUDGET["unit_prices"]["e5_candidates_per_slot_max"]
+)
 # ... and at the actual committed reference-set cells.
 GATE_EXTRA_NLLS_ACTUAL = APPROVED_E6_ADAPTERS * _reference_total()
 
@@ -358,6 +370,8 @@ NOT_MEASURED = (
 def approval_block():
     """D-11 / D-26 / D-30: the approval, the projection and the stop, embedded in every Phase 39
     record. A fresh JSON-ready dict on every call."""
+    import phase36_ledger  # torch-free; lazy so the module's import surface stays as it was
+
     return {
         "ruling": D11_RULING,
         "d26_ruling": D26_RULING,
@@ -391,8 +405,8 @@ def approval_block():
         "not_measured": list(NOT_MEASURED),
         "budget_record": BUDGET_RECORD,
         "untouched": [
-            "ledger/v6_mps_ledger.jsonl",
-            "results/phase36_budget.json",
+            phase36_ledger.LEDGER_PATH,
+            BUDGET_RECORD,
             "scripts/phase36_ledger.py",
             "scripts/phase36_caps.py",
         ],
@@ -817,6 +831,8 @@ _ENTRIES = {
             "G_a (no injected prefix) and G_q (injected prefix, scored on prefix_text + "
             "completion) differ beyond context",
             "the anchor and A2 seed windows coincide (D-28)",
+            "the D-28 seed window is proved from the seed formula, not at phase18_extraction's "
+            "draw_all call site (39-REVIEW IN-03, a known limitation)",
             "the draw-unit Wilson bounds ignore within-question clustering (D-07)",
         ),
         "derivation": "D-22: the declared limitations, published in the report.",
@@ -1078,6 +1094,9 @@ def draw_rate(successes, n):
     import erasure_gate
     import phase20_gate_coverage
 
+    _prove_count("n", n, low=1)
+    _prove_count("successes", successes)
+    _prove(successes <= n, f"successes {successes} above n {n}")
     return {
         "successes": successes,
         "n": n,
@@ -1100,7 +1119,7 @@ def predicted_hit_rate(nll_sum):
 
 def unit_of(hits):
     """D-07: the common unit, some hit in the K draws."""
-    _prove(len(hits) >= 1, "a unit over zero draws is undefined")
+    _prove(len(hits) == K, f"a unit is some hit in K = {K} draws, got {len(hits)} (D-07)")
     return int(any(hits))
 
 
@@ -1141,13 +1160,16 @@ _READING_KEYS = ("R_a", "R_q", "G_a", "G_q")
 def damage_reachable(count_k0, n):
     """D-25: damage can fire at size n only if the drop to 0 is strictly above MARGIN, by the
     committed formula with the best possible post count."""
-    _prove(0 <= count_k0 <= n, f"count_k0 {count_k0} outside 0..{n}")
+    _prove_count("n", n, low=1)
+    _prove_count("count_k0", count_k0)
+    _prove(count_k0 <= n, f"count_k0 {count_k0} outside 0..{n}")
     return count_k0 / n - 0 / n > MARGIN
 
 
 def rank_status(rank_k, rank_k0):
     """D-14 / D-25: a rank > 1 is lost under both events; ALREADY_AT_K0 when the k0 rank > 1."""
-    _prove(rank_k >= 1 and rank_k0 >= 1, f"ranks {rank_k}, {rank_k0} below 1")
+    _prove_count("rank_k", rank_k, low=1)
+    _prove_count("rank_k0", rank_k0, low=1)
     if rank_k0 > 1:
         return STATUSES[3]
     return STATUSES[1] if rank_k > 1 else STATUSES[0]
@@ -1161,8 +1183,10 @@ def count_status(event, count_k, count_k0, n):
     formula, strict >, even where (count_k0 - count_k) / n decides differently).
     """
     _prove(event in EVENTS, f"event {event!r} is not one of {EVENTS}")
+    _prove_count("n", n, low=1)
     for name, count in (("count_k", count_k), ("count_k0", count_k0)):
-        _prove(0 <= count <= n, f"{name} {count} outside 0..{n}")
+        _prove_count(name, count)
+        _prove(count <= n, f"{name} {count} outside 0..{n}")
     if event == "collapse":
         if count_k0 == 0:
             return STATUSES[3]
@@ -1457,5 +1481,7 @@ def median_rank(ranks):
 
 def rank_of_mean_nll(nll_by_candidate, taught, members):
     """D-10: the taught value's rank by its mean NLL over the questions; descriptive."""
+    for candidate, values in nll_by_candidate.items():
+        _prove(len(values) >= 1, f"{candidate!r} has no NLL to average")
     means = {c: math.fsum(values) / len(values) for c, values in nll_by_candidate.items()}
     return phase38_prereg.rank_in_prefix(means, taught, members)
