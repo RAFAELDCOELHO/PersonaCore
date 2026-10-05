@@ -1664,3 +1664,163 @@ def test_no_skips_in_this_file(tmp_path):
     assert _skip_failures(source) == []
     planted = source + '\n\ndef test_planted():\n    pytest.skip("x")\n'
     assert _skip_failures(_planted(tmp_path, source, planted, "skip.py"))
+
+
+# =================================================================================================
+# (7) Plan 06 Task 1: rank_rows and the CPU cross-check (D-20, D-30a) — NLL and rank only,
+# descriptive, write-once, no ledger line.
+# =================================================================================================
+
+_SHAPE = {"readings": ("k0", "k78"), "slots": ("pet_name", "birth_year")}
+
+
+def test_rank_rows_reads_nll_mean_only():
+    rows = {
+        "a": {"nll_mean": 1.0, "nll_sum": 3.0, "per_token": [1.0] * 3, "suffix_nll_sum": 2.0},
+        "b": {"nll_mean": 0.5, "nll_sum": 9.0, "per_token": [0.5], "suffix_nll_sum": None},
+        "c": {"nll_mean": 2.0, "nll_sum": 0.1, "per_token": [2.0], "suffix_nll_sum": None},
+    }
+    expected = phase38_prereg.rank_in_prefix({"a": 1.0, "b": 0.5, "c": 2.0}, "a", ["b", "c"])
+    assert phase39_ctx.rank_rows(rows, "a") == expected == 2
+    moved = {
+        "a": {**rows["a"], "per_token": [99.0] * 3, "suffix_nll_sum": 99.0, "nll_sum": 99.0},
+        "b": {**rows["b"], "per_token": [0.0], "nll_sum": 0.0},
+        "c": {**rows["c"], "per_token": [0.0], "nll_sum": 0.0},
+    }
+    assert phase39_ctx.rank_rows(moved, "a") == expected
+    assert phase39_ctx.rank_rows({**rows, "b": {**rows["b"], "nll_mean": 1.5}}, "a") == 1
+
+
+def _fake_pinned_suffix(tok):
+    """The pinned span_nll_from_ids on the run rig's FakeModel: the taught suffix in A2's exact
+    context gets the same expression the rig's copy uses (nll * suffix length)."""
+    taught_ids = {slot: list(tok.encode(value)) for slot, value in TAUGHT.items()}
+
+    def span_nll_from_ids(model, context_ids, value_ids, device):
+        value_ids, context_ids = list(value_ids), list(context_ids)
+        for slot, ids in taught_ids.items():
+            cut = len(ids) - len(value_ids)
+            if cut >= 1 and ids[cut:] == value_ids and context_ids[-cut:] == ids[:cut]:
+                context = hashlib.sha256(repr(context_ids[:-cut]).encode()).hexdigest()
+                nll = 1.0 + _offset(f"{model.reading}|{context}", TAUGHT[slot])
+                n = len(value_ids)
+                return {"n_scored": n, "nll_sum": nll * n, "nll_mean": nll}
+        raise AssertionError("not a taught suffix in an A2 context")
+
+    return span_nll_from_ids
+
+
+@pytest.fixture
+def crosscheck_rig(run_rig, tok, monkeypatch):
+    monkeypatch.setattr(phase18_extraction, "span_nll_from_ids", _fake_pinned_suffix(tok))
+    return run_rig
+
+
+def _cpu_ranks_from_sidecars(rig, readings):
+    """R_q and (ii) ranks recomputed in the test from the reading sidecars, nll_mean only."""
+    rq, minted = {}, {}
+    for reading in readings:
+        blob = _sidecar(phase39_ctx.reading_sidecar(rig.root, reading))
+        rq[reading], minted[reading] = {}, {}
+        for key, q in blob["questions"].items():
+            taught = TAUGHT[q["slot"]]
+            nll = {c: row["nll_mean"] for c, row in q["references"].items()}
+            rq[reading][key] = phase38_prereg.rank_in_prefix(
+                nll, taught, [c for c in nll if c != taught]
+            )
+            ii = {taught: nll[taught], **{c: row["nll_mean"] for c, row in q["minted"].items()}}
+            minted[reading][key] = phase38_prereg.rank_in_prefix(ii, taught, list(q["minted"]))
+    return rq, minted
+
+
+def test_crosscheck_writes_the_cpu_sidecar_once(crosscheck_rig, capsys):
+    rig = crosscheck_rig
+    assert phase39_ctx.run(root=rig.root, **rig.paths, **_SHAPE) == "SCORED"
+    ledger = rig.paths["ledger_path"].read_bytes()
+    loaded = len(rig.models)
+    out = phase39_ctx.crosscheck(root=rig.root, device="cpu")
+    assert out == phase39_ctx.cpu_sidecar(rig.root)
+    assert f"CROSSCHECK DONE {out}" in capsys.readouterr().out
+    cpu = _sidecar(out)
+    assert set(cpu) == {
+        "device",
+        "torch_version",
+        "started_utc",
+        "finished_utc",
+        "gate",
+        "rq",
+        "minted",
+        "suffix_equality",
+    }
+    assert cpu["device"] == "cpu"
+    assert rig.models[loaded:] == [(r, "cpu") for r in _SHAPE["readings"]]
+    gate = _sidecar(phase39_ctx.gate_sidecar(rig.root))
+    assert cpu["gate"] == {
+        r: {s: gate["rows"][r][s]["rank"] for s in _SHAPE["slots"]} for r in _SHAPE["readings"]
+    }
+    rq, minted = _cpu_ranks_from_sidecars(rig, _SHAPE["readings"])
+    assert (cpu["rq"], cpu["minted"]) == (rq, minted)
+    run = _sidecar(phase39_ctx.run_sidecar(rig.root))
+    compared = len(run["entries"]) * len(_SHAPE["readings"])
+    assert compared == 2 * 54
+    assert cpu["suffix_equality"] == {"compared": compared, "equal": compared, "unequal": []}
+    assert rig.paths["ledger_path"].read_bytes() == ledger  # D-20: no ledger line
+    with pytest.raises(SystemExit, match=r"^\[phase39_ctx\] .*write-once"):
+        phase39_ctx.crosscheck(root=rig.root, device="cpu")
+    assert len(rig.models) == loaded + len(_SHAPE["readings"])
+
+
+def test_crosscheck_refuses_a_gate_failed_or_missing_run(crosscheck_rig, tmp_path):
+    rig = crosscheck_rig
+    with pytest.raises(SystemExit, match=r"^\[phase39_ctx\] .*no E6 run"):
+        phase39_ctx.crosscheck(root=tmp_path, device="cpu")
+    rig.table[("k78", "pet_name", TAUGHT["pet_name"])] = 3.0
+    assert phase39_ctx.run(root=rig.root, **rig.paths, **_SHAPE) == "GATE_FAILED"
+    loaded = len(rig.models)
+    with pytest.raises(SystemExit, match=r"^\[phase39_ctx\] .*GATE_FAILED, not SCORED"):
+        phase39_ctx.crosscheck(root=rig.root, device="cpu")
+    assert not phase39_ctx.cpu_sidecar(rig.root).exists()
+    assert len(rig.models) == loaded
+
+
+def test_crosscheck_suffix_check_called_directly(fake_lm, tok, entries):
+    for index in (0, 120):
+        _, entry = entries[index]
+        slot = entry["slot"]
+        taught = TAUGHT[slot]
+        refs = phase39_ctx.score_question(
+            fake_lm,
+            tok,
+            "cpu",
+            entry,
+            list(phase18_extraction.reference_set_for(slot)),
+            taught=taught,
+            state={},
+        )
+        assert phase39_ctx._suffix_check(fake_lm, tok, "cpu", entry, refs, taught) is True
+        bumped = math.nextafter(refs[taught]["suffix_nll_sum"], math.inf)
+        off = {**refs, taught: {**refs[taught], "suffix_nll_sum": bumped}}
+        assert phase39_ctx._suffix_check(fake_lm, tok, "cpu", entry, off, taught) is False
+
+
+def test_crosscheck_suffix_equality_on_a_cpu_model(tmp_path, fake_lm, tok, entries, monkeypatch):
+    """The real copy and the real pinned function on fake_lm: every compared suffix is equal."""
+
+    @contextlib.contextmanager
+    def reading_model(reading, device):
+        yield fake_lm, tok, _FORBID
+
+    monkeypatch.setattr(phase39_ctx, "reading_model", reading_model)
+    in_slot = [i for i, e in entries if e["slot"] == "pet_name"]
+    sidecar = phase39_ctx.run_sidecar(tmp_path)
+    sidecar.parent.mkdir(parents=True)
+    sidecar.write_text(
+        json.dumps(
+            {"status": "SCORED", "readings": ["k0"], "slots": ["pet_name"], "entries": in_slot}
+        ),
+        encoding="utf-8",
+    )
+    cpu = _sidecar(phase39_ctx.crosscheck(root=tmp_path, device="cpu"))
+    assert cpu["suffix_equality"] == {"compared": 27, "equal": 27, "unequal": []}
+    assert set(cpu["rq"]["k0"]) == {str(i) for i in in_slot}
+    assert set(cpu["gate"]["k0"]) == {"pet_name"}

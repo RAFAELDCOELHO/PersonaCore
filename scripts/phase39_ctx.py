@@ -886,3 +886,94 @@ def run(
     )
     print(f"RUN {status} — next: crosscheck, then emit", flush=True)
     return status
+
+
+def rank_rows(rows, taught):
+    """D-30 condition 2: the taught value's rank among ``rows`` by ``nll_mean`` alone
+    (rank_in_prefix: ascending NLL, ties by the candidate string); never a per-token value."""
+    nll = {candidate: row["nll_mean"] for candidate, row in rows.items()}
+    return phase38_prereg.rank_in_prefix(nll, taught, [c for c in rows if c != taught])
+
+
+def _suffix_check(model, tok, device, entry, refs, taught):
+    """D-30a: the copy's taught suffix sum is bitwise the pinned span_nll_from_ids in A2's exact
+    context (the committed prompt_ids, then the taught ids after realized_injection)."""
+    import phase18_extraction
+
+    pinned = phase18_extraction.span_nll_from_ids(
+        model,
+        list(entry["prompt_ids"]),
+        list(tok.encode(taught))[entry["realized_injection"] :],
+        device,
+    )
+    return _same_bits(refs[taught]["suffix_nll_sum"], pinned["nll_sum"])
+
+
+def crosscheck(*, root=None, device="cpu"):
+    """D-20 / D-30a: re-score on CPU every gate cell, every R_q question and every (ii) question
+    through the same functions, and compare each taught suffix sum bitwise with the pinned call.
+    Descriptive only, write-once, no ledger line; no generation cross-check (seeded per device)."""
+    import phase18_extraction
+    import torch
+
+    prereg = _prereg()
+    root = pathlib.Path(root) if root is not None else _ROOT
+    sidecar = run_sidecar(root)
+    _prove(sidecar.exists(), f"{sidecar} is missing: there is no E6 run to cross-check")
+    run = _load(sidecar)
+    _prove(run["status"] == "SCORED", f"the run is {run['status']}, not SCORED: nothing to check")
+    out = cpu_sidecar(root)
+    _prove(not out.exists(), f"{out} exists: the CPU cross-check is write-once")
+    taught = _taught()
+    wanted = set(run["entries"])
+    entries = [(i, entry) for i, entry in prereg.e6_entries() if i in wanted]
+    _prove(len(entries) == len(wanted), f"the run's entries {sorted(wanted)} are not E6 entries")
+    state = {"point": RUN_ID, "stage": "crosscheck", "shape": None, "draw_index": None}
+    started, gate, rq, minted, unequal = _now(), {}, {}, {}, []
+    for reading in run["readings"]:
+        with reading_model(reading, device) as (model, tok, forbid):
+            gate[reading] = {
+                slot: rank_rows(
+                    {
+                        c: cell["pinned"]
+                        for c, cell in gate_cells(model, tok, device, slot, state).items()
+                    },
+                    taught[slot],
+                )
+                for slot in run["slots"]
+            }
+            rq[reading], minted[reading] = {}, {}
+            for i, entry in entries:
+                slot = entry["slot"]
+                kw = {"taught": taught[slot], "state": state}
+                refs = score_question(
+                    model, tok, device, entry, phase18_extraction.reference_set_for(slot), **kw
+                )
+                extra = score_question(model, tok, device, entry, prereg.minted_members(slot), **kw)
+                rq[reading][str(i)] = rank_rows(refs, taught[slot])
+                minted[reading][str(i)] = rank_rows(
+                    {taught[slot]: refs[taught[slot]], **extra}, taught[slot]
+                )
+                if not _suffix_check(model, tok, device, entry, refs, taught[slot]):
+                    unequal.append([reading, i])
+            del model, tok, forbid  # 38-REVIEW DI-04
+    compared = len(run["readings"]) * len(entries)
+    _write_once(
+        out,
+        {
+            "device": device,
+            "torch_version": torch.__version__,
+            "started_utc": started,
+            "finished_utc": _now(),
+            "gate": gate,
+            "rq": rq,
+            "minted": minted,
+            "suffix_equality": {
+                "compared": compared,
+                "equal": compared - len(unequal),
+                "unequal": unequal,
+            },
+        },
+    )
+    print(f"CROSSCHECK DONE {out}", flush=True)
+    return out
