@@ -260,3 +260,39 @@ matches.
 _Reviewed: 2026-10-04_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
+
+## Resolution (2026-10-05)
+
+Rafael's rulings, pasted as his reply to the plan 39-03 checkpoint, recorded verbatim. Each quote
+below is the text to carry into `scripts/phase39_prereg.py` ENTRIES derivations, with the date
+2026-10-05.
+
+### Findings
+
+- WR-01: corrigir. Conferir o k0 do alvo contra um total commitado lido de arquivo com SHA fixado (nunca digitado); com os 7 não-alvos já conferidos de forma independente, o total fixa o alvo. Se não existir esse número em registro commitado, a linha sai com "independent": False e o relatório diz isso.
+- WR-02: corrigir (a porta única de células no pré-registro).
+- WR-03: corrigir (auditoria de empates congelada, com M2 e n = 1). Ela devolve o status pelas duas fórmulas.
+- WR-04: corrigir, com as decisões e/f abaixo.
+- WR-05: corrigir.
+- IN-01: corrigir (não limitação): publicar à parte as células indefinidas (disagreement None).
+- IN-02 e IN-04: corrigir. IN-03: limitação conhecida.
+
+Orchestrator measurement for WR-01 (2026-10-05): a committed total exists. results/phase18_extraction_report.md
+(sha256 f24795f3f94c6330699261d908552ccd0dd10a9da8734438efd90dd3667f0cc1 at HEAD 85b7360) holds the A2
+adapter-on rung-48 rows, 92/104 (core_held_out) and 105/112 (core_taught), sum 197 ==
+sum(committed_a2_counts()["k0"].values()) == 197.
+
+### Confirmations and changes (text to record)
+
+a. "Confirmo D-27: o pré-registro congela antes do ensaio; o ensaio fixa o sha256 dele e o preflight real recusa se houver diferença."
+b. "Confirmo D-28: as sementes da âncora usam SLOTS.index(slot) * K; a coincidência com as janelas do A2 fica declarada."
+c. "Confirmo D-29: a previsão do contexto (b) é condicionada ao prefixo injetado."
+d. "Confirmo D-30a: a soma do sufixo sai da mesma passada, por máscara própria, com igualdade bit a bit provada em CPU contra a função fixada."
+e. "Confirmo a precedência em quatro passos, com uma mudança no passo 2: R_a perdido com G_q intacto recebe o desfecho nomeado REVERSE_DISAGREEMENT, contado à parte e sem classe de suficiência. NO_DISAGREEMENT fica só para quando os dois concordam."
+f. "Mudo D-25: k = 0 é referência nos dois eventos e não é célula em nenhum. Dano e colapso são classificados em 48 células cada (k8, k16, k32, k64, k78 e M2 × 8 slots). Os status de k = 0 saem numa tabela de linha de base."
+g. "Confirmo: M2 é classificado, adaptador desligado não. O relatório rotula M2 como outro treino, cuja referência de dano é o k = 0 do adaptador ensinado, e dá as contagens de M2 separadas das dos prefixos."
+h. "Confirmo: R_a é ALREADY_AT_K0 quando o rank em k = 0 é maior que 1."
+i. "Confirmo que as contagens de discordância publicada vêm só de dados commitados e são calculadas por função, nunca digitadas. Recalcule depois das correções e me mostre os números antes do 'reviewed'."
+j. "Confirmo D-33: a fórmula commitada vale para as contagens novas e os empates decididos por arredondamento são nomeados. Para cada célula nessa situação, o registro mostra a classe pelas duas fórmulas; o número principal usa a fórmula commitada."
+
+Status: fixes and confirmations pending; "reviewed" not yet given.
