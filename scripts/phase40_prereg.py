@@ -30,6 +30,7 @@ import json
 import math
 import pathlib
 import sys
+import types
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
@@ -389,3 +390,525 @@ def approval_block():
     }
     _prove(tuple(block) == APPROVAL_KEYS, f"approval_block keys {tuple(block)} != APPROVAL_KEYS")
     return block
+
+
+# =================================================================================================
+# (5) THE ENTRIES: the whole written rule, one entry per decision family.
+# =================================================================================================
+
+_CONTEXT = "40-CONTEXT D-{} (9d53c09)"
+_ADDENDUM = "40-CONTEXT Addendum D-{} (544ed02)"
+_APPROVALS = "40-CONTEXT Approvals (03de080)"
+_DEFAULT = "default taken at plan time, not yet confirmed by Rafael"
+
+_ENTRIES = {
+    "e2_S": {
+        "value": _BUDGET["e2_seed_count"],
+        "derivation": (
+            "NOISE-01, D-15: COST-01 chose S inside the Phase 36 budget record (e2_seed_count, "
+            "checked there against D-06 and e2_min_seeds); this slot READS it, never types it "
+            "(35-CONTEXT Addendum to D-15, Rafael 2026-10-01). SEEDS = seed_list()[:S]."
+        ),
+        "kind": "derived",
+        "source": f"{BUDGET_RECORD}::e2_seed_count; 35-CONTEXT Addendum to D-15",
+    },
+    "e2_noise_floor_estimator": {
+        "value": types.MappingProxyType(
+            {
+                "recall_floor": types.MappingProxyType(
+                    {
+                        "groups": GROUPS,
+                        "slots": (
+                            "phase19_erasure.GATED_NONTARGET_SLOTS (the 7 gated non-targets), by "
+                            "reference"
+                        ),
+                        "measure": (
+                            "A2 recall at K = the Phase 18 record's config k per fact, pooled over "
+                            "both tiers by phase19_run._pooled_rows: n_answerable / n_questions "
+                            "with the 27 = 14 core_taught + 13 core_held_out denominator; never an "
+                            "arm record's per_fact (19-09 defect C)"
+                        ),
+                        "pair_statistic": (
+                            "d(i, j) = phase19_erasure.nontarget_noise_floor("
+                            "phase19_erasure.nontarget_deltas(nontarget_rows(rows_i), "
+                            "nontarget_rows(rows_j))): the largest |recall difference| over the 7 "
+                            "slots, v3.0's own statistic"
+                        ),
+                        "pairs": (
+                            "every unordered pair of whole seeds of the SAME group, in seed_list "
+                            "order: C(S', 2) pairs, S' the whole seeds"
+                        ),
+                        "group_floor": "the arithmetic mean of d over the group's pairs",
+                        "published": (
+                            "the larger of the two group floors, beside "
+                            "phase19_floor.NONTARGET_NOISE_FLOOR; v3.0's (b) margin "
+                            "phase35_prereg.e1_condition_b_margin() is never amended (NOISE-02)"
+                        ),
+                        "beside": (
+                            "the max and min of d over the pairs, every pair's d, and per slot "
+                            "the range and the sample standard deviation (statistics.stdev, n - 1) "
+                            "with the population standard deviation (statistics.pstdev) beside, "
+                            "across the whole seeds"
+                        ),
+                        "sampling_noise": (
+                            "every A2 measurement is itself a sample, so this training-seed floor "
+                            "INCLUDES sampling noise; every adapter is drawn at the same "
+                            "per-question generator states (seed_index x K stride under "
+                            "seed_everything(phase14_recall.SEED)) — common random numbers — so "
+                            "the sampling part of a pair difference is correlated across "
+                            "adapters, not independent"
+                        ),
+                        "minimum": (
+                            "S' >= phase35_prereg.ENTRIES['e2_min_seeds'] whole seeds; below it "
+                            "no floor is published and the record status is INSUFFICIENT_SEEDS"
+                        ),
+                    }
+                ),
+                "gap_noise_floor": types.MappingProxyType(
+                    {
+                        "adapters": (
+                            "the full group only; the M2 gaps are read the same way and shown "
+                            "beside it, descriptive"
+                        ),
+                        "gap": (
+                            "adapter_on - adapter_off of each A2 arm record's dialogue reading "
+                            "(masked_perplexity through phase19_erasure.dialogue_ppl_pair inside "
+                            "run_erasure_arm, measured before the draws as "
+                            "pre_erasure.dialogue_ppl and after them as dialogue_ppl on the same "
+                            "adapter); when the two readings differ, PRE_POST_RULE decides (R-2: "
+                            "post = the record's own dialogue_ppl with pre beside; mean = the mean "
+                            "of both readings; refuse = no gap), and pre_post_equal is recorded "
+                            "either way"
+                        ),
+                        "adapter_off": (
+                            "device-scoped (R-1, ADAPTER_OFF_RULE): the committed reference is "
+                            "results/phase19_noise_floors.json dialogue_ppl_noise_floor "
+                            "seed_a.adapter_off == seed_b.adapter_off, read at call time with "
+                            "adapter_off_identical_across_seeds true, never retyped; under "
+                            "mps-equality an mps reading must equal it or the gap refuses, and a "
+                            "reading on any other device (the CPU rehearsal, whose off differs "
+                            "from the MPS one) is recorded beside it with "
+                            "adapter_off_matches_committed false and labelled rehearsal; under "
+                            "record-only no device refuses and the match flag is recorded"
+                        ),
+                        "pair_statistic": (
+                            "|gap_i - gap_j| over every unordered pair of whole full-group seeds"
+                        ),
+                        "value": "the arithmetic mean over those pairs; the max beside it",
+                        "contract": (
+                            "results/phase40_noise_floor.json::gap_noise_floor, finite >= 0, read "
+                            "by phase35_prereg's e1_condition_c_band_inputs rule (Phase 41)"
+                        ),
+                        "beside": (
+                            "phase19_floor.DIALOGUE_PPL_NOISE_FLOOR, the v3.0/v4.0 one-pair floor"
+                        ),
+                    }
+                ),
+            }
+        ),
+        "derivation": (
+            "D-16 (path 1): both estimators in ONE fill, written before any record. Recall floor: "
+            "D-01 two groups (full, M2) kept separate; D-02 d(i, j) = v3.0's max-over-slots "
+            "statistic over the 7 gated non-targets at K = 48; D-03 group floor = the MEAN of d "
+            "over the group's pairs, the published floor the larger group floor, beside v3.0's "
+            "sampling floor; D-04 the extras always beside it; D-05 the floor includes sampling "
+            "noise, declared, and the adapters share their generator states (common random "
+            "numbers, RESEARCH Pitfall 7). Gap floor: D-09 adapter-on minus adapter-off dialogue "
+            "PPL of each full adapter, read from its A2 record; D-10 the MEAN of |dgap| over the "
+            "pairs, the max beside. D-03/D-10's reason for the mean: it keeps the one-pair scale "
+            "of the v3.0 numbers. R-1, Rafael's ruling (Approvals bullet R-1, mps-equality): the "
+            "adapter-off check is device-scoped. R-2, Rafael's ruling (Approvals bullet R-2, "
+            "post): when pre != post the gap reads post, pre beside. D-04's sample standard "
+            f"deviation (n - 1) with the population one beside: {_DEFAULT}."
+        ),
+        "kind": "preference",
+        "source": (
+            f"{_CONTEXT.format('01..D-05')}; {_CONTEXT.format('09/D-10')}; "
+            f"{_CONTEXT.format('16')}; {_APPROVALS}; 40-RESEARCH Pitfall 7"
+        ),
+    },
+    "fresh_training": {
+        "value": (
+            "every adapter of both groups is trained with today's code and recipe: full = "
+            "teach_persona.arm_spec('real'); M2 = phase19_erasure.retrain_arm_spec(<pet_name fact "
+            "id>) (exactly one fact dropped, settings unchanged); teach_persona.train_arm(..., "
+            "family_ids=phase14_factset.TAUGHT_FAMILY_IDS, seed=<seed>, prefix=<the driver's "
+            "prefix>); no old adapter enters the set"
+        ),
+        "derivation": (
+            "D-06: train both groups at every seed with today's code and recipe; old adapters "
+            "are checks only (D-07), never members of the set."
+        ),
+        "kind": "preference",
+        "source": _CONTEXT.format("06"),
+    },
+    "a2_pass": {
+        "value": (
+            "phase19_erasure.run_erasure_arm(A2_LABEL, device, adapter_path=<new adapter>, "
+            "record_path=a2_record(group, seed)) for both groups; A2_LABEL 'retrain' is in "
+            "PARITY_ASSERTED_ARMS, so assert_phase18_parity runs before the first draw; the group "
+            "lives in Phase 40's own fields"
+        ),
+        "derivation": (
+            "NOISE-01: every adapter is scored by the pinned A2 pass. D-01: both groups scored by "
+            f"the same pass. The arm label 'retrain' (Claude's discretion): {_DEFAULT}."
+        ),
+        "kind": "preference",
+        "source": f"{_CONTEXT.format('01')}; 40-CONTEXT Claude's Discretion (9d53c09)",
+    },
+    "run_order": {
+        "value": (
+            "per seed in SEEDS order: train full, train M2, A2 pass full, A2 pass M2, then — only "
+            "if D13_INCLUDED — the D-13 scoring of M2; D-09's dialogue PPL is read from each A2 "
+            "record (inside the pass, no separate step); one ledger attempt per seed "
+            "(run_id(seed)); phase36_ledger.require_launch('E2') before each seed's start line; "
+            "the seed record is written before its ledger end line"
+        ),
+        "derivation": (
+            "D-15: per seed, in seed_list() order, the whole seed is the unit. P-1 / D-11: the "
+            "dialogue PPL is read from each A2 record. The D-13 scoring placed last in the seed "
+            f"unit: {_DEFAULT}."
+        ),
+        "kind": "preference",
+        "source": f"{_CONTEXT.format('15')}; {_CONTEXT.format('11')}",
+    },
+    "seed_outcomes": {
+        "value": types.MappingProxyType(
+            {
+                "whole": (
+                    "the seed's LAST ledger attempt closed by an end line naming "
+                    "seed_record(seed): it enters both estimators"
+                ),
+                "dropped": (
+                    "the seed's LAST attempt closed by a lost line (a crash or kill mid-seed): "
+                    "that attempt enters neither estimator"
+                ),
+                "not_run": (
+                    "require_launch('E2') refused before the seed's start line (the committed "
+                    "36-CONTEXT D-13 stops): the seed has no attempt and enters nothing"
+                ),
+                "relaunch": (
+                    "a relaunch Rafael approves runs pending_seeds(outcomes, rerun): the not_run "
+                    "seeds, plus a dropped seed only when DROPPED_SEED_RERUN and it is in rerun — "
+                    "the dropped seeds whose re-run he approved, so drop_attempt wrote the "
+                    "manifest of their latest crashed attempt; a relaunch MAY run a dropped seed, "
+                    "never must (R-3 rerun-as-new-attempt under Rafael's conditions: only a crash "
+                    "— an attempt a lost line closed, never a whole seed — qualifies; the re-run "
+                    "needs his approved and a cause note and uses the same seed and the same HEAD "
+                    "or declares the change, all held in a per-attempt manifest that "
+                    "phase40_noise.drop_attempt writes beside the crashed attempt's partial "
+                    "outputs after moving them under dropped_attempt_dir (never deleted; the lost "
+                    "line stays in the ledger); the kept outputs are listed with path and sha256 "
+                    "in the seed record and the noise-floor record, and when both attempts "
+                    "produced a group's adapter their tensor-by-tensor equality is reported there)"
+                ),
+            }
+        ),
+        "derivation": (
+            "D-15: the whole seed is the unit; a seed that does not finish drops. R-3, Rafael's "
+            "ruling (Approvals bullet R-3, rerun-as-new-attempt): D-15's 'drops that seed' reads "
+            "'drops that attempt', and a relaunch he approves may run a dropped seed again as a "
+            "new ledger attempt of the same run_id. His conditions, verbatim: "
+            f'"{R3_CONDITIONS_RULING}"'
+        ),
+        "kind": "preference",
+        "source": f"{_CONTEXT.format('15')}; {_APPROVALS}",
+    },
+    "determinism_check": {
+        "value": types.MappingProxyType(
+            {
+                "pairs": (
+                    "M2 at seed 1337 vs phase38_rank.m2_adapter_path() "
+                    "(checkpoints/phase19_erase_reference_adapter.pt)",
+                    "full at seed 1337 vs phase14_recall.ADAPTER_PATH "
+                    "(checkpoints/persona_adapter.pt)",
+                    "full at seed 2024 vs the Phase 19 dialogue-floor seed-2024 adapter",
+                ),
+                "comparison": (
+                    "tensor by tensor: torch.equal on every tensor of the 'adapter' mapping, plus "
+                    "equality of every other top-level key; NEVER the file sha256 (torch.save "
+                    "writes the file stem into the zip)"
+                ),
+                "digest_cited": (
+                    "results/phase19_retrain_scores.json::retrain_scores.adapter_sha256 "
+                    "(22e66552...), cited, never compared"
+                ),
+                "if_not_identical": (
+                    "the A2-count difference against the committed record is reported as 'ruído "
+                    "de re-execução com a mesma semente' (same-seed re-run noise)"
+                ),
+                "criterion": False,
+            }
+        ),
+        "derivation": (
+            "D-07 amended (Addendum, Rafael's ruling quoted in approval_block()): every comparison "
+            "between a new and a committed adapter is tensor by tensor (torch.equal on every "
+            "tensor, plus metadata), never the file sha256; descriptive, never a criterion. P-2: "
+            "the Phase 19 dialogue-floor recipe is the full adapter's, so the seed-2024 floor "
+            "adapter is a third check."
+        ),
+        "kind": "preference",
+        "source": f"{_ADDENDUM.format('07')}; 40-CONTEXT P-2 (9d53c09)",
+    },
+    "d08_correction": {
+        "value": (
+            "persona_adapter.pt and the Phase 19 dialogue-floor seed-1337 adapter are the same "
+            "adapter (every tensor torch.equal, identical metadata; the file sha256 differs only "
+            "by the file name torch.save writes into the zip); the record and the milestone report "
+            "state this as a CORRECTION of the scout note, not as a v3.0 limitation; emit "
+            "re-measures it on CPU"
+        ),
+        "derivation": (
+            "D-08 amended (Addendum, Rafael's ruling): the scout note's 'v3.0 taught limitation' "
+            "premise was measured false (every tensor equal) and is recorded as a correction."
+        ),
+        "kind": "preference",
+        "source": _ADDENDUM.format("08"),
+    },
+    "d08b_residual": {
+        "value": types.MappingProxyType(
+            {
+                "what": (
+                    "v3.0's taught-side A2 counts came from Phase 18's run_arm draws "
+                    "(phase19_erasure.PHASE18_ARM_RECORD_PATH, phase19_run.py:1721), not from "
+                    "run_erasure_arm; measured against the new full adapter at seed 1337, per "
+                    "slot, pooled by phase19_run._pooled_rows"
+                ),
+                "NO_RESIDUAL": "weights identical and counts equal",
+                "V3_LIMITATION": (
+                    "weights identical and counts differ: named a v3.0 limitation, with its "
+                    "measured size"
+                ),
+                "NOT_SEPARABLE": (
+                    "the new full@1337 weights are not bit-identical: the weights effect and the "
+                    "scoring-path effect cannot be separated; the size is still reported"
+                ),
+            }
+        ),
+        "derivation": (
+            "D-08b (Addendum, Rafael's ruling): the residual difference is reported with its "
+            "measured size against the new full@1337; it is named a v3.0 limitation only when the "
+            "counts differ on identical weights; if the weights differ the two effects do not "
+            "separate."
+        ),
+        "kind": "preference",
+        "source": _ADDENDUM.format("08b"),
+    },
+    "d12_rereading": {
+        "value": (
+            "for each gated slot, the signed difference m2 rate - full rate (v3.0's sign: "
+            "delta_taught_to_m2 = m2 - taught) for every (full seed, M2 seed) pair of whole seeds "
+            "— S' x S' pairs, the S' same-seed pairs marked — beside v3.0's delta_taught_to_m2 of "
+            "that slot read from phase19_run.RETRAIN_SCORES_PATH retrain_scores.retained; "
+            "descriptive, never a verdict"
+        ),
+        "derivation": (
+            "D-12: the floor is published beside v3.0's sampling floor without touching the (b) "
+            "margin, and v3.0's M1 x M2 comparison is re-read against the new spread."
+        ),
+        "kind": "preference",
+        "source": _CONTEXT.format("12"),
+    },
+    "d13_addition": {
+        "value": types.MappingProxyType(
+            {
+                "included": D13_INCLUDED,
+                "ruling": "quoted in approval_block()",
+                "anchor": (
+                    "on each M2 adapter: phase38_rank.scoring_plan(slots=(TARGET_SLOT,)) values "
+                    "scored with phase38_rank.score_values, ranked with phase38_rank.curve_for at "
+                    "the nested sizes 8, 32, 128, 512 (38-D-08)"
+                ),
+                "anchor_gate": (
+                    "the committed |R| = 8 scored with score_values and ranked with "
+                    "phase38_prereg.rank_in_prefix, compared with the same adapter's A2 record "
+                    "exposure rank; descriptive, never a stop"
+                ),
+                "r_q": (
+                    "n1 (phase39_prereg.n1) of the target over its 27 A2 questions under the "
+                    "question context (phase39_ctx.score_question + rank_rows), on the committed "
+                    "set and on the minted |R| = 8 set (phase39_prereg.minted_members)"
+                ),
+                "criterion": False,
+            }
+        ),
+        "derivation": (
+            "D-13: the target's rank across the M2 seeds, descriptive, scoring only. D-14: its "
+            "price and the unit cap it needs went to Rafael before inclusion. "
+            + (
+                "Approved by Rafael (Approvals bullet D-13/D-14): included in the driver; its "
+                "NLL count is D13_NLLS_PER_ADAPTER, derived by d13_nlls_per_adapter()."
+                if D13_INCLUDED
+                else "not measured: Rafael did not approve it."
+            )
+        ),
+        "kind": "preference",
+        "source": f"{_CONTEXT.format('13/D-14')}; {_APPROVALS}",
+    },
+    "predictions": {
+        "value": types.MappingProxyType(
+            {
+                "tensor_identity": (
+                    "M2@1337 tensor-equal to checkpoints/phase19_erase_reference_adapter.pt; "
+                    "full@1337 to phase14_recall.ADAPTER_PATH; full@2024 to the dialogue-floor "
+                    "seed-2024 adapter"
+                ),
+                "gap_pair": (
+                    "|gap(1337) - gap(2024)| over the full group equals "
+                    "phase19_floor.DIALOGUE_PPL_NOISE_FLOOR"
+                ),
+                "m2_counts": (
+                    "M2@1337 A2 counts equal results/phase19_arm_retrain.json's "
+                    "(phase19_erasure.arm_record_path('retrain'))"
+                ),
+                "full_counts": (
+                    "full@1337 A2 counts equal the Phase 18 run_arm counts (D-08b NO_RESIDUAL)"
+                ),
+                "status": (
+                    "recorded before any Phase 40 run; descriptive; a mismatch is a finding, not "
+                    "a failure"
+                ),
+            }
+        ),
+        "derivation": (
+            "D-07: the determinism predictions are written before any run, by reference to the "
+            "committed adapters and records (RESEARCH Pitfall 8), never as typed values."
+        ),
+        "kind": "preference",
+        "source": f"{_CONTEXT.format('07')}; 40-RESEARCH Pitfall 8",
+    },
+    "approvals": {
+        "value": (
+            "approval_block() in every Phase 40 seed record and in the noise-floor record; the A2 "
+            "arm records are written by the pinned run_erasure_arm and carry none, so each seed "
+            "record names their path and sha256 (R-4 seed-record-names-a2: Rafael's ruled "
+            "deviation from D-11's 'into every Phase 40 record')"
+        ),
+        "derivation": (
+            "D-11, D-14 and 38-D-21/D-22: the approval, the projection and the stop travel with "
+            f'the records. Rafael\'s Approvals reply, verbatim: "{APPROVALS_RULING}". R-4, his '
+            "ruling (Approvals bullet R-4, seed-record-names-a2). His record-total paragraph, "
+            f'verbatim: "{RECORD_TOTAL_RULING}" — approval_block() shows the E2 + E5 + E6 total '
+            "beside the committed and E2-only totals."
+        ),
+        "kind": "preference",
+        "source": (
+            f"{_CONTEXT.format('11')}; {_CONTEXT.format('14')}; {_APPROVALS}; 38-CONTEXT D-21/D-22"
+        ),
+    },
+    "record_layout": {
+        "value": types.MappingProxyType(
+            {
+                "seed": (
+                    "seed_record(seed): one per whole seed, named by its ledger end line, "
+                    "carrying provenance.run (device, started_utc, finished_utc)"
+                ),
+                "a2": "a2_record(group, seed): written by run_erasure_arm(record_path=...)",
+                "noise_floor": (
+                    "NOISE_FLOOR_RECORD: built on CPU from the seed and A2 records; top-level "
+                    "gap_noise_floor; NO top-level provenance.run (tests/test_phase36_ledger.py's "
+                    "launch-line census)"
+                ),
+                "report": "REPORT_RECORD, rendered from the committed noise-floor record",
+                "commits": (
+                    "none during the run; after Rafael's approved: the ledger first, then each "
+                    "whole seed's records, then the noise-floor record, then the report"
+                ),
+            }
+        ),
+        "derivation": (
+            "D-15: the whole seed is the record unit. The layout (Claude's discretion, "
+            f"40-CONTEXT): {_DEFAULT}."
+        ),
+        "kind": "preference",
+        "source": f"{_CONTEXT.format('15')}; 40-CONTEXT Claude's Discretion (9d53c09)",
+    },
+    "e2_projection_hours": {
+        "value": E2_PROJECTION_HOURS,
+        "derivation": (
+            f"D-11 (+0: P-1) and D-13/D-14: {BUDGET_RECORD}'s E2 term in the formula's term "
+            "order, plus D13_ADAPTERS x (adapter_setup_high + D13_NLLS_PER_ADAPTER x e5_nll_high), "
+            "divided by 3600; without D-13 the same function reproduces front_hours.E2 bit for bit "
+            "(proved at import)."
+        ),
+        "kind": "derived",
+        "source": f"{_CONTEXT.format('11')}; {_CONTEXT.format('13/D-14')}; {BUDGET_RECORD}",
+    },
+    "e2_total_hours": {
+        "value": E2_TOTAL_HOURS,
+        "derivation": (
+            "D-11 and 38-D-22's 'new total': math.fsum of the budget's front_hours with E2 = "
+            "E2_PROJECTION_HOURS."
+        ),
+        "kind": "derived",
+        "source": f"{_CONTEXT.format('11')}; {BUDGET_RECORD}",
+    },
+    "e2_stop_hours": {
+        "value": E2_STOP_HOURS,
+        "derivation": (
+            "D-14: the committed stop (a), phase36_prereg front_stop_factor x front_hours.E2; the "
+            "projection is proved at or below it at import. No second stop rule (38-D-23)."
+        ),
+        "kind": "derived",
+        "source": f"{_CONTEXT.format('14')}; {BUDGET_RECORD}; phase36_prereg.ENTRIES",
+    },
+}
+
+ENTRIES = types.MappingProxyType(
+    {name: types.MappingProxyType(entry) for name, entry in _ENTRIES.items()}
+)
+
+_ENTRY_NAMES = frozenset(
+    {
+        "e2_S",
+        "e2_noise_floor_estimator",
+        "fresh_training",
+        "a2_pass",
+        "run_order",
+        "seed_outcomes",
+        "determinism_check",
+        "d08_correction",
+        "d08b_residual",
+        "d12_rereading",
+        "d13_addition",
+        "predictions",
+        "approvals",
+        "record_layout",
+        "e2_projection_hours",
+        "e2_total_hours",
+        "e2_stop_hours",
+    }
+)
+
+
+def _prove_entries():
+    """Every entry proved, and the entry set exactly the pre-registered seventeen."""
+    for name, entry in ENTRIES.items():
+        _prove_entry(name, entry)
+    _prove(
+        set(ENTRIES) == _ENTRY_NAMES,
+        f"entries {sorted(set(ENTRIES) ^ _ENTRY_NAMES)} are missing or extra",
+    )
+
+
+_prove_entries()
+
+# =================================================================================================
+# (6) THE SLOT FILLS (D-16): once each, the whole value of its module-level binding.
+# =================================================================================================
+
+E2_S = phase35_prereg.fill("e2_S", input_records=(BUDGET_RECORD,), derivation=ENTRIES["e2_S"])
+E2_NOISE_FLOOR_ESTIMATOR = phase35_prereg.fill(
+    "e2_noise_floor_estimator", estimator=ENTRIES["e2_noise_floor_estimator"]
+)
+
+# NOISE-01: the seeds are the seed_list prefix of length S (Phase 41 reuses the first two).
+SEEDS = phase35_prereg.seed_list()[:E2_S]
+_prove(
+    len(SEEDS) == E2_S == _E2_CAPS["seeds"],
+    f"SEEDS {SEEDS} is not S = {E2_S} seeds = unit_caps.E2.seeds {_E2_CAPS['seeds']}",
+)
+_prove(
+    E2_S >= phase35_prereg.ENTRIES["e2_min_seeds"]["value"],
+    f"S = {E2_S} is below e2_min_seeds",
+)

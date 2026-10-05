@@ -231,3 +231,113 @@ def test_record_paths_from_the_registry():
     assert len(set(paths)) == len(paths)
     with pytest.raises(SystemExit, match=r"^\[phase40_prereg\]"):
         p.a2_record("planted", 1337)
+
+
+# =================================================================================================
+# (2) THE ENTRIES, BOTH FILLS AND SEEDS.
+# =================================================================================================
+
+_ENTRY_NAMES = {
+    "e2_S",
+    "e2_noise_floor_estimator",
+    "fresh_training",
+    "a2_pass",
+    "run_order",
+    "seed_outcomes",
+    "determinism_check",
+    "d08_correction",
+    "d08b_residual",
+    "d12_rereading",
+    "d13_addition",
+    "predictions",
+    "approvals",
+    "record_layout",
+    "e2_projection_hours",
+    "e2_total_hours",
+    "e2_stop_hours",
+}
+_DERIVED = {"e2_S", "e2_projection_hours", "e2_total_hours", "e2_stop_hours"}
+
+
+def test_e2_s_is_read_never_typed():
+    p = phase40_prereg
+    read = _budget()["e2_seed_count"]
+    assert p.E2_S == read == 5
+    assert type(p.E2_S) is int
+    assert p.BUDGET_RECORD in p.ENTRIES["e2_S"]["source"]
+    assert p.ENTRIES["e2_S"]["value"] == read
+    # NON-VACUITY: a derivation whose source omits the read path is refused by the fill.
+    omitted = {**p.ENTRIES["e2_S"], "source": "35-CONTEXT Addendum to D-15"}
+    with pytest.raises(SystemExit):
+        phase35_prereg.fill("e2_S", input_records=(p.BUDGET_RECORD,), derivation=omitted)
+
+
+def test_seeds_are_the_seed_list_prefix():
+    p = phase40_prereg
+    assert p.SEEDS == phase35_prereg.seed_list()[: p.E2_S] == (1337, 2024, 1338, 2025, 1339)
+    assert p.SEEDS[:2] == phase35_prereg.e1_teaching_seeds()
+    assert len(p.SEEDS) == _budget()["unit_caps"]["E2"]["seeds"]
+    assert p.E2_S >= phase35_prereg.ENTRIES["e2_min_seeds"]["value"]
+
+
+def test_fill_holds_both_estimators():
+    p = phase40_prereg
+    filled = p.E2_NOISE_FLOOR_ESTIMATOR
+    entry = p.ENTRIES["e2_noise_floor_estimator"]
+    assert set(filled) == {"value", "derivation", "kind", "source"}
+    for field in ("value", "derivation", "kind", "source"):
+        assert filled[field] == entry[field], field
+    assert filled["kind"] == "preference"
+    value = filled["value"]
+    assert set(value) == {"recall_floor", "gap_noise_floor"}
+    assert value["recall_floor"]["groups"] == p.GROUPS
+    with pytest.raises(TypeError):
+        filled["kind"] = "derived"
+    with pytest.raises(TypeError):
+        value["recall_floor"]["published"] = "planted"
+    for d_id in ("D-01", "D-02", "D-03", "D-04", "D-05", "D-09", "D-10", "D-16", "R-1", "R-2"):
+        assert d_id in filled["derivation"], d_id
+
+
+def _dict_value_constants(source, key):
+    """The string constants keyed ``key`` in any dict literal of ``source`` (docstrings are never
+    dict values, so they are excluded by construction)."""
+    import ast
+
+    found = []
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Dict):
+            for k, v in zip(node.keys, node.values, strict=True):
+                if isinstance(k, ast.Constant) and k.value == key and isinstance(v, ast.Constant):
+                    found.append(v.value)
+    return found
+
+
+def test_sampling_noise_and_crn_are_declared():
+    source = (_ROOT / PREREG).read_text(encoding="utf-8")
+    found = _dict_value_constants(source, "sampling_noise")
+    assert len(found) == 1, "meta-guard: the sampling_noise constant was not found exactly once"
+    text = found[0]
+    assert "sampling noise" in text and "common random numbers" in text
+    assert (
+        text == phase40_prereg.E2_NOISE_FLOOR_ESTIMATOR["value"]["recall_floor"]["sampling_noise"]
+    )
+
+
+def test_entries_names_kinds_and_d_ids():
+    p = phase40_prereg
+    kinds = {name: entry["kind"] for name, entry in p.ENTRIES.items()}
+    assert set(kinds) == _ENTRY_NAMES
+    assert len(kinds) == len(_ENTRY_NAMES) == 17
+    assert {n for n, k in kinds.items() if k == "derived"} == _DERIVED
+    for name, entry in p.ENTRIES.items():
+        assert "D-" in entry["derivation"] or "P-" in entry["derivation"], name
+    entries = p.ENTRIES
+    assert entries["e2_projection_hours"]["value"] == p.E2_PROJECTION_HOURS
+    assert entries["e2_total_hours"]["value"] == p.E2_TOTAL_HOURS
+    assert entries["e2_stop_hours"]["value"] == p.E2_STOP_HOURS
+    assert entries["d13_addition"]["value"]["included"] is p.D13_INCLUDED
+    assert entries["determinism_check"]["value"]["criterion"] is False
+    assert type(entries["determinism_check"]["value"]["pairs"]) is tuple
+    with pytest.raises(TypeError):
+        entries["planted"] = {}
