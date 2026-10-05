@@ -543,10 +543,13 @@ _ENTRIES = {
                 ),
                 "margin": "phase38_prereg.MARGIN by reference",
                 "ties": (
-                    "D-33 (Phase 38, Rafael's ruling, applied as precedent): the committed formula "
-                    "decides; a cell where (count_k0 - count_k) / n decides damage differently is "
-                    "a margin tie decided by rounding and is named in the record and report; a "
-                    "drop exactly equal to MARGIN is an exact tie decided by strict >"
+                    "D-33 (Phase 38, Rafael's ruling, applied as precedent; ruling j): the "
+                    "committed formula decides; a cell where (count_k0 - count_k) / n decides "
+                    "damage differently is a margin tie decided by rounding and is named in the "
+                    "record and report; a drop exactly equal to MARGIN is an exact tie decided by "
+                    "strict >; tie_audit / drop_audit give, for every damage cell over R_q n1, G_a "
+                    "(n = 1) and G_q, M2 included, the status and the class by both formulas; the "
+                    "main number uses the committed formula; descriptive, never a criterion"
                 ),
                 "shares": (
                     "class counts over the published disagreement cells, every count with its "
@@ -1342,6 +1345,82 @@ def _tally(classified):
         "disagreement_by_class": by_disagreement,
         "shares": {name: (count / n if n else None) for name, count in by_disagreement.items()},
         "denominator": "disagreement_cells",
+    }
+
+
+def drop_audit(count_k, count_k0, n):
+    """WR-03 / D-33 / ruling j: one damage count's status by the committed formula
+    count_k0 / n - count_k / n and by (count_k0 - count_k) / n, against MARGIN; a flip is a margin
+    tie decided by rounding, a committed drop equal to MARGIN an exact tie. Descriptive."""
+    committed = count_status("damage", count_k, count_k0, n)
+    rate_drop = count_k0 / n - count_k / n
+    count_drop = (count_k0 - count_k) / n
+    if committed == STATUSES[2]:
+        # Reachability is the same under both: count_k0 / n - 0 / n == (count_k0 - 0) / n exactly.
+        exact = committed
+    else:
+        exact = STATUSES[1] if count_drop > MARGIN else STATUSES[0]
+    return {
+        "count_k": count_k,
+        "count_k0": count_k0,
+        "n": n,
+        "rate_drop": rate_drop,
+        "count_drop": count_drop,
+        "differs": rate_drop != count_drop,
+        "status_committed": committed,
+        "status_exact": exact,
+        "flip": committed != exact,
+        "exact_margin_tie": rate_drop == MARGIN,
+    }
+
+
+_COUNT_KEYS = _READING_KEYS[1:]  # R_q, G_a, G_q: the counts a margin decides; R_a is a rank
+
+
+def tie_audit(classified):
+    """WR-03 / D-33 / ruling j: every classified damage cell (classify_cell's output, M2 included)
+    audited over R_q n1, G_a and G_q, with its class by both formulas; flips and exact ties named
+    by (reading, slot, reading key). Descriptive, never a criterion: the class is the committed
+    formula's."""
+    rows, flips, exact_ties, class_changes = [], [], [], []
+    for cell in classified:
+        door = {field: cell[field] for field in _CELL_FIELDS}
+        _prove(door["event"] == EVENTS[1], f"{door}: margin ties exist only under damage")
+        statuses = cell_statuses(door, cell["values"], cell["k0"])
+        committed = _precedence(statuses)["class"]
+        _prove(committed == cell["class"], f"{door}: class {cell['class']!r} is not {committed!r}")
+        audits = {
+            key: drop_audit(cell["values"][key], cell["k0"][key], door["n"][key])
+            for key in _COUNT_KEYS
+        }
+        exact = _precedence(
+            {**statuses, **{key: audit["status_exact"] for key, audit in audits.items()}}
+        )["class"]
+        name = [door["reading"], door["slot"]]
+        flips += [name + [key] for key, audit in audits.items() if audit["flip"]]
+        exact_ties += [name + [key] for key, audit in audits.items() if audit["exact_margin_tie"]]
+        if exact != committed:
+            class_changes.append(name)
+        rows.append(
+            {
+                "reading": door["reading"],
+                "slot": door["slot"],
+                "audits": audits,
+                "class_committed": committed,
+                "class_exact": exact,
+            }
+        )
+    return {
+        "criterion": False,
+        "formula": "count_k0 / n - count_k / n",
+        "exact_formula": "(count_k0 - count_k) / n",
+        "margin": MARGIN,
+        "cells": rows,
+        "flips": flips,
+        "flip_name": "margin tie decided by rounding",
+        "exact_ties": exact_ties,
+        "exact_tie_name": "exact margin tie decided by strict >",
+        "class_changes": class_changes,
     }
 
 

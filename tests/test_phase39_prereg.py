@@ -1418,6 +1418,63 @@ def test_baseline_table_is_the_k0_statuses_per_slot():
         phase39_prereg.baseline_table({"person_name": k0["person_name"]})
 
 
+def test_drop_audit_names_the_rounding_decided_ties():
+    """WR-03 / ruling j: status by both formulas; the four n = 27 flips and (26, 18)."""
+    for count_k0 in (15, 17, 19, 21):
+        audit = phase39_prereg.drop_audit(count_k0 - 8, count_k0, 27)
+        assert audit["count_drop"] == phase38_prereg.MARGIN < audit["rate_drop"], count_k0
+        assert (audit["status_committed"], audit["status_exact"]) == (_LOST, _INTACT)
+        assert audit["flip"] is True and audit["differs"] is True
+    tie = phase39_prereg.drop_audit(18, 26, 27)
+    assert tie["exact_margin_tie"] is True and tie["flip"] is False
+    assert (tie["status_committed"], tie["status_exact"]) == (_INTACT, _INTACT)
+    flips = [c for c in range(8, 28) if phase39_prereg.drop_audit(c - 8, c, 27)["flip"]]
+    assert flips == [15, 17, 19, 21]
+    assert phase39_prereg.drop_audit(0, 8, 27)["status_exact"] == _UNREACH
+    unit = phase39_prereg.drop_audit(0, 1, 1)
+    assert (unit["status_committed"], unit["status_exact"], unit["flip"]) == (_LOST, _LOST, False)
+    assert phase39_prereg.drop_audit(0, 0, 1)["status_exact"] == _UNREACH
+    # The prefix cells agree with Phase 38's audit field by field on the committed G_q counts.
+    a2 = phase38_prereg.a2_counts()
+    for cell in phase38_prereg.drop_formula_audit(a2)["cells"]:
+        counts = a2[cell["slot"]]["counts"]
+        mine = phase39_prereg.drop_audit(counts[cell["k"]], counts[0], 27)
+        for field in ("rate_drop", "count_drop", "differs", "flip", "exact_margin_tie"):
+            assert mine[field] == cell[field], (cell["slot"], cell["k"], field)
+
+
+def _classified(reading, slot, values, k0, event="damage"):
+    cell = phase39_prereg.cell_spec(event, reading, slot)
+    return phase39_prereg.classify_cell(cell, values, k0)
+
+
+def test_tie_audit_gives_the_class_by_both_formulas():
+    k0 = {"R_a": 1, "R_q": 26, "G_a": 1, "G_q": 21}
+    flipped = _classified("k8", "person_name", {"R_a": 1, "R_q": 26, "G_a": 1, "G_q": 13}, k0)
+    assert flipped["class"] == "INTERACTION_ONLY"
+    tied = _classified("M2", "pet_name", {"R_a": 1, "R_q": 18, "G_a": 0, "G_q": 21}, k0)
+    assert tied["class"] == "NO_DISAGREEMENT"
+    audit = phase39_prereg.tie_audit([flipped, tied])
+    json.dumps(audit)
+    assert audit["criterion"] is False and audit["margin"] == phase38_prereg.MARGIN
+    assert audit["flips"] == [["k8", "person_name", "G_q"]]
+    assert audit["exact_ties"] == [["M2", "pet_name", "R_q"]]
+    assert audit["class_changes"] == [["k8", "person_name"]]
+    first, second = audit["cells"]
+    assert (first["class_committed"], first["class_exact"]) == (
+        "INTERACTION_ONLY",
+        "NO_DISAGREEMENT",
+    )
+    assert (second["class_committed"], second["class_exact"]) == ("NO_DISAGREEMENT",) * 2
+    assert second["audits"]["G_a"]["n"] == 1 and second["audits"]["G_a"]["status_exact"] == _LOST
+    assert set(first["audits"]) == {"R_q", "G_a", "G_q"}
+    assert phase39_prereg.tie_audit([])["cells"] == []
+    collapse = _classified("k8", "person_name", flipped["values"], k0, event="collapse")
+    for bad in ([collapse], [{**flipped, "class": "EITHER"}], [{**flipped, "reading": "k0"}]):
+        with pytest.raises(SystemExit, match=r"^\[phase39_prereg\]"):
+            phase39_prereg.tie_audit(bad)
+
+
 def test_rank_summaries():
     import math
     import random
