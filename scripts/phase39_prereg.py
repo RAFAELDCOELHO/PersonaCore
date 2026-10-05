@@ -20,6 +20,7 @@ Not torch-free at import: the e6_entry_subset fill calls ``phase35_prereg.a2_cor
 which imports phase18_extraction (torch). Every other heavy import stays inside a function.
 """
 
+import collections
 import collections.abc
 import fnmatch
 import hashlib
@@ -134,7 +135,8 @@ SLOTS = phase38_prereg.SLOTS
 MARGIN = phase38_prereg.MARGIN
 K = phase35_prereg.FULL_FIDELITY_K
 
-# D-25: k = 0 is the damage reference of every reading's own context.
+# Ruling f (Rafael 2026-10-05, changing D-25): k = 0 is the reference of every reading's own
+# context in both events and is never a cell.
 REFERENCE_READING = f"k{PREFIXES[0]}"
 _prove(REFERENCE_READING in READINGS, f"{REFERENCE_READING} is not a reading")
 # D-11 (i): adapter-off is descriptive and never classified.
@@ -143,10 +145,10 @@ _prove(
     set(DESCRIPTIVE_READINGS) <= set(READINGS),
     f"the descriptive readings {DESCRIPTIVE_READINGS} are not readings {READINGS}",
 )
-# CTX-02's adapters: k0..k78 and M2.
-CLASSIFIED_READINGS = tuple(r for r in READINGS if r not in DESCRIPTIVE_READINGS)
-# D-25: the k = 0 cell has no damage class.
-DAMAGE_READINGS = tuple(r for r in CLASSIFIED_READINGS if r != REFERENCE_READING)
+# CTX-02's adapters, each with a committed A2 pin: the k0 reference, k8..k78 and M2.
+CTX02_READINGS = tuple(r for r in READINGS if r not in DESCRIPTIVE_READINGS)
+# Rulings f and g: the cells' readings in both events, k8..k78 and M2; never k0, never adapter-off.
+CELL_READINGS = tuple(r for r in CTX02_READINGS if r != REFERENCE_READING)
 
 EVENTS = ("collapse", "damage")  # D-16: classified for each separately
 STATUSES = ("INTACT", "LOST", "UNREACHABLE_AT_SIZE", "ALREADY_AT_K0")
@@ -209,6 +211,13 @@ _prove(
 )
 
 N_ENTRIES = len(phase35_prereg.a2_corpus_entries())
+# The questions per slot (R_q's and G_q's n), derived: each slot holds the same share of entries.
+N_QUESTIONS = N_ENTRIES // len(SLOTS)
+_prove(
+    collections.Counter(e["slot"] for e in phase35_prereg.a2_corpus_entries())
+    == dict.fromkeys(SLOTS, N_QUESTIONS),
+    f"the A2 entries are not {N_QUESTIONS} per slot of {SLOTS}",
+)
 
 
 def _reference_total():
@@ -281,13 +290,13 @@ D26_RULING = "Yes, add adapter-off"
 _PIN = re.compile(r"(k = \d+|M2): (results/[\w.-]+\.json) sha256 ([0-9a-f]{64})")
 _PINS = _PIN.findall(_BUDGET["cap_rulings"]["E6.a2_regenerated_entries"])
 _prove(
-    len(_PINS) == len(CLASSIFIED_READINGS),
-    f"{len(_PINS)} A2 pins in the budget's E6 ruling, expected one per {CLASSIFIED_READINGS}",
+    len(_PINS) == len(CTX02_READINGS),
+    f"{len(_PINS)} A2 pins in the budget's E6 ruling, expected one per {CTX02_READINGS}",
 )
 _PARSED = {label.replace("k = ", "k"): (path, digest) for label, path, digest in _PINS}
 _prove(
-    tuple(_PARSED) == CLASSIFIED_READINGS,
-    f"the budget's A2 pins label {tuple(_PARSED)}, not one-to-one {CLASSIFIED_READINGS}",
+    tuple(_PARSED) == CTX02_READINGS,
+    f"the budget's A2 pins label {tuple(_PARSED)}, not one-to-one {CTX02_READINGS}",
 )
 
 # D-11 (i): adapter-off's A2 record is in no budget field; the one typed digest, proved by
@@ -341,7 +350,8 @@ def approval_block():
         "committed_adapter_cap": COMMITTED_ADAPTER_CAP,
         "committed_anchor_adapter_cap": COMMITTED_ANCHOR_ADAPTER_CAP,
         "readings": list(READINGS),
-        "classified_readings": list(CLASSIFIED_READINGS),
+        "reference_reading": REFERENCE_READING,
+        "cell_readings": list(CELL_READINGS),
         "descriptive_readings": list(DESCRIPTIVE_READINGS),
         "minted_set_size": MINTED_SET_SIZE,
         "minted_extra_nlls": MINTED_EXTRA_NLLS,
@@ -376,6 +386,55 @@ def approval_block():
 # =================================================================================================
 # (7) THE ENTRIES: the whole written rule, one entry per decision family.
 # =================================================================================================
+
+# 39-REVIEW.md "Resolution (2026-10-05)": Rafael's confirmations and changes a-j, verbatim.
+RULINGS_DATE = "2026-10-05"
+RULINGS = types.MappingProxyType(
+    {
+        "a": (
+            "Confirmo D-27: o pré-registro congela antes do ensaio; o ensaio fixa o sha256 "
+            "dele e o preflight real recusa se houver diferença."
+        ),
+        "b": (
+            "Confirmo D-28: as sementes da âncora usam SLOTS.index(slot) * K; a coincidência "
+            "com as janelas do A2 fica declarada."
+        ),
+        "c": ("Confirmo D-29: a previsão do contexto (b) é condicionada ao prefixo injetado."),
+        "d": (
+            "Confirmo D-30a: a soma do sufixo sai da mesma passada, por máscara própria, com "
+            "igualdade bit a bit provada em CPU contra a função fixada."
+        ),
+        "e": (
+            "Confirmo a precedência em quatro passos, com uma mudança no passo 2: R_a perdido "
+            "com G_q intacto recebe o desfecho nomeado REVERSE_DISAGREEMENT, contado à parte "
+            "e sem classe de suficiência. NO_DISAGREEMENT fica só para quando os dois "
+            "concordam."
+        ),
+        "f": (
+            "Mudo D-25: k = 0 é referência nos dois eventos e não é célula em nenhum. Dano e "
+            "colapso são classificados em 48 células cada (k8, k16, k32, k64, k78 e M2 × 8 "
+            "slots). Os status de k = 0 saem numa tabela de linha de base."
+        ),
+        "g": (
+            "Confirmo: M2 é classificado, adaptador desligado não. O relatório rotula M2 como "
+            "outro treino, cuja referência de dano é o k = 0 do adaptador ensinado, e dá as "
+            "contagens de M2 separadas das dos prefixos."
+        ),
+        "h": ("Confirmo: R_a é ALREADY_AT_K0 quando o rank em k = 0 é maior que 1."),
+        "i": (
+            "Confirmo que as contagens de discordância publicada vêm só de dados commitados e "
+            "são calculadas por função, nunca digitadas. Recalcule depois das correções e me "
+            "mostre os números antes do 'reviewed'."
+        ),
+        "j": (
+            "Confirmo D-33: a fórmula commitada vale para as contagens novas e os empates "
+            "decididos por arredondamento são nomeados. Para cada célula nessa situação, o "
+            "registro mostra a classe pelas duas fórmulas; o número principal usa a fórmula "
+            "commitada."
+        ),
+    }
+)
+
 
 _CONTEXT = "39-CONTEXT D-{} (62af2fe)"
 _PLAN_TIME = "39-CONTEXT D-{} (3499c3b)"
@@ -419,9 +478,9 @@ _ENTRIES = {
                         ),
                     }
                 ),
-                "classified_readings": CLASSIFIED_READINGS,
+                "reference_reading": REFERENCE_READING,
+                "cell_readings": CELL_READINGS,
                 "descriptive_readings": DESCRIPTIVE_READINGS,
-                "damage_readings": DAMAGE_READINGS,
                 "events": EVENTS,
                 "statuses": STATUSES,
                 "classes": CLASSES,
@@ -452,9 +511,13 @@ _ENTRIES = {
                     "INTACT -> INSTRUMENT_SUFFICIENT; both LOST -> EITHER; neither -> "
                     "INTERACTION_ONLY",
                 ),
-                "k0": (
-                    "the k0 cell is classified under collapse only; under damage it is the "
-                    "reference and is not a cell"
+                "cells": (
+                    "per event, CELL_READINGS x SLOTS through the one door cells(event) / "
+                    "cell_spec(event, reading, slot), each cell with its reading, event, slot, the "
+                    "readings' n (R_q and G_q: N_QUESTIONS; G_a: 1; R_a: a rank) and its k0 "
+                    "reference; k0 is the reference in both events and is never a cell, its "
+                    "statuses published as the baseline table (baseline_table); adapter-off is "
+                    "never a cell"
                 ),
                 "margin": "phase38_prereg.MARGIN by reference",
                 "ties": (
@@ -484,8 +547,8 @@ _ENTRIES = {
             "exactly, is not damaged, which is true of that cell by strict >, not of every exact "
             "eight-question drop. D-33 (Phase 38 precedent applied to Phase 39's new counts): the "
             "formula stands and rounding-decided ties are named. The step order of 'precedence' "
-            "and the absence of k0 damage cells are the planner's reading of D-25, to be "
-            "confirmed at the plan-03 review."
+            "is the planner's reading of D-25, to be confirmed at the plan-03 review. Ruling f, "
+            f'changed by Rafael {RULINGS_DATE}: "{RULINGS["f"]}"'
         ),
         "kind": "preference",
         "source": f"{_CONTEXT.format('13..D-16')}; {_PLAN_TIME.format('24/D-25')}; {_D33}",
@@ -867,7 +930,7 @@ def committed_a2_counts():
     )
     out["M2"] = {slot: dict(rows)[slot] for slot in SLOTS}
     out["adapter_off"] = dict.fromkeys(SLOTS, 0)
-    _prove(tuple(out) == CLASSIFIED_READINGS + DESCRIPTIVE_READINGS, f"readings {tuple(out)}")
+    _prove(tuple(out) == CTX02_READINGS + DESCRIPTIVE_READINGS, f"readings {tuple(out)}")
     return out
 
 
@@ -1060,7 +1123,7 @@ def rank_status(rank_k, rank_k0):
     return STATUSES[1] if rank_k > 1 else STATUSES[0]
 
 
-def count_status(event, count_k, count_k0, n, *, reference=False):
+def count_status(event, count_k, count_k0, n):
     """D-14 / D-24 / D-25: a count's status under ``event`` against the k0 count of its context.
 
     collapse: ALREADY_AT_K0 at a k0 count of 0, LOST at a count of 0. damage: UNREACHABLE_AT_SIZE
@@ -1074,7 +1137,6 @@ def count_status(event, count_k, count_k0, n, *, reference=False):
         if count_k0 == 0:
             return STATUSES[3]
         return STATUSES[1] if count_k == 0 else STATUSES[0]
-    _prove(not reference, "the k0 cell is the damage reference (D-25), not a damage cell")
     if not damage_reachable(count_k0, n):
         return STATUSES[2]
     return STATUSES[1] if count_k0 / n - count_k / n > MARGIN else STATUSES[0]
@@ -1085,8 +1147,9 @@ def _wr01(*statuses):
     return next((s for s in WR01_OUTCOMES if s in statuses), None)
 
 
-def classify_cell(statuses):
-    """D-15 / D-16 / D-25: the four-step precedence of ENTRIES["e6_decomposition_rule"]."""
+def _precedence(statuses):
+    """D-15 / D-16 / D-25: the four-step precedence of ENTRIES["e6_decomposition_rule"] on bare
+    statuses; reached only through classify_cell's door."""
     _prove(
         set(statuses) == set(_READING_KEYS),
         f"statuses keyed {sorted(statuses)}, not {_READING_KEYS}",
@@ -1116,6 +1179,105 @@ def classify_cell(statuses):
     else:
         name = CLASSES[3]
     return {"class": name, "disagreement": True}
+
+
+# WR-02: each reading's n; R_a is a rank (no n), G_a one unit per slot (D-07).
+_UNITS = types.MappingProxyType({"R_q": N_QUESTIONS, "G_a": 1, "G_q": N_QUESTIONS})
+_CELL_FIELDS = ("event", "reading", "slot", "n", "reference")
+
+
+def cell_spec(event, reading, slot):
+    """WR-02 / rulings f, g: the one door to a classified cell, a fresh JSON-ready dict; SystemExit
+    for any (event, reading, slot) outside it (k0, adapter-off, an unknown reading or slot)."""
+    _prove(event in EVENTS, f"event {event!r} is not one of {EVENTS}")
+    _prove(
+        reading in CELL_READINGS,
+        f"{reading!r} is not a {event} cell: the cells are {CELL_READINGS}; k0 is the reference in "
+        "both events (ruling f) and adapter-off is never classified (D-11 i)",
+    )
+    _prove(slot in SLOTS, f"slot {slot!r} is not one of {SLOTS}")
+    return {
+        "event": event,
+        "reading": reading,
+        "slot": slot,
+        "n": dict(_UNITS),
+        "reference": REFERENCE_READING,
+    }
+
+
+def cells(event):
+    """Ruling f: the classified cells of ``event``, CELL_READINGS x SLOTS, in that order."""
+    return tuple(cell_spec(event, reading, slot) for reading in CELL_READINGS for slot in SLOTS)
+
+
+def _door(cell):
+    """Refuse a cell that is not exactly the door's."""
+    _prove(
+        isinstance(cell, collections.abc.Mapping) and tuple(cell) == _CELL_FIELDS,
+        f"a cell has exactly the fields {_CELL_FIELDS}, got {cell!r}",
+    )
+    _prove(
+        dict(cell) == cell_spec(cell["event"], cell["reading"], cell["slot"]),
+        f"{cell!r} is not the door's cell",
+    )
+
+
+def _paired(values, k0):
+    """The reading keys given, the same in ``values`` and ``k0``, non-empty, in _READING_KEYS."""
+    for name, given in (("values", values), ("k0", k0)):
+        _prove(isinstance(given, collections.abc.Mapping), f"{name} is not a mapping")
+    _prove(
+        set(values) == set(k0) and values and set(values) <= set(_READING_KEYS),
+        f"values keyed {sorted(values)} and k0 keyed {sorted(k0)}: one non-empty subset of "
+        f"{_READING_KEYS}",
+    )
+    return tuple(key for key in _READING_KEYS if key in values)
+
+
+def _status(event, key, value, value_k0):
+    if key == "R_a":
+        return rank_status(value, value_k0)
+    return count_status(event, value, value_k0, _UNITS[key])
+
+
+def cell_statuses(cell, values, k0):
+    """WR-02: the statuses of the readings in ``values`` (R_a a rank; R_q n1, G_a the unit, G_q
+    the answered count) against the k0 values of the same slot, at the door's n."""
+    _door(cell)
+    return {key: _status(cell["event"], key, values[key], k0[key]) for key in _paired(values, k0)}
+
+
+def classify_cell(cell, values, k0):
+    """WR-02: a door cell classified on all four readings: the cell, its values, its k0 values,
+    the statuses and the class of the four-step precedence."""
+    statuses = cell_statuses(cell, values, k0)
+    _prove(tuple(statuses) == _READING_KEYS, f"a cell is classified on all of {_READING_KEYS}")
+    return {
+        **dict(cell),
+        "values": dict(values),
+        "k0": dict(k0),
+        "statuses": statuses,
+        **_precedence(statuses),
+    }
+
+
+def baseline_table(k0_by_slot):
+    """Ruling f: the k0 statuses per slot, the baseline table. Each reading given at k0 with its
+    status under each event against itself (ALREADY_AT_K0 / UNREACHABLE_AT_SIZE or INTACT)."""
+    _prove(
+        isinstance(k0_by_slot, collections.abc.Mapping) and tuple(k0_by_slot) == SLOTS,
+        f"the baseline covers {list(k0_by_slot)}, not {SLOTS} in order",
+    )
+    return {
+        slot: {
+            key: {
+                "value": values[key],
+                **{event: _status(event, key, values[key], values[key]) for event in EVENTS},
+            }
+            for key in _paired(values, values)
+        }
+        for slot, values in k0_by_slot.items()
+    }
 
 
 def class_counts(classified):

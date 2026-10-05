@@ -139,7 +139,8 @@ def test_arithmetic_approval_block_is_fresh_and_reproduces_each_step():
     assert first["approved_adapters"] == 8
     assert first["committed_adapter_cap"] == first["committed_anchor_adapter_cap"] == 7
     assert first["readings"] == list(phase38_prereg.READINGS)
-    assert first["classified_readings"] == list(phase39_prereg.CLASSIFIED_READINGS)
+    assert first["reference_reading"] == "k0"
+    assert first["cell_readings"] == list(phase39_prereg.CELL_READINGS)
     assert first["descriptive_readings"] == ["adapter_off"]
     steps = dict(first["projection_steps"])
     assert repr(steps["d11"]) == "0.7030772649827931"
@@ -200,13 +201,13 @@ def test_a2_sha_pins_match_the_tracked_bytes():
 
 def test_a2_sha_seven_pins_parse_from_the_budget_ruling():
     ruling = _budget()["cap_rulings"]["E6.a2_regenerated_entries"]
-    for reading in phase39_prereg.CLASSIFIED_READINGS:
+    for reading in phase39_prereg.CTX02_READINGS:
         pin = phase39_prereg.A2_RECORDS[reading]
         assert pin["path"] in ruling and pin["sha256"] in ruling, reading
     assert phase39_prereg.ADAPTER_OFF_SHA256 not in ruling
 
 
-def test_readings_split_into_classified_damage_and_descriptive():
+def test_readings_split_into_reference_cells_and_descriptive():
     assert phase39_prereg.READINGS is phase38_prereg.READINGS
     assert phase39_prereg.PREFIXES is phase38_prereg.PREFIXES
     assert phase39_prereg.SLOTS is phase38_prereg.SLOTS
@@ -214,8 +215,9 @@ def test_readings_split_into_classified_damage_and_descriptive():
     assert phase39_prereg.K == phase35_prereg.FULL_FIDELITY_K
     assert phase39_prereg.REFERENCE_READING == "k0"
     assert phase39_prereg.DESCRIPTIVE_READINGS == ("adapter_off",)
-    assert phase39_prereg.CLASSIFIED_READINGS == ("k0", "k8", "k16", "k32", "k64", "k78", "M2")
-    assert phase39_prereg.DAMAGE_READINGS == ("k8", "k16", "k32", "k64", "k78", "M2")
+    assert phase39_prereg.CTX02_READINGS == ("k0", "k8", "k16", "k32", "k64", "k78", "M2")
+    assert phase39_prereg.CELL_READINGS == ("k8", "k16", "k32", "k64", "k78", "M2")
+    assert phase39_prereg.N_QUESTIONS == 27
     assert phase39_prereg.EVENTS == ("collapse", "damage")
     assert phase39_prereg.CLASSES == (
         "CONTEXT_SUFFICIENT",
@@ -302,9 +304,10 @@ def test_fill_decomposition_rule_equals_the_entry():
         assert filled[field] == entry[field], field
     value = filled["value"]
     assert set(value) == set(entry["value"])
-    assert value["classified_readings"] == phase39_prereg.CLASSIFIED_READINGS
+    assert value["reference_reading"] == phase39_prereg.REFERENCE_READING
+    assert value["cell_readings"] == phase39_prereg.CELL_READINGS
     assert value["descriptive_readings"] == phase39_prereg.DESCRIPTIVE_READINGS
-    assert value["damage_readings"] == phase39_prereg.DAMAGE_READINGS
+    assert "never a cell" in value["cells"] and "baseline" in value["cells"]
     assert value["events"] == phase39_prereg.EVENTS
     assert value["statuses"] == phase39_prereg.STATUSES
     assert value["classes"] == phase39_prereg.CLASSES
@@ -838,7 +841,7 @@ def test_a2_sha_verify_records():
 
 def test_committed_a2_counts_sources():
     counts = phase39_prereg.committed_a2_counts()
-    assert tuple(counts) == phase39_prereg.CLASSIFIED_READINGS + phase39_prereg.DESCRIPTIVE_READINGS
+    assert tuple(counts) == phase39_prereg.CTX02_READINGS + phase39_prereg.DESCRIPTIVE_READINGS
     assert counts == _expected_counts()
     assert set(counts["adapter_off"].values()) == {0}
     scores = _record(phase38_prereg.RETRAIN_SCORES)["retrain_scores"]
@@ -1004,8 +1007,6 @@ def test_lost_count_status_collapse():
     assert status("collapse", 4, 0, 27) == _ALREADY
     assert status("collapse", 0, 1, 1) == _LOST
     assert status("collapse", 1, 0, 1) == _ALREADY
-    # The k0 cell is classified under collapse: its own count is its reference.
-    assert status("collapse", 26, 26, 27, reference=True) == _INTACT
     for bad in (("planted", 0, 5, 27), ("collapse", 28, 5, 27), ("collapse", 0, -1, 27)):
         with pytest.raises(SystemExit, match=r"^\[phase39_prereg\]"):
             status(*bad)
@@ -1025,8 +1026,6 @@ def test_lost_count_status_damage():
     assert status("damage", 0, 1, 1) == _LOST
     assert status("damage", 1, 1, 1) == _INTACT
     assert status("damage", 0, 0, 1) == _UNREACH
-    with pytest.raises(SystemExit, match=r"^\[phase39_prereg\] .*D-25"):
-        status("damage", 26, 26, 27, reference=True)
 
 
 def test_lost_count_status_damage_on_every_exact_eight_drop():
@@ -1047,7 +1046,7 @@ def test_reachability_threshold_is_derived():
 
 
 def _cell(r_a, r_q, g_a, g_q):
-    return phase39_prereg.classify_cell({"R_a": r_a, "R_q": r_q, "G_a": g_a, "G_q": g_q})
+    return phase39_prereg._precedence({"R_a": r_a, "R_q": r_q, "G_a": g_a, "G_q": g_q})
 
 
 def test_classify_cell_sufficiency_table():
@@ -1112,7 +1111,7 @@ def test_classify_cell_exhaustive():
         {"R_a": "planted", "R_q": _INTACT, "G_a": _INTACT, "G_q": _LOST},
     ):
         with pytest.raises(SystemExit, match=r"^\[phase39_prereg\]"):
-            phase39_prereg.classify_cell(bad)
+            phase39_prereg._precedence(bad)
 
 
 def test_class_counts_publish_denominators():
@@ -1202,32 +1201,152 @@ _COLLAPSE_CELLS = {
 }
 
 
-def test_classify_committed_disagreement_oracle():
+def _committed_values(cell):
+    """(values, k0) of the two committed readings, R_a and G_q, for a door cell."""
     ranks = phase38_prereg.committed_gate_ranks()
     counts = phase39_prereg.committed_a2_counts()
-    ref = phase39_prereg.REFERENCE_READING
+    reading, slot, ref = cell["reading"], cell["slot"], cell["reference"]
+    return (
+        {"R_a": ranks[reading][slot]["rank"], "G_q": counts[reading][slot]},
+        {"R_a": ranks[ref][slot]["rank"], "G_q": counts[ref][slot]},
+    )
+
+
+def test_classify_committed_disagreement_oracle():
     published = {}
-    for event, readings in (
-        ("collapse", phase39_prereg.CLASSIFIED_READINGS),
-        ("damage", phase39_prereg.DAMAGE_READINGS),
-    ):
+    for event in phase39_prereg.EVENTS:
         cells = set()
-        for reading in readings:
-            for slot in _SLOT_ORDER:
-                r_a = phase39_prereg.rank_status(
-                    ranks[reading][slot]["rank"], ranks[ref][slot]["rank"]
-                )
-                g_q = phase39_prereg.count_status(
-                    event, counts[reading][slot], counts[ref][slot], _N_QUESTIONS
-                )
-                assert g_q in (_INTACT, _LOST), (event, reading, slot)
-                if r_a == _INTACT and g_q == _LOST:
-                    cells.add((reading, slot))
+        for cell in phase39_prereg.cells(event):
+            statuses = phase39_prereg.cell_statuses(cell, *_committed_values(cell))
+            assert statuses["G_q"] in (_INTACT, _LOST), cell
+            if statuses == {"R_a": _INTACT, "G_q": _LOST}:
+                cells.add((cell["reading"], cell["slot"]))
         published[event] = cells
+    counts = phase39_prereg.committed_a2_counts()
+    ref = phase39_prereg.REFERENCE_READING
     assert min(counts[ref].values()) >= 18
     assert published["damage"] == _DAMAGE_CELLS and len(_DAMAGE_CELLS) == 24
     assert published["collapse"] == _COLLAPSE_CELLS and len(_COLLAPSE_CELLS) == 9
     assert not [c for c in published["damage"] | published["collapse"] if c[0] == "M2"]
+
+
+def test_cell_door_is_cell_readings_by_slots_for_both_events():
+    """WR-02 / ruling f: 48 cells per event; k0 and adapter-off are never cells."""
+    for event in phase39_prereg.EVENTS:
+        door = phase39_prereg.cells(event)
+        assert len(door) == len(phase39_prereg.CELL_READINGS) * len(_SLOT_ORDER) == 48
+        assert [(c["reading"], c["slot"]) for c in door] == [
+            (r, s) for r in phase39_prereg.CELL_READINGS for s in _SLOT_ORDER
+        ]
+        for cell in door:
+            json.dumps(cell)
+            assert cell["event"] == event and cell["reference"] == "k0"
+            assert cell["n"] == {"R_q": 27, "G_a": 1, "G_q": 27}
+            assert phase39_prereg.cell_spec(event, cell["reading"], cell["slot"]) == cell
+    for event, reading, slot in (
+        ("damage", "k0", "pet_name"),
+        ("collapse", "k0", "pet_name"),
+        ("collapse", "adapter_off", "person_name"),
+        ("damage", "adapter_off", "person_name"),
+        ("damage", "k99", "person_name"),
+        ("damage", "k8", "planted"),
+        ("planted", "k8", "person_name"),
+    ):
+        with pytest.raises(SystemExit, match=r"^\[phase39_prereg\]"):
+            phase39_prereg.cell_spec(event, reading, slot)
+
+
+def test_cell_statuses_and_classify_refuse_a_cell_outside_the_door():
+    good = phase39_prereg.cell_spec("damage", "k8", "person_name")
+    values = {"R_a": 1, "R_q": 27, "G_a": 1, "G_q": 18}
+    k0 = {"R_a": 1, "R_q": 27, "G_a": 1, "G_q": 26}
+    assert phase39_prereg._door(good) is None
+    for bad in (
+        {**good, "reading": "k0"},
+        {**good, "reading": "adapter_off"},
+        {**good, "n": {"R_q": 26, "G_a": 1, "G_q": 26}},
+        {**good, "reference": "k8"},
+        {k: v for k, v in good.items() if k != "n"},
+        [good],
+    ):
+        with pytest.raises(SystemExit, match=r"^\[phase39_prereg\]"):
+            phase39_prereg._door(bad)
+        with pytest.raises(SystemExit, match=r"^\[phase39_prereg\]"):
+            phase39_prereg.cell_statuses(bad, values, k0)
+        with pytest.raises(SystemExit, match=r"^\[phase39_prereg\]"):
+            phase39_prereg.classify_cell(bad, values, k0)
+
+
+def test_cell_statuses_use_the_door_n():
+    damage = phase39_prereg.cell_spec("damage", "k8", "person_name")
+    collapse = phase39_prereg.cell_spec("collapse", "k8", "person_name")
+    k0 = {"R_a": 1, "R_q": 26, "G_a": 1, "G_q": 26}
+    values = {"R_a": 2, "R_q": 17, "G_a": 0, "G_q": 18}
+    assert phase39_prereg.cell_statuses(damage, values, k0) == {
+        "R_a": _LOST,
+        "R_q": _LOST,
+        "G_a": _LOST,
+        "G_q": _INTACT,
+    }
+    assert phase39_prereg.cell_statuses(collapse, values, k0) == {
+        "R_a": _LOST,
+        "R_q": _INTACT,
+        "G_a": _LOST,
+        "G_q": _INTACT,
+    }
+    assert phase39_prereg.cell_statuses(damage, {"G_q": 0}, {"G_q": 8}) == {"G_q": _UNREACH}
+    assert phase39_prereg._status("damage", "G_a", 0, 1) == _LOST
+    assert phase39_prereg._status("collapse", "R_a", 1, 2) == _ALREADY
+    assert phase39_prereg._paired({"G_q": 1, "R_a": 1}, {"R_a": 1, "G_q": 1}) == ("R_a", "G_q")
+    for bad_values, bad_k0 in (({}, {}), ({"G_q": 1}, {"R_a": 1}), ({"X": 1}, {"X": 1})):
+        with pytest.raises(SystemExit, match=r"^\[phase39_prereg\]"):
+            phase39_prereg._paired(bad_values, bad_k0)
+    with pytest.raises(SystemExit, match=r"^\[phase39_prereg\]"):
+        phase39_prereg._paired([1], {"G_q": 1})
+
+
+def test_classify_cell_through_the_door():
+    cell = phase39_prereg.cell_spec("damage", "k32", "pet_name")
+    values = {"R_a": 1, "R_q": 10, "G_a": 1, "G_q": 2}
+    k0 = {"R_a": 1, "R_q": 27, "G_a": 1, "G_q": 27}
+    out = phase39_prereg.classify_cell(cell, values, k0)
+    json.dumps(out)
+    assert out == {
+        **cell,
+        "values": values,
+        "k0": k0,
+        "statuses": {"R_a": _INTACT, "R_q": _LOST, "G_a": _INTACT, "G_q": _LOST},
+        "class": "CONTEXT_SUFFICIENT",
+        "disagreement": True,
+    }
+    with pytest.raises(SystemExit, match=r"^\[phase39_prereg\] a cell is classified on all"):
+        phase39_prereg.classify_cell(cell, {"R_a": 1, "G_q": 2}, {"R_a": 1, "G_q": 27})
+
+
+def test_baseline_table_is_the_k0_statuses_per_slot():
+    """Ruling f: the k0 statuses come out as a baseline table, never as cells."""
+    k0 = dict.fromkeys(_SLOT_ORDER, {"R_a": 1, "R_q": 27, "G_a": 1, "G_q": 27})
+    k0["person_name"] = {"R_a": 2, "R_q": 0, "G_a": 0, "G_q": 8}
+    table = phase39_prereg.baseline_table(k0)
+    json.dumps(table)
+    assert tuple(table) == _SLOT_ORDER
+    assert table["person_name"] == {
+        "R_a": {"value": 2, "collapse": _ALREADY, "damage": _ALREADY},
+        "R_q": {"value": 0, "collapse": _ALREADY, "damage": _UNREACH},
+        "G_a": {"value": 0, "collapse": _ALREADY, "damage": _UNREACH},
+        "G_q": {"value": 8, "collapse": _INTACT, "damage": _UNREACH},
+    }
+    assert table["pet_name"]["G_q"] == {"value": 27, "collapse": _INTACT, "damage": _INTACT}
+    committed = phase39_prereg.committed_a2_counts()["k0"]
+    ranks = phase38_prereg.committed_gate_ranks()["k0"]
+    partial = {s: {"R_a": ranks[s]["rank"], "G_q": committed[s]} for s in _SLOT_ORDER}
+    assert {
+        (key, row[key]["collapse"], row[key]["damage"])
+        for row in phase39_prereg.baseline_table(partial).values()
+        for key in row
+    } == {("R_a", _INTACT, _INTACT), ("G_q", _INTACT, _INTACT)}
+    with pytest.raises(SystemExit, match=r"^\[phase39_prereg\]"):
+        phase39_prereg.baseline_table({"person_name": k0["person_name"]})
 
 
 def test_rank_summaries():
