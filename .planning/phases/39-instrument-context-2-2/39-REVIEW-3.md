@@ -249,3 +249,24 @@ shape check would silently shrink the denominators.
 _Reviewed: 2026-10-05T14:25:52Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
+
+## Resolution (2026-10-05)
+
+Rafael's rulings, pasted as his reply to the plan 39-08 Task 1 checkpoint, recorded verbatim:
+
+- WR-01: corrigir.
+- WR-02: corrigir (emit recusa com a tentativa aberta no livro-caixa). A mesma lacuna na Fase 38 fica registrada como limitação conhecida de lá; a rodada dela fechou com início e fim, então nada a refazer.
+- WR-03: corrigir (projection_within_stop e run_within_stop).
+- IN-06: corrigir.
+- IN-05: corrigir.
+- IN-01 e IN-03: corrigir.
+- IN-02: corrigir, não limitação. Na passada de trabalho, repontuar com a função fixada a célula ensinada do portão (primeiro slot) em cada leitura e exigir igualdade bit a bit com o valor do sidecar do portão. Se diferir, PARE. Confirme que a projeção com essas 8 pontuações continua abaixo da parada (a).
+- IN-04: limitação conhecida.
+
+No novo ensaio: a mesma fatia do primeiro, em raiz nova. A divulgação do ensaio lista cada commit de correção com o motivo.
+
+Traga para o "reviewed": a lista de commits, o resultado do novo ensaio (portão, igualdade bit a bit, checagem do IN-02), a projeção final e o resultado da suíte.
+
+Orchestrator note (2026-10-05): the full suite launched at 45599e3 was stopped at 61% (no failure so far, EXIT=143 by kill) because these fixes supersede that HEAD; it reruns on the fixed, committed state.
+
+Status: fixes pending; "reviewed" not yet given.
