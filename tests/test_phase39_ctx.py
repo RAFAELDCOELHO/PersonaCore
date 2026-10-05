@@ -2323,9 +2323,11 @@ def test_emit_writes_the_record_once_through_the_prereg(scored_rig, monkeypatch,
     assert cost["e6_stop_hours"] == phase39_prereg.E6_STOP_HOURS
     assert cost["extra_setup_hours"] == extra
     assert cost["projection_with_double_load_hours"] == phase39_prereg.E6_PROJECTION_HOURS + extra
-    assert cost["within_stop"] is (
+    assert "within_stop" not in cost  # 39-REVIEW-3 WR-03: the projection and the run apart
+    assert cost["projection_within_stop"] is (
         phase39_prereg.E6_PROJECTION_HOURS + extra <= phase39_prereg.E6_STOP_HOURS
     )
+    assert cost["run_within_stop"] is (cost["run_hours"] <= phase39_prereg.E6_STOP_HOURS)
     assert "I1" in cost["note"]
     assert record["limitations"] == list(phase39_prereg.ENTRIES["limitations"]["value"])
     assert record["not_measured"] == list(phase39_prereg.NOT_MEASURED)
@@ -3094,6 +3096,17 @@ def test_census_helpers_called_directly(tmp_path):
     assert cost["projection_with_double_load_hours"] == (
         phase39_prereg.E6_PROJECTION_HOURS + 2 * setup / 3600
     )
+    # 39-REVIEW-3 WR-03: a run that overran stop (a) says so beside a projection within it.
+    late = phase39_ctx._cost(
+        {
+            "readings": list(READINGS),
+            "started_utc": "2026-10-06T00:00:00+00:00",
+            "finished_utc": "2026-10-06T02:00:00+00:00",
+        }
+    )
+    assert late["run_hours"] == 2.0 and late["run_within_stop"] is False
+    assert late["projection_within_stop"] is True and "within_stop" not in late
+    assert cost["run_within_stop"] is True
     # _descriptive_block: exp(-nll_sum) beside the observed rates; per-token values carried.
     K = phase39_prereg.K
     gate = {

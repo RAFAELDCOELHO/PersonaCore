@@ -1289,15 +1289,19 @@ def _cost(run):
     setup = _json(prereg.BUDGET_RECORD)["unit_prices"]["adapter_setup_high"]
     extra = (setups_run - priced) * setup / 3600
     projected = prereg.E6_PROJECTION_HOURS + extra
+    run_hours = _hours(run["started_utc"], run["finished_utc"])
     return {
-        "run_hours": _hours(run["started_utc"], run["finished_utc"]),
+        "run_hours": run_hours,
         "e6_projection_hours": prereg.E6_PROJECTION_HOURS,
         "e6_stop_hours": prereg.E6_STOP_HOURS,
         "setups_priced": priced,
         "setups_run": setups_run,
         "extra_setup_hours": extra,
         "projection_with_double_load_hours": projected,
-        "within_stop": projected <= prereg.E6_STOP_HOURS,
+        # 39-REVIEW-3 WR-03: the projection and the run judged apart, both descriptive (D-03:
+        # the committed stop is require_launch's).
+        "projection_within_stop": projected <= prereg.E6_STOP_HOURS,
+        "run_within_stop": run_hours <= prereg.E6_STOP_HOURS,
         "note": "run() loads each reading twice (gate pass, then work pass) where the formula "
         "prices one adapter setup each (I1)",
     }
