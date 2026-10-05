@@ -907,7 +907,8 @@ def run_rig(rig, monkeypatch, tok, gate_ranks, references):
     import phase16_persistence
     import phase19_erasure
 
-    rig.models, rig.log, rig.crash, rig.ulp = [], [], None, None
+    rig.models, rig.log, rig.crash, rig.ulp, rig.drift = [], [], None, None, None
+    rig.pinned_calls = {}
     rig.table = _fake_table(gate_ranks, references)
     anchors = {tuple(phase39_ctx.anchor_ids(tok, slot)): slot for slot in SLOTS}
     values = {}
@@ -927,7 +928,12 @@ def run_rig(rig, monkeypatch, tok, gate_ranks, references):
 
     def value_span_nll(model, tok_, device, *, slot, value, frame):
         rig.log.append(("gate", model.reading, slot, value))
-        return {**pinned_row(model.reading, slot, value), "frame": frame}
+        key = (model.reading, slot, value)
+        rig.pinned_calls[key] = rig.pinned_calls.get(key, 0) + 1
+        row = {**pinned_row(model.reading, slot, value), "frame": frame}
+        if rig.drift == model.reading and rig.pinned_calls[key] > 1:  # the work-pass re-score
+            row["nll_mean"] = math.nextafter(row["nll_mean"], math.inf)
+        return row
 
     def copy(model, context_ids, value_ids, device, *, suffix_from=None):
         value = values[tuple(value_ids)]
@@ -996,12 +1002,18 @@ def test_run_scores_the_full_shape_gate_first(run_rig, references, entries, caps
     ]
     assert lines[1]["record"] == phase39_prereg.CTX_RECORD and lines[1]["front"] == "E6"
     # D-18 / D-30: every gate cell, through both functions, before any draw or question NLL.
-    first_work = min(i for i, e in enumerate(rig.log) if e[0] in ("draw", "question"))
-    gate_part = rig.log[:first_work]
+    gate_end = max(i for i, e in enumerate(rig.log) if e[0] == "copy_anchor") + 1
+    gate_part, work = rig.log[:gate_end], rig.log[gate_end:]
     expected = [(r, s, v) for r in READINGS for s in SLOTS for v in references[s]]
     assert [e[1:] for e in gate_part if e[0] == "gate"] == expected
     assert [e[1:] for e in gate_part if e[0] == "copy_anchor"] == expected
-    assert {e[0] for e in rig.log[first_work:]} == {"draw", "question"}
+    assert {e[0] for e in work} == {"gate", "draw", "question"}
+    # 39-REVIEW-3 IN-02: each work-pass load opens with ONE pinned re-score of the gate's taught
+    # cell of the first slot, before any of its draws or question NLLs.
+    first, taught = SLOTS[0], TAUGHT[SLOTS[0]]
+    assert [e[1:] for e in work if e[0] == "gate"] == [(r, first, taught) for r in READINGS]
+    for reading in READINGS:
+        assert next(e for e in work if e[1] == reading) == ("gate", reading, first, taught)
     assert [r for r, _ in rig.models] == [*READINGS, *READINGS]
     assert {d for _, d in rig.models} == {"mps"}
     gate = _sidecar(phase39_ctx.gate_sidecar(rig.root))
@@ -1037,6 +1049,18 @@ def test_run_scores_the_full_shape_gate_first(run_rig, references, entries, caps
     run = _sidecar(phase39_ctx.run_sidecar(rig.root))
     assert run["status"] == "SCORED" and run["run_id"] == phase39_ctx.RUN_ID
     assert set(phase39_ctx.RUN_PROVENANCE_KEYS) <= set(run)
+    assert run["work_load_check"] == [
+        {
+            "reading": reading,
+            "slot": first,
+            "candidate": taught,
+            "gate_pinned": {k: float(v).hex() for k, v in pinned.items() if k != "n_scored"},
+            "work_pinned": {k: float(v).hex() for k, v in pinned.items() if k != "n_scored"},
+            "equal": True,
+        }
+        for reading in READINGS
+        for pinned in [gate["cells"][reading][first][taught]["pinned"]]
+    ]
     assert run["git_sha_at_launch"] == run["git_sha_at_end"] == _git("rev-parse", "HEAD")
     assert run["head_moved_during_run"] is False and run["device"] == "mps"
     assert run["module_sha256_at_launch"] == phase39_ctx.module_sha256()
@@ -1059,6 +1083,7 @@ def _assert_gate_failed(rig):
     assert not any(phase39_ctx.reading_sidecar(rig.root, r).exists() for r in READINGS)
     run = _sidecar(phase39_ctx.run_sidecar(rig.root))
     assert run["status"] == "GATE_FAILED" and run["reading_sha256"] == {}
+    assert run["work_load_check"] == []
     assert [x["event"] for x in _lines(rig)] == ["start", "end"]
     return _sidecar(phase39_ctx.gate_sidecar(rig.root))
 
@@ -1089,6 +1114,90 @@ def test_a_bitwise_inequality_is_gate_failed(run_rig, references):
         "unequal": [["k16", "street", bumped]],
     }
     assert gate["cells"]["k16"]["street"][bumped]["equal"] is False
+
+
+_DRIFT_SHAPE = {"readings": ("k0", "k8", "k16", "k78"), "slots": ("pet_name", "birth_year")}
+
+
+def test_a_work_load_check_failure_stops_the_run(crosscheck_rig, capsys):
+    """39-REVIEW-3 IN-02: k16's work-pass load re-scores the gate's taught pet_name cell one ulp
+    off: the run STOPs there (no k16 draw or question, no later reading), writes its run sidecar
+    and its ledger END line, keeps k0 and k8 as evidence; emit and the report treat it like
+    GATE_FAILED and give both values as float.hex."""
+    rig = crosscheck_rig
+    rig.drift = "k16"
+    assert phase39_ctx.run(root=rig.root, **rig.paths, **_DRIFT_SHAPE) == "WORK_CHECK_FAILED"
+    out = capsys.readouterr().out
+    assert "RUN WORK_CHECK_FAILED" in out and "k16/pet_name" in out
+    assert [x["event"] for x in _lines(rig)] == ["start", "end"]
+    assert phase36_ledger.open_runs(_lines(rig)) == {}
+    gate_end = max(i for i, e in enumerate(rig.log) if e[0] == "copy_anchor") + 1
+    work = rig.log[gate_end:]
+    assert {e[1] for e in work} == {"k0", "k8", "k16"}
+    assert [e for e in work if e[1] == "k16"] == [("gate", "k16", "pet_name", TAUGHT["pet_name"])]
+    assert [r for r, _ in rig.models] == [*_DRIFT_SHAPE["readings"], "k0", "k8", "k16"]
+    kept = {r: phase39_ctx.reading_sidecar(rig.root, r) for r in ("k0", "k8")}
+    assert all(path.exists() for path in kept.values())
+    assert not any(phase39_ctx.reading_sidecar(rig.root, r).exists() for r in ("k16", "k78"))
+    run = _sidecar(phase39_ctx.run_sidecar(rig.root))
+    assert run["status"] == "WORK_CHECK_FAILED"
+    assert run["reading_sha256"] == {r: phase39_ctx._sha256(p) for r, p in kept.items()}
+    checks = run["work_load_check"]
+    assert [(c["reading"], c["equal"]) for c in checks] == [
+        ("k0", True),
+        ("k8", True),
+        ("k16", False),
+    ]
+    failing = checks[-1]
+    assert (failing["slot"], failing["candidate"]) == ("pet_name", TAUGHT["pet_name"])
+    gate = _sidecar(phase39_ctx.gate_sidecar(rig.root))
+    pinned = gate["cells"]["k16"]["pet_name"][TAUGHT["pet_name"]]["pinned"]
+    assert failing["gate_pinned"] == {
+        "nll_sum": pinned["nll_sum"].hex(),
+        "nll_mean": pinned["nll_mean"].hex(),
+    }
+    assert failing["work_pinned"] == {
+        "nll_sum": pinned["nll_sum"].hex(),
+        "nll_mean": math.nextafter(pinned["nll_mean"], math.inf).hex(),
+    }
+    with pytest.raises(SystemExit, match=r"WORK_CHECK_FAILED, not SCORED"):
+        phase39_ctx.crosscheck(root=rig.root, device="cpu")
+    record = phase39_ctx.emit(root=rig.root, ledger_path=rig.paths["ledger_path"])
+    assert record["status"] == "WORK_CHECK_FAILED" and set(record) == _COMMON_KEYS
+    assert record["work_load_check"] == checks
+    assert record["provenance"]["sidecar_sha256"]["readings"] == run["reading_sha256"]
+    text = phase39_ctx.render_report(_sidecar(_record_path(rig)))
+    assert _headings(text) == _GATE_FAILED_SECTIONS
+    _assert_gfm_tables(text)
+    status = _section(text, "## Status")
+    assert "WORK_CHECK_FAILED" in status
+    assert "phase39_ctx_k0.json, phase39_ctx_k8.json" in status
+    for value in (*failing["gate_pinned"].values(), *failing["work_pinned"].values()):
+        assert value in status
+    gate1 = _section(text, _SECTIONS[3])
+    _, loads = _tables(gate1)
+    assert [r[0] for r in loads] == ["k0", "k8", "k16"] and loads[-1][-1] == "False"
+
+
+def test_work_load_check_rescores_the_gate_taught_cell_with_the_pinned_call(fake_lm, tok):
+    slot, taught = "pet_name", TAUGHT["pet_name"]
+    pinned = phase39_ctx.gate_cells(fake_lm, tok, "cpu", slot, {})[taught]["pinned"]
+    state = {"shape": None, "draw_index": 3}
+    check = phase39_ctx.work_load_check(fake_lm, tok, "cpu", "k0", slot, taught, pinned, state)
+    hexed = {key: pinned[key].hex() for key in ("nll_sum", "nll_mean")}
+    assert check == {
+        "reading": "k0",
+        "slot": slot,
+        "candidate": taught,
+        "gate_pinned": hexed,
+        "work_pinned": hexed,
+        "equal": True,
+    }
+    assert state == {"shape": slot, "draw_index": None}
+    for key in ("nll_sum", "nll_mean"):
+        off = {**pinned, key: math.nextafter(pinned[key], math.inf)}
+        drifted = phase39_ctx.work_load_check(fake_lm, tok, "cpu", "k0", slot, taught, off, {})
+        assert drifted["equal"] is False and drifted["work_pinned"] == hexed
 
 
 def test_the_real_root_refuses_a_partial_shape(tmp_path):
@@ -2248,6 +2357,7 @@ def test_predicted_and_extras_are_descriptive(scored_rig):
 # =================================================================================================
 
 _COMMON_KEYS = {
+    "work_load_check",
     "front",
     "run_id",
     "status",
@@ -2368,9 +2478,14 @@ def test_emit_writes_the_record_once_through_the_prereg(scored_rig, monkeypatch,
     assert cost["extra_setup_hours"] == extra
     assert cost["projection_with_double_load_hours"] == phase39_prereg.E6_PROJECTION_HOURS + extra
     assert "within_stop" not in cost  # 39-REVIEW-3 WR-03: the projection and the run apart
-    assert cost["projection_within_stop"] is (
-        phase39_prereg.E6_PROJECTION_HOURS + extra <= phase39_prereg.E6_STOP_HOURS
-    )
+    # 39-REVIEW-3 IN-02: one pinned re-score per reading, priced at e5_nll_high.
+    checks = n * budget["unit_prices"]["e5_nll_high"] / 3600
+    assert (cost["work_load_check_nlls"], cost["work_load_check_hours"]) == (n, checks)
+    final = phase39_prereg.E6_PROJECTION_HOURS + extra + checks
+    assert cost["projection_with_double_load_and_checks_hours"] == final
+    assert cost["projection_within_stop"] is (final <= phase39_prereg.E6_STOP_HOURS)
+    assert record["work_load_check"] == rig.run["work_load_check"]
+    assert [c["equal"] for c in record["work_load_check"]] == [True] * n
     assert cost["run_within_stop"] is (cost["run_hours"] <= phase39_prereg.E6_STOP_HOURS)
     assert "I1" in cost["note"]
     assert record["limitations"] == list(phase39_prereg.ENTRIES["limitations"]["value"])
@@ -2748,7 +2863,21 @@ def test_render_report_renders_the_scored_record(scored_rig):
         assert f"- cost {key}: {value!r}" in approval
     # Gate 1: the rows, then the copy sentence with cells compared and equal.
     gate1 = _section(text, _SECTIONS[3])
-    (gate_rows,) = _tables(gate1)
+    gate_rows, load_rows = _tables(gate1)
+    # 39-REVIEW-3 IN-02: one row per work-pass load check, both values as float.hex.
+    assert load_rows == [
+        [
+            c["reading"],
+            c["slot"],
+            c["candidate"],
+            c["gate_pinned"]["nll_sum"],
+            c["work_pinned"]["nll_sum"],
+            c["gate_pinned"]["nll_mean"],
+            c["work_pinned"]["nll_mean"],
+            str(c["equal"]),
+        ]
+        for c in record["work_load_check"]
+    ]
     rows = record["gate"]["rows"]
     assert [r[:2] for r in gate_rows] == [
         [reading, slot] for reading in _SCORED_SHAPE["readings"] for slot in _SCORED_SHAPE["slots"]
@@ -3165,6 +3294,12 @@ def test_census_helpers_called_directly(tmp_path):
         }
     )
     assert late["run_hours"] == 2.0 and late["run_within_stop"] is False
+    nll = _read(phase39_prereg.BUDGET_RECORD)["unit_prices"]["e5_nll_high"]
+    assert late["work_load_check_nlls"] == len(READINGS)
+    assert late["work_load_check_hours"] == len(READINGS) * nll / 3600
+    assert late["projection_with_double_load_and_checks_hours"] == (
+        late["projection_with_double_load_hours"] + len(READINGS) * nll / 3600
+    )
     assert late["projection_within_stop"] is True and "within_stop" not in late
     assert cost["run_within_stop"] is True
     # _descriptive_block: exp(-nll_sum) beside the observed rates; per-token values carried.

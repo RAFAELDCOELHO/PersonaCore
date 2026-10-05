@@ -17,7 +17,10 @@ sets at |R| = 8 (phase39_prereg.minted_members).
 GATE 1 (D-18 + D-30 condition 1). Before anything new is scored, every committed
 reference_set_for cell is scored by BOTH the pinned value_span_nll and this module's copy of
 span_nll_from_ids; nll_sum and nll_mean must be bitwise equal in every cell, and the committed
-ranks must be reproduced.
+ranks must be reproduced. Then each reading's WORK-pass load first re-scores the gate's taught cell
+of the run's first slot with the pinned function and must reproduce the gate sidecar's values
+bitwise; a difference STOPs the run as WORK_CHECK_FAILED, ledger end line written (39-REVIEW-3
+IN-02).
 
 GATE 2 (D-19). The committed A2 counts are re-derived from the SHA-verified draws
 (phase39_prereg.gate2) in preflight; a mismatch refuses before the ledger start line.
@@ -488,6 +491,34 @@ def gate_cells(model, tok, device, slot, state):
     return cells
 
 
+def work_load_check(model, tok, device, reading, slot, taught, gate_pinned, state):
+    """39-REVIEW-3 IN-02 (Rafael: fix, not a limitation): the work pass's own load re-scores, with
+    the PINNED value_span_nll (gate_cells' call), the gate's taught cell of ``slot``; nll_sum and
+    nll_mean must be bitwise ``gate_pinned`` (the gate sidecar's), so the gate's "passed" covers
+    the model the work pass scores. Both values are kept as float.hex."""
+    import phase18_extraction
+
+    state.update(shape=slot, draw_index=None)
+    with phase36_probe.silenced():
+        row = phase18_extraction.value_span_nll(
+            model,
+            tok,
+            device,
+            slot=slot,
+            value=taught,
+            frame=phase18_extraction.ADMISSIBLE_NLL_FRAME,
+        )
+    keys = ("nll_sum", "nll_mean")
+    return {
+        "reading": reading,
+        "slot": slot,
+        "candidate": taught,
+        "gate_pinned": {key: float(gate_pinned[key]).hex() for key in keys},
+        "work_pinned": {key: float(row[key]).hex() for key in keys},
+        "equal": all(_same_bits(gate_pinned[key], row[key]) for key in keys),
+    }
+
+
 def anchor_draws(model, tok, device, forbid, slot, reading, *, state):
     """G_a (D-05 / D-06 / D-08 / D-28): K draws from the anchor ids, every draw kept.
 
@@ -813,11 +844,34 @@ def run(
                 "passed": passed,
             },
         )
-        scored = []
+        scored, checks = [], []
         if passed:
+            written = _load(gate_sidecar(root))["cells"]  # IN-02: the sidecar's pinned values
+            first = slots[0]
             for reading in readings:
                 state.update(stage=f"work_{reading}")
                 with reading_model(reading, device) as (model, tok, forbid):
+                    # 39-REVIEW-3 IN-02: before any work-pass score, this load must reproduce the
+                    # gate's taught cell of the first slot bitwise; else STOP (no further score).
+                    check = work_load_check(
+                        model,
+                        tok,
+                        device,
+                        reading,
+                        first,
+                        taught[first],
+                        written[reading][first][taught[first]]["pinned"],
+                        state,
+                    )
+                    checks.append(check)
+                    if not check["equal"]:
+                        print(
+                            f"WORK CHECK FAILED {reading}/{first}/{taught[first]}: gate "
+                            f"{check['gate_pinned']} work {check['work_pinned']}",
+                            flush=True,
+                        )
+                        del model, tok, forbid
+                        break
                     anchor = {
                         slot: anchor_draws(model, tok, device, forbid, slot, reading, state=state)
                         for slot in slots
@@ -864,7 +918,12 @@ def run(
                     },
                 )
                 scored.append(reading)
-        status = "SCORED" if passed else "GATE_FAILED"
+        if not passed:
+            status = "GATE_FAILED"
+        elif all(check["equal"] for check in checks):
+            status = "SCORED"
+        else:
+            status = "WORK_CHECK_FAILED"
         end_sha = git_sha()
         if end_sha != pre["git_sha"]:
             print(f"WARN HEAD moved during the run: {pre['git_sha']} -> {end_sha}", flush=True)
@@ -888,6 +947,7 @@ def run(
                 "gate2": pre["gate2"],
                 "gate_sha256": _sha256(gate_sidecar(root)),
                 "reading_sha256": {r: _sha256(reading_sidecar(root, r)) for r in scored},
+                "work_load_check": checks,
             },
         )
         state.update(stage="done")
@@ -902,7 +962,8 @@ def run(
         record=prereg.CTX_RECORD,
         ledger_path=ledger_path,
     )
-    print(f"RUN {status} — next: crosscheck, then emit", flush=True)
+    following = "crosscheck, then emit" if status == "SCORED" else "emit, then STOP for Rafael"
+    print(f"RUN {status} — next: {following}", flush=True)
     return status
 
 
@@ -1310,9 +1371,12 @@ def _cost(run):
     prereg = _prereg()
     priced = len(run["readings"])
     setups_run = 2 * priced
-    setup = _json(prereg.BUDGET_RECORD)["unit_prices"]["adapter_setup_high"]
-    extra = (setups_run - priced) * setup / 3600
+    prices = _json(prereg.BUDGET_RECORD)["unit_prices"]
+    extra = (setups_run - priced) * prices["adapter_setup_high"] / 3600
     projected = prereg.E6_PROJECTION_HOURS + extra
+    # 39-REVIEW-3 IN-02: one pinned re-score per reading's work-pass load, at e5_nll_high.
+    check_hours = priced * prices["e5_nll_high"] / 3600
+    final = projected + check_hours
     run_hours = _hours(run["started_utc"], run["finished_utc"])
     return {
         "run_hours": run_hours,
@@ -1324,10 +1388,14 @@ def _cost(run):
         "projection_with_double_load_hours": projected,
         # 39-REVIEW-3 WR-03: the projection and the run judged apart, both descriptive (D-03:
         # the committed stop is require_launch's).
-        "projection_within_stop": projected <= prereg.E6_STOP_HOURS,
+        "work_load_check_nlls": priced,
+        "work_load_check_hours": check_hours,
+        "projection_with_double_load_and_checks_hours": final,
+        "projection_within_stop": final <= prereg.E6_STOP_HOURS,
         "run_within_stop": run_hours <= prereg.E6_STOP_HOURS,
         "note": "run() loads each reading twice (gate pass, then work pass) where the formula "
-        "prices one adapter setup each (I1)",
+        "prices one adapter setup each (I1), and re-scores one pinned NLL per work-pass load "
+        "(39-REVIEW-3 IN-02)",
     }
 
 
@@ -1378,6 +1446,7 @@ def build_record(root):
         "rehearsal_disclosure": disclosure,
         "limitations": list(prereg.ENTRIES["limitations"]["value"]),
         "not_measured": list(prereg.NOT_MEASURED),
+        "work_load_check": run["work_load_check"],
         "context_b_instrument": (
             "scored with the driver's copy of span_nll_from_ids (D-30); gate-1 equality: "
             f"{equality['cells_equal']} of {equality['cells_compared']}"
@@ -1969,6 +2038,23 @@ def render_report(record):
             "gate rows and no readings.",
             "",
         ]
+    checks = record["work_load_check"]
+    if record["status"] == "WORK_CHECK_FAILED":
+        failed = next(c for c in checks if not c["equal"])
+        written = _readings(record["provenance"]["sidecar_sha256"]["readings"])
+        kept = [reading_sidecar(".", reading).name for reading in written]
+        out += [
+            f"The work-pass load of `{failed['reading']}` re-scored the gate's taught cell "
+            f"`{failed['slot']}` `{failed['candidate']}` with the pinned function and did not "
+            "reproduce the gate sidecar's values bitwise (39-REVIEW-3 IN-02), so the run stopped "
+            "before scoring that reading: this record carries the gate rows, the load checks and "
+            f"no readings. nll_sum gate `{failed['gate_pinned']['nll_sum']}` work "
+            f"`{failed['work_pinned']['nll_sum']}`; nll_mean gate "
+            f"`{failed['gate_pinned']['nll_mean']}` work `{failed['work_pinned']['nll_mean']}`. "
+            "Reading sidecars written before the stop, kept as evidence (never reused): "
+            f"{', '.join(kept) or 'none'}.",
+            "",
+        ]
     out += [
         "## Approval and cost (D-11, D-26, D-30)",
         "",
@@ -2040,6 +2126,41 @@ def render_report(record):
         ),
         *(f"- unequal cell: `{r}` `{s}` `{c}`" for r, s, c in equality["unequal"]),
         "",
+        "### Work-pass load check (39-REVIEW-3 IN-02)",
+        "",
+        "Each reading's work-pass load re-scored, with the pinned value_span_nll, the gate's "
+        "taught cell of the run's first slot before any work-pass score; nll_sum and nll_mean "
+        "must equal the gate sidecar's bitwise (float.hex), else the run stops.",
+        "",
+        *(
+            _table(
+                (
+                    "reading",
+                    "slot",
+                    "candidate",
+                    "gate nll_sum",
+                    "work nll_sum",
+                    "gate nll_mean",
+                    "work nll_mean",
+                    "equal",
+                ),
+                [
+                    [
+                        c["reading"],
+                        c["slot"],
+                        c["candidate"],
+                        c["gate_pinned"]["nll_sum"],
+                        c["work_pinned"]["nll_sum"],
+                        c["gate_pinned"]["nll_mean"],
+                        c["work_pinned"]["nll_mean"],
+                        c["equal"],
+                    ]
+                    for c in checks
+                ],
+            )
+            if checks
+            else ["No work pass ran: gate 1 failed.", ""]
+        ),
         "## Gate 2: committed A2 counts re-derived (D-19)",
         "",
         f"Passed: {gate2['passed']}. Each committed A2 answered count re-derived from the "
