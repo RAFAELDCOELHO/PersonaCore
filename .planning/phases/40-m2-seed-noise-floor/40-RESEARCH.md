@@ -535,7 +535,11 @@ rank — the Phase 38 gate (`scripts/phase38_rank.py:395-419`) against a same-se
 | A3 | Seeds 1337/2024 reproduce prior adapters bit-identically | Pitfall 8 | a D-07 finding, not a failure |
 | A4 | Sample SD (`statistics.stdev`, n−1) is the intended D-04 "standard deviation" | Open Q2 | wrong scale on a descriptive column |
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> Resolved 2026-10-05: Q1 by Rafael's ruling (40-CONTEXT.md "Addendum (2026-10-05)", D-08 amended +
+> D-08b); Q2, Q3, Q5 by 40-CONTEXT.md "Claude's Discretion" (confirmed by Rafael at plan 40-04);
+> Q4 is ruled by Rafael at the plan 40-01 checkpoint before the prereg is written.
 
 1. **D-08 rewording (Rafael).** Measured: the premise is false at the tensor level (Pitfall 2).
    Recommendation: record the field list above, state tensor identity with

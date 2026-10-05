@@ -47,10 +47,10 @@ created: 2026-10-05
 | D-03 / D-04 | group floor = mean over C(S',2) pairs; published = larger group floor; max/min/every pair; per-slot range, sample SD + population SD beside; ties, S' = 2 | unit (pure) | `pytest tests/test_phase40_prereg.py -k "floor or extras"` | ❌ W0 | ⬜ pending |
 | NOISE-02 (no amendment) | record carries v3.0 floor and `e1_condition_b_margin()` 0.2962962962962963 read, not typed; v3.0 floor record/module byte-unchanged (git) | unit + git | `pytest tests/test_phase40_noise.py -k "beside or margin"` | ❌ W0 | ⬜ pending |
 | D-05 | estimator entry names sampling noise and common random numbers (same per-question draw seeds across adapters) | unit (AST over entry string) | `pytest tests/test_phase40_prereg.py -k sampling` | ❌ W0 | ⬜ pending |
-| D-06 / D-15 | per seed in `seed_list()` order: train full, train M2, A2 full, A2 M2 (+ D-13 last if approved); one ledger attempt per seed; `require_launch("E2")` before each seed; a mid-seed stop drops the seed | unit (stubbed train/score, tmp ledger) | `pytest tests/test_phase40_noise.py -k "order or whole_seed or crash or stop"` | ❌ W0 | ⬜ pending |
+| D-06 / D-15 | per seed in `seed_list()` order: train full, train M2, A2 full, A2 M2 (+ D-13 last if approved); one ledger attempt per seed; `require_launch("E2")` before each seed; a mid-seed stop drops that attempt from the estimator; whether a dropped seed is re-run is Rafael's R-3 ruling (`DROPPED_SEED_RERUN`, `pending_seeds`); a relaunch's preflight (and emit) dirty check excludes, via `_launch_pathspec(outcomes)`, exactly the seed + A2 records of whole and dropped seeds plus each dropped seed's in-process csv directory `results/phase40_e2_<arm>` — nothing else | unit (stubbed train/score, tmp ledger) + exact-pathspec test + the real `refuse_if_dirty` on a tmp git rig | `pytest tests/test_phase40_noise.py -k "order or whole_seed or crash or stop"` ; `pytest tests/test_phase40_noise.py -k "relaunch_pathspec or real_git_rig"` | ❌ W0 | ⬜ pending |
 | D-07 (amended) | new vs committed adapter compared tensor by tensor (`torch.equal` every tensor + metadata), NEVER file sha256: M2@1337 vs `phase19_erase_reference_adapter.pt`, full@1337 vs `persona_adapter.pt` (and full@2024 vs dialogue-floor 2024); not bit-identical → A2-count difference reported as same-seed re-run noise; descriptive | unit (tiny tensors in tmp) + AST (no file-sha comparison) + rehearsal | `pytest tests/test_phase40_noise.py -k "identity or tensor"` | ❌ W0 | ⬜ pending |
 | D-08 (amended) / D-08b | record states the 72/72 tensor identity of `persona_adapter.pt` and dialogue-floor-1337 (file sha differs by stem) as a correction of the scout note, not a limitation; residual (Phase 18 `run_arm` draws vs `run_erasure_arm`) reported with measured size vs full@1337; labelled a v3.0 limitation ONLY if counts differ on identical weights; if full@1337 weights are not bit-identical → "effects not separable" | unit (truth table over the three outcomes) | `pytest tests/test_phase40_noise.py -k d08` | ❌ W0 | ⬜ pending |
-| D-09 / D-10 | gap = on − off from each full A2 record; off == committed 4.573349214207799 read from `results/phase19_noise_floors.json`; `gap_noise_floor` = mean |Δgap| over pairs, max beside, finite ≥ 0 | unit | `pytest tests/test_phase40_prereg.py -k gap` | ❌ W0 | ⬜ pending |
+| D-09 / D-10 | gap = on − off from each full A2 record; adapter-off check device-scoped per Rafael's R-1 (`ADAPTER_OFF_RULE`; on mps, off == committed 4.573349214207799 read from `results/phase19_noise_floors.json`; CPU measures 4.573348505014267 → recorded, `adapter_off_matches_committed` false, rehearsal-labelled); pre != post handled per R-2 (`PRE_POST_RULE`); `gap_noise_floor` = mean |Δgap| over pairs, max beside, finite ≥ 0 | unit | `pytest tests/test_phase40_prereg.py -k gap` | ❌ W0 | ⬜ pending |
 | D-11 / D-13 / D-14 | approvals quoted verbatim; projection reproduces `front_hours.E2`; D-13 NLL count 925/adapter derived; projection ≤ stop (a); new total; approval block in every record; D-13 absent unless approved | unit | `pytest tests/test_phase40_prereg.py -k "approval or projection"` | ❌ W0 | ⬜ pending |
 | D-12 | 25 full×M2 per-slot differences, 5 same-seed marked, beside v3.0 `delta_taught_to_m2` read from committed record; descriptive | unit | `pytest tests/test_phase40_prereg.py -k d12` | ❌ W0 | ⬜ pending |
 | D-16 | one `e2_noise_floor_estimator` fill holding both estimators, frozen | unit | `pytest tests/test_phase40_prereg.py -k fill` | ❌ W0 | ⬜ pending |
@@ -95,5 +95,15 @@ No framework install needed.
 
 | Iteration | Finding | Origin (revision-introduced / pre-existing) |
 |---|---|---|
+| 1 | B1 CPU adapter_off ≠ committed MPS value → rehearsal emit refuses | initial |
+| 1 | B2 run() zero-kwarg real-root defaults unresolved | initial |
+| 1 | 9 warnings (D-13 branch, _REPO identity path, rehearsal_disclosure unwired, DR-01, D-11 A2 records, dropped seed, pre!=post, grep-over-prose, key_links) | initial |
+| 2 | B relaunch refused by preflight refuse_if_dirty (untracked whole-seed records) | pre-existing, scope extended by revision-1 |
+| 2 | W tracked_files → () makes real require_launch refuse | revision-1 |
+| 2 | W real-root tests under real teach_persona._REPO_ROOT / real ledger | revision-1 + pre-existing |
+| 2 | W preflight omits both csv paths | revision-1 + pre-existing |
+| 2 | W driver review would overwrite 40-REVIEW.md | revision-1 |
+| 2 | W this file's D-09/D-10 and D-06/D-15 rows stale | revision-1 omission (fixed by orchestrator) |
+| 2 | 4 info (pending tuple, module_sha256 _REPO, unverifiable key_link sources, plan 04 _DEFAULT labels) | 1 revision-1, 3 pre-existing |
 
 **Approval:** pending

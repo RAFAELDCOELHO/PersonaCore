@@ -1797,7 +1797,52 @@ sampling floor, without amending v3.0's (b) margin
   3. No record exists before the pre-registration module and its ancestry test are committed;
      result records are write-once and committed only after Rafael writes approved. (NOISE-01)
 
-**Plans**: TBD
+**Plans**: 11 plans in 11 waves (the commit order is load-bearing: Rafael's price/ruling reply before the prereg; the prereg reviewed and frozen before any driver code reads real data; the CPU rehearsal pins the prereg sha256 before the MPS run; every record committed only after Rafael's approved, the ledger before the records)
+
+Plans:
+**Wave 1**
+
+- [ ] 40-01-PLAN.md — checkpoint: re-measure every number Rafael sees; he rules on D-11 (dialogue PPL, +0 h, read from the A2 records), D-13/D-14 (+0.0609 h; E2 projection 7.9519 h <= stop 11.836 h) and R-1..R-4 (adapter-off check by device, pre != post, dropped seed, approval block vs the A2 records); reply committed verbatim to 40-CONTEXT.md before any code
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 40-02-PLAN.md — `scripts/phase40_prereg.py` part 1 + ancestry test: registry paths, both Phase 35 fills (e2_S = 5 read; e2_noise_floor_estimator holding the recall floor and gap_noise_floor, D-16), SEEDS, approval arithmetic, ENTRIES, rulings as typed constants tested against the Approvals bullets
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 40-03-PLAN.md — prereg part 2: pure estimator functions on committed records (pair d reproduces 0.14814814814814814 and 0.2592592592592592; group floor = mean over C(S',2) pairs; D-04 extras; device-scoped dialogue_gap; D-07 tensor-wise comparison; D-08b truth table; D-12 25-pair table; seed outcomes)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 40-04-PLAN.md — code review of the prereg; Rafael confirms the plan-time defaults; full suite; the prereg is frozen from here
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 40-05-PLAN.md — `scripts/phase40_noise.py` part 1: the one registered training helper (full and M2), the A2 wrapper, the tensor-wise comparison (never file sha256), the conditional D-13 scorer, the LaunchAgent plist
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 40-06-PLAN.md — driver part 2: preflight and run — one ledger attempt per seed in seed_list order, whole-seed records, stop/crash/reconcile/relaunch (`_launch_pathspec`), rehearsal identity; zero-argument real-root defaults tested
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [ ] 40-07-PLAN.md — driver part 3: build_record, emit, report, main; the real build_record fed real committed records through Phase 41's `fill("e1_condition_c_band_inputs", ...)`
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
+- [ ] 40-08-PLAN.md — full-shape CPU rehearsal (seeds 1337 and 2024, both groups, MPS hidden) fed to emit, the consumer and the report; artifacts moved out of the real tree
+
+**Wave 9** *(blocked on Wave 8 completion)*
+
+- [ ] 40-09-PLAN.md — driver review (40-REVIEW-2.md), launch gate, Rafael's approved, the E2 MPS run (~8 h) + CPU emit (no record commits)
+
+**Wave 10** *(blocked on Wave 9 completion)*
+
+- [ ] 40-10-PLAN.md — E2 records: Rafael's approved; ledger, then one commit per whole seed, then results/phase40_noise_floor.json; full suite
+
+**Wave 11** *(blocked on Wave 10 completion)*
+
+- [ ] 40-11-PLAN.md — report from the committed record, Rafael's approved, single-path commit, SC1-SC3 evidence; STATE/ROADMAP/REQUIREMENTS closed by hand
 
 ### Phase 41: Erasure Across Facts, Orderings and Seeds
 
