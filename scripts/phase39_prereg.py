@@ -362,3 +362,444 @@ def approval_block():
             "scripts/phase36_caps.py",
         ],
     }
+
+
+# =================================================================================================
+# (7) THE ENTRIES: the whole written rule, one entry per decision family.
+# =================================================================================================
+
+_CONTEXT = "39-CONTEXT D-{} (62af2fe)"
+_PLAN_TIME = "39-CONTEXT D-{} (3499c3b)"
+_COPY = "39-CONTEXT D-{} (f681550)"
+_DEFAULT = "default taken at plan time, not yet confirmed by Rafael"
+_D33 = "38-CONTEXT D-33 (Phase 38, Rafael's ruling, applied as precedent)"
+
+_ENTRY_INDICES = tuple(range(N_ENTRIES))  # D-01: every A2 entry, derived
+
+_ENTRIES = {
+    "e6_entry_subset": {
+        "value": _ENTRY_INDICES,
+        "derivation": (
+            "D-01: all A2 entries of phase35_prereg.a2_corpus_entries(), in corpus order, no "
+            'subset: Rafael\'s budget approval "E6 com a2_regenerated_entries = 0 e entries = 216" '
+            "and unit_caps.E6.entries. If any entry must leave, STOP and tell Rafael which and why."
+        ),
+        "kind": "preference",
+        "source": (
+            f"{_CONTEXT.format('01')}; {phase38_prereg.PROBE_E1_RECORD}; {PROBE_E6_RECORD}; "
+            f"{BUDGET_RECORD}"
+        ),
+    },
+    "e6_decomposition_rule": {
+        "value": types.MappingProxyType(
+            {
+                "readings": types.MappingProxyType(
+                    {
+                        "R_a": (
+                            "anchor rank, committed (phase38_prereg.committed_gate_ranks, "
+                            "reproduced by gate 1)"
+                        ),
+                        "R_q": (
+                            "per-question rank under context (b); summary n1 = number of the 27 "
+                            "questions at rank 1"
+                        ),
+                        "G_a": "anchor generation unit: some hit in K draws (n = 1 per slot)",
+                        "G_q": (
+                            "A2 generation: questions with some hit in K draws, from the "
+                            "committed K = 48 records (n = 27 per slot)"
+                        ),
+                    }
+                ),
+                "classified_readings": CLASSIFIED_READINGS,
+                "descriptive_readings": DESCRIPTIVE_READINGS,
+                "damage_readings": DAMAGE_READINGS,
+                "events": EVENTS,
+                "statuses": STATUSES,
+                "classes": CLASSES,
+                "lost": types.MappingProxyType(
+                    {
+                        "R_a": "rank > 1 under both events; ALREADY_AT_K0 when the k0 rank > 1",
+                        "collapse": (
+                            "count == 0 (R_q: n1; G_a: unit; G_q: answered); ALREADY_AT_K0 when "
+                            "the k0 count == 0"
+                        ),
+                        "damage": (
+                            "count_k0 / n - count_k / n > MARGIN (the committed formula, strict "
+                            ">); UNREACHABLE_AT_SIZE when count_k0 / n - 0 / n > MARGIN is False "
+                            "(R_q, G_q: n = 27, needs count_k0 >= the smallest such count; G_a: "
+                            "n = 1, needs a k0 hit)"
+                        ),
+                    }
+                ),
+                "disagreement": "R_a INTACT and G_q LOST",
+                "precedence": (
+                    "1. if R_a or G_q is UNREACHABLE_AT_SIZE or ALREADY_AT_K0, the cell takes that "
+                    "outcome (UNREACHABLE_AT_SIZE first) and disagreement is undecided",
+                    "2. otherwise, no disagreement -> NO_DISAGREEMENT",
+                    "3. otherwise, if R_q or G_a is UNREACHABLE_AT_SIZE or ALREADY_AT_K0, the cell "
+                    "takes that outcome (UNREACHABLE_AT_SIZE first) and enters no sufficiency "
+                    "class",
+                    "4. otherwise R_q LOST and G_a INTACT -> CONTEXT_SUFFICIENT; G_a LOST and R_q "
+                    "INTACT -> INSTRUMENT_SUFFICIENT; both LOST -> EITHER; neither -> "
+                    "INTERACTION_ONLY",
+                ),
+                "k0": (
+                    "the k0 cell is classified under collapse only; under damage it is the "
+                    "reference and is not a cell"
+                ),
+                "margin": "phase38_prereg.MARGIN by reference",
+                "ties": (
+                    "D-33 (Phase 38, Rafael's ruling, applied as precedent): the committed formula "
+                    "decides; a cell where (count_k0 - count_k) / n decides damage differently is "
+                    "a margin tie decided by rounding and is named in the record and report; a "
+                    "drop exactly equal to MARGIN is an exact tie decided by strict >"
+                ),
+                "shares": (
+                    "class counts over the disagreement cells, every count with its denominator; "
+                    "collapse and damage given separately (D-16)"
+                ),
+                "never_classified": "adapter-off (D-11 i) and the minted |R| = 8 sets (D-11 ii)",
+            }
+        ),
+        "derivation": (
+            "The whole per-cell rule, written before any record. D-13: four readings per slot x "
+            "adapter, R_a, R_q, G_a, G_q. D-14: rank lost = rank > 1; generation lost by two "
+            "events, collapse (no unit with a hit) and damage (the committed drop pre/n - post/n "
+            "relative to k = 0 of the same context, strictly above phase38_prereg.MARGIN). D-15: "
+            "the published disagreement is R_a intact and G_q lost, split into "
+            "CONTEXT_SUFFICIENT, INSTRUMENT_SUFFICIENT, EITHER and INTERACTION_ONLY; without it, "
+            "NO_DISAGREEMENT. D-16: collapse and damage classified separately. D-24: R_q lost on "
+            "n1 (collapse: n1 = 0; damage: the committed drop of n1/27); the median is 1 iff n1 "
+            ">= 14 and stays outside the criterion. D-25: the WR-01 outcomes per cell, with the "
+            "R_q and G_q reachability additions; person_name k8, whose drop equals MARGIN "
+            "exactly, is not damaged, which is true of that cell by strict >, not of every exact "
+            "eight-question drop. D-33 (Phase 38 precedent applied to Phase 39's new counts): the "
+            "formula stands and rounding-decided ties are named. The step order of 'precedence' "
+            "and the absence of k0 damage cells are the planner's reading of D-25, to be "
+            "confirmed at the plan-03 review."
+        ),
+        "kind": "preference",
+        "source": f"{_CONTEXT.format('13..D-16')}; {_PLAN_TIME.format('24/D-25')}; {_D33}",
+    },
+    "anchor_context": {
+        "value": (
+            "[ASSISTANT_ID] + tok.encode(phase18_extraction._frame_preamble(SLOT_FORMS[slot], "
+            "ADMISSIBLE_NLL_FRAME)) — byte for byte value_span_nll's context"
+        ),
+        "derivation": (
+            "D-04: context (a) is byte for byte the context under which exposure_rank scores the "
+            "taught value (the ans1 anchor); no new prompt. D-18: gate 1 reproduces the "
+            "committed anchor ranks on exactly these ids."
+        ),
+        "kind": "preference",
+        "source": f"{_CONTEXT.format('04')}; {_CONTEXT.format('18')}",
+    },
+    "anchor_generation": {
+        "value": types.MappingProxyType(
+            {
+                "sampling": (
+                    "phase14_recall.SAMPLE_TEMPERATURE, SAMPLE_TOP_P, RECALL_MAX_NEW_TOKENS read "
+                    "inside draw_all; draw 0 greedy; never passed as arguments"
+                ),
+                "K": K,
+                "n_samples": "K - 1",
+                "seed_index": "SLOTS.index(slot) * K (the slot's LOCKED_FACTS position, "
+                "stage_e6's rule)",
+                "forbid": (
+                    "phase16_persistence.forbid_digest(forbid) == "
+                    "phase19_erasure.FORBID_IDS_SHA256 before the first draw"
+                ),
+                "guard": "phase14_recall.assert_no_value_in_prompt on the dispatched ids",
+                "hit": (
+                    "phase18_extraction.score_records on the completion alone (family "
+                    "'anchor', prefix_text None)"
+                ),
+                "unit": "int(any(hits)) over the K draws",
+                "kept": "every completion and stopped flag",
+            }
+        ),
+        "derivation": (
+            "D-05: exactly the A2 sampling parameters, read inside the sampler, and the same "
+            "forbid mask. D-06: the A2 hit function unchanged. D-07: the unit is some hit in K "
+            "draws. D-08: every draw kept, so the hit is re-derivable on CPU. D-28 "
+            f"({_DEFAULT}): seed_index = the slot's position x K (stage_e6's rule); the seed "
+            "windows SEED + i*K + s coincide with the A2 windows of seed_index 0..7; the prompts "
+            "differ; declared in the report."
+        ),
+        "kind": "preference",
+        "source": f"{_CONTEXT.format('05..D-08')}; {_PLAN_TIME.format('28')}",
+    },
+    "question_context": {
+        "value": (
+            "phase18_extraction._guarded_span(entry) (the committed A2 prompt up to and including "
+            "<|assistant|>) followed by the whole candidate value"
+        ),
+        "derivation": (
+            "D-23 (B1): context (b) differs from (a) by the question added AND the ans1 preamble "
+            "dropped, both declared in the report. The injected-prefix reading is impossible: "
+            "the pet_name reference nyxen is 3 ids and its injection budget is 0."
+        ),
+        "kind": "preference",
+        "source": _PLAN_TIME.format("23"),
+    },
+    "per_token_nll": {
+        "value": (
+            "a driver-held copy of span_nll_from_ids: same forward, mask and _prove checks, the "
+            "same two cross_entropy calls (sum, mean) plus cross_entropy(reduction='none') on the "
+            "same logits; one forward pass per NLL"
+        ),
+        "derivation": (
+            "D-23a: the per-token NLL of every candidate in both contexts. D-30 condition 1: "
+            "every gate cell is scored by the pinned value_span_nll AND the copy on MPS; nll_sum "
+            "and nll_mean bitwise equal in every cell, else STOP before any new scoring. D-30 "
+            "condition 2: the per-token values are descriptive only; ranks, n1 and events read "
+            "nll_sum / nll_mean."
+        ),
+        "kind": "preference",
+        "source": f"{_PLAN_TIME.format('23a')}; {_COPY.format('30')}",
+    },
+    "taught_suffix_nll": {
+        "value": (
+            "for the taught value under (b): a separate cross_entropy(reduction='sum') in the "
+            "same forward over a mask holding only the targets after realized_injection; never a "
+            "slice of the per-token values"
+        ),
+        "derivation": (
+            "D-23b: the taught value's NLL over only the tokens after the prefix A2 injects, its "
+            f"NLL in A2's exact context. D-30a ({_DEFAULT}): no extra forward pass; premise "
+            "prompt_ids == _guarded_span(e) + encode(taught)[:realized_injection] for every A2 "
+            "entry (measured 216/216); proved bitwise equal to span_nll_from_ids(prompt_ids, "
+            "suffix) on CPU by test and by the CPU cross-check."
+        ),
+        "kind": "preference",
+        "source": f"{_PLAN_TIME.format('23b')}; {_COPY.format('30a')}",
+    },
+    "rank_with_question": {
+        "value": (
+            "phase38_prereg.rank_in_prefix over nll_mean of "
+            "phase18_extraction.reference_set_for(slot), one rank per question; per slot x "
+            "reading: n1, the median rank (descriptive), the rank of the mean NLL over the 27 "
+            "questions (descriptive)"
+        ),
+        "derivation": (
+            "D-09: the committed reference sets (|R| 6-8), the main reading. D-10: one rank per "
+            "question, summarised per slot x adapter. D-24: n1 is the criterion's summary; the "
+            "median and the rank of the mean NLL are descriptive."
+        ),
+        "kind": "preference",
+        "source": f"{_CONTEXT.format('09/D-10')}; {_PLAN_TIME.format('24')}",
+    },
+    "common_unit": {
+        "value": (
+            "some hit in K draws: anchor 1 unit per slot, A2 27 units per slot; beside it the "
+            "per-draw rates h / K and total / (27 K), each with one-sided 95% Wilson lower and "
+            "upper bounds (together a 90% two-sided interval), draw unit, within-question "
+            "clustering ignored, descriptive"
+        ),
+        "derivation": (
+            "D-07: the common unit is some hit in K draws; the 1-vs-27 unit asymmetry is "
+            "declared in the report."
+        ),
+        "kind": "preference",
+        "source": _CONTEXT.format("07"),
+    },
+    "predicted_hit_rate": {
+        "value": (
+            "(a) exp(-nll_sum of the taught value at the anchor); (b) exp(-taught_suffix_nll) per "
+            "question, conditioned on the injected prefix exactly as G_q's hit is scored on "
+            "prefix_text + completion"
+        ),
+        "derivation": (
+            "D-17: in each context, the hit rate predicted by the value's NLL beside the observed "
+            "one, descriptive, never a criterion. D-23c: under (b) the suffix sum, not the "
+            f"whole-value NLL. D-29 ({_DEFAULT}): the (b) prediction is conditioned on the "
+            "injected prefix. Caveat: temperature, top-p and the hit rule separate prediction "
+            "and observation."
+        ),
+        "kind": "preference",
+        "source": (
+            f"{_CONTEXT.format('17')}; {_PLAN_TIME.format('23c')}; {_PLAN_TIME.format('29')}"
+        ),
+    },
+    "gate_exact_ranks": {
+        "value": READINGS,
+        "derivation": (
+            "D-18: gate 1 reproduces the 64 committed anchor ranks (READINGS x SLOTS, "
+            "phase38_prereg.committed_gate_ranks) before any new scoring; any mismatch STOPs. "
+            "D-30 condition 1 runs on the same cells."
+        ),
+        "kind": "preference",
+        "source": f"{_CONTEXT.format('18')}; {_COPY.format('30')}",
+    },
+    "gate_a2_counts": {
+        "value": (
+            "each A2 record's sha256 == A2_RECORDS; phase19_run._pooled_rows re-derives every "
+            "committed count (k0..k78 from phase38_prereg.a2_counts, M2 from "
+            "phase19_retrain_scores.json, adapter-off 0)"
+        ),
+        "derivation": (
+            "D-19: gate 2 re-derives on CPU the committed A2 counts from the committed draws, "
+            "SHA-256 checked, before using them. D-02: nothing is regenerated; anything needing "
+            "regeneration pauses for Rafael."
+        ),
+        "kind": "preference",
+        "source": f"{_CONTEXT.format('19')}; {_CONTEXT.format('02')}; {BUDGET_RECORD}",
+    },
+    "cpu_crosscheck": {
+        "value": (
+            "NLL and rank re-scored on CPU: gate cells, R_q, (ii); differing ranks counted; the "
+            "taught suffix sum compared bitwise with the pinned span_nll_from_ids; no generation "
+            "cross-check (generation is seeded per device)"
+        ),
+        "derivation": (
+            "D-20: a CPU cross-check of NLL and rank only, descriptive, never a criterion. D-30a: "
+            "the taught suffix sum is compared bitwise with the pinned function."
+        ),
+        "kind": "preference",
+        "source": f"{_CONTEXT.format('20')}; {_COPY.format('30a')}",
+    },
+    "descriptive_extras": {
+        "value": APPROVED_E6_ADAPTERS,
+        "derivation": (
+            f'D-11, Rafael, verbatim: "{D11_RULING}". D-26, Rafael, verbatim: "{D26_RULING}". '
+            "(i) adapter-off is an 8th adapter: its A2 context reused by SHA-256, anchor "
+            "generation and both NLL readings run. (ii) the minted sets of "
+            f"{phase38_prereg.MINTING_RECORD} under the full question at |R| = MINTED_SET_SIZE "
+            "only, on all eight adapters (D-26). Both descriptive, never criteria, never inside "
+            "the classes. Caps are checked against the approved values without passing the "
+            "raised counts to check_unit_caps; the ledger, the budget record, "
+            "scripts/phase36_ledger.py and scripts/phase36_caps.py stay untouched; no second "
+            "stop rule."
+        ),
+        "kind": "preference",
+        "source": f"{_CONTEXT.format('11')}; {_PLAN_TIME.format('26')}; {BUDGET_RECORD}",
+    },
+    "not_measured": {
+        "value": NOT_MEASURED,
+        "derivation": (
+            "D-12: the minted-set reading under the full question at |R| > 8 is not part of E6. "
+            "D-23d: B1' context (b) is not measured. Both are carried into every record."
+        ),
+        "kind": "preference",
+        "source": f"{_CONTEXT.format('12')}; {_PLAN_TIME.format('23d')}",
+    },
+    "run_shape": {
+        "value": (
+            "one MPS run under the milestone ledger with phase36_ledger.require_launch('E6'); a "
+            "CPU rehearsal on a declared slice, disclosed; the rehearsal identity records "
+            "sha256(scripts/phase39_prereg.py) and the real-root preflight refuses on drift"
+        ),
+        "derivation": (
+            "D-21: one MPS run under the ledger, the committed stop rule, a rehearsal on a "
+            "declared slice disclosed in the report. D-03: no second stop rule. D-27 "
+            f"({_DEFAULT}): the prereg's code review runs before the rehearsal, which pins its "
+            "sha256."
+        ),
+        "kind": "preference",
+        "source": (f"{_CONTEXT.format('21')}; {_CONTEXT.format('03')}; {_PLAN_TIME.format('27')}"),
+    },
+    "limitations": {
+        "value": (
+            "one seed, one target, |R| 6-8 in the main reading (D-22)",
+            "the 1-vs-27 unit asymmetry between the anchor and A2 (D-07)",
+            "no generation cross-check: generation is seeded per device (D-20)",
+            "context (b) differs from (a) in two ways, the question added and the ans1 preamble "
+            "dropped (D-23)",
+            "G_a (no injected prefix) and G_q (injected prefix, scored on prefix_text + "
+            "completion) differ beyond context",
+            "the anchor and A2 seed windows coincide (D-28)",
+            "the draw-unit Wilson bounds ignore within-question clustering (D-07)",
+        ),
+        "derivation": "D-22: the declared limitations, published in the report.",
+        "kind": "preference",
+        "source": (
+            f"{_CONTEXT.format('22')}; {_CONTEXT.format('07')}; {_CONTEXT.format('20')}; "
+            f"{_PLAN_TIME.format('23')}; {_PLAN_TIME.format('28')}"
+        ),
+    },
+    "e6_projection_hours": {
+        "value": E6_PROJECTION_HOURS,
+        "derivation": (
+            f"D-26 + D-30: {BUDGET_RECORD}'s E6 term at APPROVED_E6_ADAPTERS adapters and anchor "
+            "adapters, in the formula's term order, plus MINTED_EXTRA_NLLS + "
+            "GATE_EXTRA_NLLS_PRICED at e5_nll_high, divided by 3600; at the committed caps the "
+            "same function reproduces front_hours.E6 bit for bit (proved at import)."
+        ),
+        "kind": "derived",
+        "source": f"{_PLAN_TIME.format('26')}; {_COPY.format('30')}; {BUDGET_RECORD}",
+    },
+    "e6_projection_hours_actual_gate": {
+        "value": E6_PROJECTION_HOURS_ACTUAL_GATE,
+        "derivation": (
+            "D-30: the same projection with the gate scored twice at the actual committed "
+            "reference-set cells per adapter (GATE_EXTRA_NLLS_ACTUAL)."
+        ),
+        "kind": "derived",
+        "source": f"{_COPY.format('30')}; {BUDGET_RECORD}",
+    },
+    "e6_stop_hours": {
+        "value": E6_STOP_HOURS,
+        "derivation": (
+            "D-03: the committed stop (a), phase36_prereg front_stop_factor x front_hours.E6; it "
+            "covers both projections (proved at import). No second stop rule."
+        ),
+        "kind": "derived",
+        "source": f"{_CONTEXT.format('03')}; {BUDGET_RECORD}; phase36_prereg.ENTRIES",
+    },
+}
+
+ENTRIES = types.MappingProxyType(
+    {name: types.MappingProxyType(entry) for name, entry in _ENTRIES.items()}
+)
+
+_ENTRY_NAMES = frozenset(
+    {
+        "e6_entry_subset",
+        "e6_decomposition_rule",
+        "anchor_context",
+        "anchor_generation",
+        "question_context",
+        "per_token_nll",
+        "taught_suffix_nll",
+        "rank_with_question",
+        "common_unit",
+        "predicted_hit_rate",
+        "gate_exact_ranks",
+        "gate_a2_counts",
+        "cpu_crosscheck",
+        "descriptive_extras",
+        "not_measured",
+        "run_shape",
+        "limitations",
+        "e6_projection_hours",
+        "e6_projection_hours_actual_gate",
+        "e6_stop_hours",
+    }
+)
+
+
+def _prove_entries():
+    """Every entry proved, and the entry set exactly the pre-registered twenty."""
+    for name, entry in ENTRIES.items():
+        _prove_entry(name, entry)
+    _prove(
+        set(ENTRIES) == _ENTRY_NAMES,
+        f"entries {sorted(set(ENTRIES) ^ _ENTRY_NAMES)} are missing or extra",
+    )
+
+
+_prove_entries()
+
+# =================================================================================================
+# (8) THE SLOT FILLS (D-03): once each, the whole value of its module-level binding.
+# =================================================================================================
+
+E6_ENTRY_SUBSET = phase35_prereg.fill(
+    "e6_entry_subset",
+    entry_indices=_ENTRY_INDICES,
+    input_records=(phase38_prereg.PROBE_E1_RECORD, PROBE_E6_RECORD),
+    derivation=ENTRIES["e6_entry_subset"],
+)
+E6_DECOMPOSITION_RULE = phase35_prereg.fill(
+    "e6_decomposition_rule", decomposition=ENTRIES["e6_decomposition_rule"]
+)

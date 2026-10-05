@@ -220,3 +220,118 @@ def test_not_measured_names_both_readings():
     first, second = phase39_prereg.NOT_MEASURED
     assert "|R| > 8" in first and "D-12" in first
     assert "B1'" in second and "D-23d" in second
+
+
+# =================================================================================================
+# (2) THE ENTRIES AND BOTH FILLS.
+# =================================================================================================
+
+_ENTRY_NAMES = {
+    "e6_entry_subset",
+    "e6_decomposition_rule",
+    "anchor_context",
+    "anchor_generation",
+    "question_context",
+    "per_token_nll",
+    "taught_suffix_nll",
+    "rank_with_question",
+    "common_unit",
+    "predicted_hit_rate",
+    "gate_exact_ranks",
+    "gate_a2_counts",
+    "cpu_crosscheck",
+    "descriptive_extras",
+    "not_measured",
+    "run_shape",
+    "limitations",
+    "e6_projection_hours",
+    "e6_projection_hours_actual_gate",
+    "e6_stop_hours",
+}
+_DERIVED = {"e6_projection_hours", "e6_projection_hours_actual_gate", "e6_stop_hours"}
+# Keyed by ENTRY NAME, never by D-ID: cpu_crosscheck also cites D-30a and carries no label. Plan
+# 39-03 moves each name to its confirmed form with a local edit.
+_UNCONFIRMED = {
+    "run_shape": "D-27",
+    "anchor_generation": "D-28",
+    "predicted_hit_rate": "D-29",
+    "taught_suffix_nll": "D-30a",
+}
+_DEFAULT_LABEL = "default taken at plan time, not yet confirmed by Rafael"
+
+
+def test_e6_entry_subset_is_every_a2_entry():
+    import phase36_caps
+
+    subset = phase39_prereg.E6_ENTRY_SUBSET
+    assert type(subset) is tuple
+    assert subset == tuple(range(len(phase35_prereg.a2_corpus_entries())))
+    assert subset == tuple(range(216))
+    assert phase36_caps.counts_for("e6_entry_subset", subset) == {"entries": 216}
+    entry = phase39_prereg.ENTRIES["e6_entry_subset"]
+    assert entry["value"] == subset and type(entry["value"]) is tuple
+    for path in (phase38_prereg.PROBE_E1_RECORD, phase39_prereg.PROBE_E6_RECORD):
+        assert path in entry["source"]
+    assert "D-01" in entry["derivation"] and "STOP" in entry["derivation"]
+
+
+def test_fill_decomposition_rule_equals_the_entry():
+    filled = phase39_prereg.E6_DECOMPOSITION_RULE
+    entry = phase39_prereg.ENTRIES["e6_decomposition_rule"]
+    assert set(filled) == {"value", "derivation", "kind", "source"}
+    for field in ("derivation", "kind", "source"):
+        assert filled[field] == entry[field], field
+    value = filled["value"]
+    assert set(value) == set(entry["value"])
+    assert value["classified_readings"] == phase39_prereg.CLASSIFIED_READINGS
+    assert value["descriptive_readings"] == phase39_prereg.DESCRIPTIVE_READINGS
+    assert value["damage_readings"] == phase39_prereg.DAMAGE_READINGS
+    assert value["events"] == phase39_prereg.EVENTS
+    assert value["statuses"] == phase39_prereg.STATUSES
+    assert value["classes"] == phase39_prereg.CLASSES
+    assert set(value["readings"]) == {"R_a", "R_q", "G_a", "G_q"}
+    assert set(value["lost"]) == {"R_a", "collapse", "damage"}
+    assert "MARGIN" in value["margin"] and "MARGIN" in value["lost"]["damage"]
+    assert "strict >" in value["lost"]["damage"]
+    assert value["disagreement"] == "R_a INTACT and G_q LOST"
+    precedence = " ".join(value["precedence"])
+    for name in phase39_prereg.CLASSES + phase39_prereg.WR01_OUTCOMES:
+        assert name in precedence, name
+    assert "D-33" in value["ties"]
+    assert "adapter-off" in value["never_classified"]
+    for d_id in ("D-13", "D-14", "D-15", "D-16", "D-24", "D-25", "D-33"):
+        assert d_id in filled["derivation"], d_id
+    assert "plan-03 review" in filled["derivation"]
+
+
+def test_entries_are_the_twenty_names_with_honest_kinds():
+    kinds = {name: entry["kind"] for name, entry in phase39_prereg.ENTRIES.items()}
+    assert set(kinds) == _ENTRY_NAMES
+    assert len(kinds) == len(_ENTRY_NAMES) == 20
+    assert {n for n, k in kinds.items() if k == "derived"} == _DERIVED
+    assert {n for n, k in kinds.items() if k == "preference"} == _ENTRY_NAMES - _DERIVED
+    entries = phase39_prereg.ENTRIES
+    assert entries["e6_projection_hours"]["value"] == phase39_prereg.E6_PROJECTION_HOURS
+    assert (
+        entries["e6_projection_hours_actual_gate"]["value"]
+        == phase39_prereg.E6_PROJECTION_HOURS_ACTUAL_GATE
+    )
+    assert entries["e6_stop_hours"]["value"] == phase39_prereg.E6_STOP_HOURS
+    assert entries["descriptive_extras"]["value"] == phase39_prereg.APPROVED_E6_ADAPTERS
+    assert entries["not_measured"]["value"] == phase39_prereg.NOT_MEASURED
+    assert entries["gate_exact_ranks"]["value"] == phase38_prereg.READINGS
+    assert entries["anchor_generation"]["value"]["K"] == phase35_prereg.FULL_FIDELITY_K
+    assert type(entries["limitations"]["value"]) is tuple
+
+
+def test_preferences_are_labelled():
+    for name, entry in phase39_prereg.ENTRIES.items():
+        assert "D-" in entry["derivation"], name
+    for name, d_id in _UNCONFIRMED.items():
+        derivation = phase39_prereg.ENTRIES[name]["derivation"]
+        assert d_id in derivation, name
+        assert _DEFAULT_LABEL in derivation, name
+    for name, entry in phase39_prereg.ENTRIES.items():
+        if name not in _UNCONFIRMED:
+            assert _DEFAULT_LABEL not in entry["derivation"], name
+    assert "D-30a" in phase39_prereg.ENTRIES["cpu_crosscheck"]["derivation"]
