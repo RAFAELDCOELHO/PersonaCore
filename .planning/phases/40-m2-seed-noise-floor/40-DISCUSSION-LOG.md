@@ -68,3 +68,27 @@ returned); slot input_records = (), owner 40.
 ## Deferred Ideas
 
 None.
+
+## Plan-phase 40 follow-up (2026-10-05) — D-08 premise
+
+**Measured (researcher, then re-measured by the orchestrator):** `persona_adapter.pt` (226f2ae5…) and
+`phase19_erase_dialogue_floor_seed1337_adapter.pt` (f12ab4c3…) are tensor-identical (72/72
+`torch.equal`, identical non-tensor metadata); the file sha256 differs only by the file stem that
+`torch.save` writes into the zip.
+
+**Question:** how should D-08 read? Options: correction (recommended) / narrowed limitation / table as written.
+
+**Rafael (verbatim):** "Opção 1 (correção), com dois ajustes:1. D-08 passa a dizer: persona_adapter.pt
+e phase19_erase_dialogue_floor_seed1337_adapter.pt são o mesmo adaptador (72 tensores iguais; o sha do
+arquivo difere só pelo nome gravado no zip). O relatório do milestone registra isso como correção da
+nota do scout, não como limitação do v3.0.2. A diferença residual (contagens do A2 do lado ensinado
+vindas dos sorteios do run_arm da Fase 18, e não do run_erasure_arm) é reportada com o tamanho medido
+contra o completo@1337. Ela só recebe o nome de limitação do v3.0 se as contagens diferirem em pesos
+idênticos. Se o completo@1337 novo não reproduzir os pesos bit a bit, o relatório diz que os dois
+efeitos não se separam.3. Correção de D-02 (checagem de determinismo): toda comparação entre adaptador
+novo e commitado é feita tensor a tensor (torch.equal em todos os tensores, mais metadados), nunca
+pelo sha256 do arquivo. Vale para M2@1337 contra phase19_erase_reference_adapter.pt e para
+completo@1337 contra persona_adapter.pt."
+
+**Recorded:** CONTEXT "Addendum (2026-10-05)". His item 3 is labelled "D-02"; its content is the
+determinism check, which is D-07 — recorded as a D-07 amendment, D-02 unchanged.

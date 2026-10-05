@@ -124,7 +124,32 @@ in his reply was measured before it was written here (see `<specifics>`).
   "real", `n_facts` 10, `replay_ratio` 1.0, `second_person` false, prefix `phase19`) is identical to
   the new full adapter's. Research settles it before D-07's comparison is planned.
 
+### Addendum (2026-10-05, Rafael, plan-phase 40) — D-07 and D-08 amended
+Research measured the D-08 premise false (40-RESEARCH.md Pitfalls 1-2); the orchestrator re-measured
+it before asking (`torch.equal` on all 72 tensors + identical non-tensor metadata). Rafael ruled
+"Opção 1 (correção)" with three adjustments. These SUPERSEDE the D-07/D-08 text above where they
+differ:
+- **D-08 (amended):** `persona_adapter.pt` and `phase19_erase_dialogue_floor_seed1337_adapter.pt` are
+  the same adapter (72 equal tensors; the file sha256 differs only by the file name `torch.save`
+  writes into the zip). The milestone report records this as a CORRECTION of the scout note in
+  `<specifics>`, NOT as a v3.0 limitation.
+- **D-08b (residual):** the residual difference — v3.0's taught-side A2 counts came from Phase 18's
+  `run_arm` draws (`phase19_run.py:1721`, `PHASE18_ARM_RECORD_PATH`), not from `run_erasure_arm` — is
+  reported with its MEASURED size against the new full@1337. It is named a v3.0 limitation ONLY if
+  the counts differ on identical weights. If the new full@1337 does not reproduce the weights bit for
+  bit, the report says the two effects (weights vs scoring path) cannot be separated.
+- **D-07 (amended; Rafael's reply labels it "D-02 (checagem de determinismo)" — the determinism check
+  is D-07, D-02 is the pair statistic and is unchanged):** every comparison between a new adapter
+  and a committed one is made tensor by tensor (`torch.equal` on every tensor, plus the metadata),
+  NEVER by the file sha256. Applies to M2@1337 vs `phase19_erase_reference_adapter.pt` and to
+  full@1337 vs `persona_adapter.pt`. (Phase 41's ERASE-05 reuse-by-SHA-256 hashes the SAME file at
+  its original path, so it is unaffected.)
+
 ### Claude's Discretion
+- D-04's per-slot standard deviation: sample SD (`statistics.stdev`), population SD shown beside it.
+- The A2 arm label for the full adapter: `"retrain"` (keeps the Phase 18 parity assertion); the group
+  (full / M2) lives in Phase 40's own fields.
+- The ~10 per-arm A2 records are committed after Rafael's "approved", like every result record.
 - Record field layout of `results/phase40_noise_floor.json` beyond the contract key
   `gap_noise_floor` (finite >= 0), and how per-seed records (if any) are split; the per-seed records
   must keep the "whole seed" unit of D-15.
