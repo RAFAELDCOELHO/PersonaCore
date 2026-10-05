@@ -15,11 +15,13 @@ It reads only tracked files and git history and writes nothing under results/.
 
 import ast
 import fnmatch
+import functools
 import inspect
 import json
 import math
 import os
 import pathlib
+import statistics
 import subprocess
 import sys
 
@@ -779,3 +781,237 @@ def test_census_every_phase40_prereg_function_has_a_cpu_test(tmp_path):
     copied = _planted(tmp_path, source, planted, "untested.py")
     assert _untested_functions("phase40_prereg", copied, test_source) == ["planted_untested"]
     assert real.read_bytes() == before
+
+
+# =================================================================================================
+# (8) PLAN 40-03: THE PURE ESTIMATOR FUNCTIONS, ON COMMITTED v3.0 RECORDS AND TRUTH TABLES.
+# =================================================================================================
+
+_PHASE18 = "results/phase18_arm_adapter-on.json"
+_REPLICATE = "results/phase19_arm_replicate.json"
+_RETRAIN = "results/phase19_arm_retrain.json"
+
+
+@functools.cache
+def _committed_rows(rel):
+    """Rows of a committed arm record, pooled with the M2 record's family and tiers (the Phase 18
+    record carries every family and no attack_family: phase19_run.py:1715-1722)."""
+    scope = phase40_prereg.a2_scope(_record(_RETRAIN))
+    return phase40_prereg.a2_rows(_record(rel), *scope)
+
+
+def _rows(counts, n_questions=None):
+    """Synthetic rows in the pin's row shape: one fact per core slot, ``counts`` {slot: n}."""
+    import phase19_erasure as pin
+
+    q = pin.N_TARGET_QUESTIONS if n_questions is None else n_questions
+    rows = {}
+    for slot in (*pin.GATED_NONTARGET_SLOTS, pin.TARGET_SLOT):
+        n = counts.get(slot, 0)
+        rows[f"f_{slot}"] = {
+            "slot": slot,
+            "n_answerable": n,
+            "n_questions": q,
+            "per_tier": {},
+            "rate": n / q,
+        }
+    return rows
+
+
+def test_rows_denominator_on_the_committed_m2_record():
+    import phase19_erasure as pin
+
+    record = _record(_RETRAIN)
+    family, tiers = phase40_prereg.a2_scope(record)
+    assert (family, tiers) == ("A2", ("core_held_out", "core_taught"))
+    rows = phase40_prereg.a2_rows(record, family, tiers)
+    core = (*pin.GATED_NONTARGET_SLOTS, pin.TARGET_SLOT)
+    by_slot = phase40_prereg.slot_rows(rows)
+    assert tuple(by_slot) == core
+    assert pin.N_TARGET_QUESTIONS == 27
+    for slot, row in by_slot.items():
+        assert row["n_questions"] == 27, slot
+        assert row["per_tier"]["core_taught"]["n_questions"] == 14, slot
+        assert row["per_tier"]["core_held_out"]["n_questions"] == 13, slot
+        assert row["rate"] == row["n_answerable"] / row["n_questions"]
+    counts = {slot: row["n_answerable"] for slot, row in by_slot.items()}
+    assert counts == {
+        "pet_name": 0,
+        "house_number": 17,
+        "hometown": 18,
+        "birth_year": 18,
+        "person_name": 26,
+        "cat_name": 27,
+        "sibling_name": 27,
+        "street": 27,
+    }
+    assert by_slot["house_number"]["fact_id"] == "cand_house_7412"
+    # NON-VACUITY: a single-tier denominator (14) is refused, and so is a missing slot.
+    with pytest.raises(SystemExit, match=r"^\[phase40_prereg\]"):
+        phase40_prereg.a2_rows(record, family, ("core_taught",))
+    short = {k: v for k, v in rows.items() if v["slot"] != "street"}
+    with pytest.raises(SystemExit, match=r"^\[phase40_prereg\]"):
+        phase40_prereg.slot_rows(short)
+    with pytest.raises(SystemExit, match=r"^\[phase40_prereg\]"):
+        phase40_prereg.a2_scope({"config": {"attack_family": "A2"}, "draws": []})
+
+
+def test_pair_reproduces_the_v3_sampling_floor():
+    pair = phase40_prereg.pair_d(_committed_rows(_PHASE18), _committed_rows(_REPLICATE))
+    assert pair == {
+        "d": 0.14814814814814814,
+        "deltas": (
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.03703703703703698,
+            0.11111111111111105,
+            0.14814814814814814,
+        ),
+    }
+    committed = _record("results/phase19_noise_floors.json")["nontarget_noise_floor"]["value"]
+    assert pair["d"] == committed
+
+
+def test_pair_reproduces_the_taught_to_m2_maximum():
+    pair = phase40_prereg.pair_d(_committed_rows(_PHASE18), _committed_rows(_RETRAIN))
+    assert pair == {
+        "d": 0.2592592592592592,
+        "deltas": (0.0, 0.0, 0.0, 0.0, 0.2592592592592592, 0.0, 0.11111111111111116),
+    }
+
+
+def test_group_floor_truth_table():
+    import phase19_erasure as pin
+
+    q = pin.N_TARGET_QUESTIONS
+    a, b = _rows({}), _rows({"house_number": 1})
+    two = phase40_prereg.group_floor({1337: a, 2024: b})
+    assert two["n_seeds"] == 2 and two["seeds"] == [1337, 2024]
+    assert two["n_pairs"] == math.comb(2, 2)
+    assert two["floor"] == two["max"] == two["min"] == 1 / q
+    assert two["pairs"] == [
+        {"seeds": [1337, 2024], "d": 1 / q, "deltas": list(phase40_prereg.pair_d(a, b)["deltas"])}
+    ]
+    # Three seeds, d = 1/27, 4/27, 4/27: a tie at the max keeps both pairs.
+    c = _rows({"street": 4})
+    three = phase40_prereg.group_floor({1337: a, 2024: b, 1338: c})
+    assert three["n_pairs"] == math.comb(3, 2)
+    assert [p["seeds"] for p in three["pairs"]] == [[1337, 2024], [1337, 1338], [2024, 1338]]
+    assert [p["d"] for p in three["pairs"]] == [1 / q, 4 / q, 4 / q]
+    assert three["floor"] == statistics.fmean([1 / q, 4 / q, 4 / q])
+    assert three["max"] == 4 / q and three["min"] == 1 / q
+    # An identical pair: d = 0 is the min.
+    same = phase40_prereg.group_floor({1337: a, 2024: a, 1338: b})
+    assert [p["d"] for p in same["pairs"]] == [0.0, 1 / q, 1 / q]
+    assert same["min"] == 0.0 and same["floor"] == statistics.fmean([0.0, 1 / q, 1 / q])
+    # Below e2_min_seeds whole seeds: no floor.
+    assert phase35_prereg.ENTRIES["e2_min_seeds"]["value"] == 2
+    with pytest.raises(SystemExit, match="INSUFFICIENT_SEEDS"):
+        phase40_prereg.group_floor({1337: a})
+    with pytest.raises(SystemExit, match="INSUFFICIENT_SEEDS"):
+        phase40_prereg._pairs([1337])
+    assert phase40_prereg._pairs([1337, 2024, 1338]) == [(1337, 2024), (1337, 1338), (2024, 1338)]
+
+
+def test_extras_per_slot_spread():
+    import phase19_erasure as pin
+
+    q = pin.N_TARGET_QUESTIONS
+    rows = {
+        1337: _rows({"house_number": 17, "hometown": 18}),
+        2024: _rows({"house_number": 20, "hometown": 18}),
+        1338: _rows({"house_number": 25, "hometown": 9}),
+    }
+    spread = phase40_prereg.per_slot_spread(rows)
+    assert tuple(spread) == pin.GATED_NONTARGET_SLOTS
+    house = spread["house_number"]
+    assert house["rates"] == [17 / q, 20 / q, 25 / q]
+    assert house["counts"] == [[17, q], [20, q], [25, q]]
+    assert house["range"] == 25 / q - 17 / q
+    assert house["sd_sample"] == statistics.stdev(house["rates"])
+    assert house["sd_population"] == statistics.pstdev(house["rates"])
+    assert house["sd_sample"] != house["sd_population"]
+    assert spread["street"]["range"] == 0.0 and spread["street"]["sd_sample"] == 0.0
+    two = phase40_prereg.per_slot_spread({1337: rows[1337], 2024: rows[2024]})
+    assert two["house_number"]["sd_sample"] == statistics.stdev([17 / q, 20 / q])
+    assert phase40_prereg.group_floor(rows)["per_slot"] == spread
+
+
+def _function_node(source, name):
+    tree = ast.parse(source)
+    found = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == name]
+    assert len(found) == 1, f"meta-guard: {len(found)} defs named {name}"
+    return found[0]
+
+
+def _pair_d_call_failures(source):
+    """The pair_d AST gate: it calls pin.nontarget_noise_floor and pin.nontarget_deltas, and never
+    the builtin max (docstring excluded)."""
+    node = _function_node(source, "pair_d")
+    body = node.body
+    if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant):
+        body = body[1:]
+    calls = [n for stmt in body for n in ast.walk(stmt) if isinstance(n, ast.Call)]
+    assert calls, "meta-guard: pair_d holds no Call, the gate would be vacuous"
+    pin_calls = {
+        c.func.attr
+        for c in calls
+        if isinstance(c.func, ast.Attribute)
+        and isinstance(c.func.value, ast.Name)
+        and c.func.value.id == "pin"
+    }
+    failures = [
+        f"pair_d never calls pin.{name}"
+        for name in ("nontarget_noise_floor", "nontarget_deltas")
+        if name not in pin_calls
+    ]
+    failures += [
+        f"pair_d calls the builtin max at line {c.lineno}"
+        for c in calls
+        if isinstance(c.func, ast.Name) and c.func.id == "max"
+    ]
+    return failures
+
+
+def test_pair_d_calls_the_pin_ast():
+    source = (_ROOT / PREREG).read_text(encoding="utf-8")
+    assert _pair_d_call_failures(source) == []
+    # NON-VACUITY: a pair_d that returns max(deltas) fails the same check.
+    node = _function_node(source, "pair_d")
+    lines = source.splitlines()
+    planted_def = [
+        "def pair_d(rows_i, rows_j):",
+        "    deltas = [abs(rows_i[k]['rate'] - rows_j[k]['rate']) for k in rows_i]",
+        "    return {'d': max(deltas), 'deltas': tuple(deltas)}",
+    ]
+    planted = "\n".join(lines[: node.lineno - 1] + planted_def + lines[node.end_lineno :])
+    ast.parse(planted)
+    failures = _pair_d_call_failures(planted)
+    assert any("nontarget_noise_floor" in f for f in failures)
+    assert any("builtin max" in f for f in failures)
+
+
+def test_recall_floor_publishes_the_larger_group_beside_v3():
+    import phase19_floor
+
+    full = {1337: _rows({}), 2024: _rows({"house_number": 1})}
+    m2 = {1337: _rows({}), 2024: _rows({"hometown": 3})}
+    floor = phase40_prereg.recall_floor(full, m2)
+    assert floor["full"] == phase40_prereg.group_floor(full)
+    assert floor["m2"] == phase40_prereg.group_floor(m2)
+    assert floor["published"] == {"value": floor["m2"]["floor"], "group": "m2", "tie": False}
+    assert floor["beside"] == {
+        "sampling_floor": phase19_floor.NONTARGET_NOISE_FLOOR,
+        "margin_at_gate": phase35_prereg.e1_condition_b_margin(),
+        "margin_amended": False,
+    }
+    assert floor["estimator"] == "e2_noise_floor_estimator (preference)"
+    flipped = phase40_prereg.recall_floor(m2, full)
+    assert flipped["published"]["group"] == "full"
+    assert flipped["published"]["value"] == floor["m2"]["floor"]
+    tie = phase40_prereg.recall_floor(full, full)
+    assert tie["published"] == {"value": tie["full"]["floor"], "group": "full", "tie": True}
+    with pytest.raises(SystemExit, match=r"^\[phase40_prereg\]"):
+        phase40_prereg.recall_floor(full, {1337: _rows({}), 1338: _rows({})})

@@ -26,9 +26,11 @@ total; measured, importing them opens no checkpoints/ or data/ file.
 
 import collections.abc
 import fnmatch
+import itertools
 import json
 import math
 import pathlib
+import statistics
 import sys
 import types
 
@@ -912,3 +914,140 @@ _prove(
     E2_S >= phase35_prereg.ENTRIES["e2_min_seeds"]["value"],
     f"S = {E2_S} is below e2_min_seeds",
 )
+
+# =================================================================================================
+# (7) THE PURE ESTIMATOR FUNCTIONS (plan 40-03): what the entries above describe, computed only by
+# the pinned v3.0 reductions; the driver computes nothing of its own.
+# =================================================================================================
+
+
+def a2_scope(record):
+    """NOISE-01 / D-01: an A2 arm record's (family, tiers), read as phase19_run.py:1715-1717."""
+    family = record["config"]["attack_family"]
+    tiers = tuple(sorted({d["tier"] for d in record["draws"] if d["family"] == family}))
+    _prove(family and tiers, f"A2 scope is empty: family {family!r}, tiers {tiers!r}")
+    return family, tiers
+
+
+def a2_rows(record, family, tiers):
+    """NOISE-01 / D-01: per-fact rows pooled over both tiers by phase19_run._pooled_rows (the 27 =
+    14 + 13 denominator), never an arm record's per_fact (19-09 defect C)."""
+    import phase14_factset  # torch-free, but lazy like every pin import
+    import phase19_erasure as pin  # torch at import: lazy
+    import phase19_run  # torch at import: lazy
+
+    values = {f.id: f.value for f in phase14_factset.LOCKED_FACTS + phase14_factset.SOFT_TIER_FACTS}
+    rows = phase19_run._pooled_rows(record["draws"], values, family, tiers)
+    for fact_id, row in rows.items():
+        if row["slot"] in (*pin.GATED_NONTARGET_SLOTS, pin.TARGET_SLOT):
+            _prove(
+                row["n_questions"] == pin.N_TARGET_QUESTIONS,
+                f"fact {fact_id!r} pools {row['n_questions']} questions, not "
+                f"phase19_erasure.N_TARGET_QUESTIONS (a single-tier denominator?)",
+            )
+    return rows
+
+
+def slot_rows(rows):
+    """NOISE-01: every core slot (the gated non-targets in GATED_NONTARGET_SLOTS order, then the
+    target) with its fact, count, denominator, rate and per-tier rows."""
+    import phase19_erasure as pin  # torch at import: lazy
+
+    core = (*pin.GATED_NONTARGET_SLOTS, pin.TARGET_SLOT)
+    by_slot = {}
+    for fact_id, row in rows.items():
+        if row["slot"] in core:
+            _prove(row["slot"] not in by_slot, f"two facts on slot {row['slot']!r}")
+            by_slot[row["slot"]] = {
+                "fact_id": fact_id,
+                "n_answerable": row["n_answerable"],
+                "n_questions": row["n_questions"],
+                "rate": row["rate"],
+                "per_tier": row["per_tier"],
+            }
+    _prove(set(by_slot) == set(core), f"rows cover slots {sorted(by_slot)}, not {sorted(core)}")
+    return {slot: by_slot[slot] for slot in core}
+
+
+def pair_d(rows_i, rows_j):
+    """D-02: v3.0's pair statistic, the pinned max over the seven gated non-target deltas."""
+    import phase19_erasure as pin  # torch at import: lazy
+
+    deltas = pin.nontarget_deltas(pin.nontarget_rows(rows_i), pin.nontarget_rows(rows_j))
+    return {"d": pin.nontarget_noise_floor(deltas), "deltas": tuple(deltas)}
+
+
+def _pairs(seeds):
+    """D-03: every unordered pair of whole seeds, in the given (SEEDS) order; C(S', 2) of them."""
+    minimum = phase35_prereg.ENTRIES["e2_min_seeds"]["value"]
+    _prove(
+        len(seeds) >= minimum,
+        f"INSUFFICIENT_SEEDS: {len(seeds)} whole seeds {list(seeds)}, below e2_min_seeds {minimum}",
+    )
+    return list(itertools.combinations(seeds, 2))
+
+
+def per_slot_spread(rows_by_seed):
+    """D-04: per gated non-target, the rates across the whole seeds, range, sample and population
+    standard deviation."""
+    import phase19_erasure as pin  # torch at import: lazy
+
+    by_seed = [slot_rows(rows) for rows in rows_by_seed.values()]
+    spread = {}
+    for slot in pin.GATED_NONTARGET_SLOTS:
+        rates = [rows[slot]["rate"] for rows in by_seed]
+        spread[slot] = {
+            "rates": rates,
+            "counts": [[rows[slot]["n_answerable"], rows[slot]["n_questions"]] for rows in by_seed],
+            "range": max(rates) - min(rates),
+            "sd_sample": statistics.stdev(rates),
+            "sd_population": statistics.pstdev(rates),
+        }
+    return spread
+
+
+def group_floor(rows_by_seed):
+    """D-03 / D-04: the mean of d over every pair of the group's whole seeds, with the max, min,
+    every pair and the per-slot spread beside."""
+    seeds = list(rows_by_seed)
+    pairs = []
+    for i, j in _pairs(seeds):
+        pair = pair_d(rows_by_seed[i], rows_by_seed[j])
+        pairs.append({"seeds": [i, j], "d": pair["d"], "deltas": list(pair["deltas"])})
+    ds = [p["d"] for p in pairs]
+    return {
+        "n_seeds": len(seeds),
+        "seeds": seeds,
+        "n_pairs": len(pairs),
+        "pairs": pairs,
+        "floor": statistics.fmean(ds),
+        "max": max(ds),
+        "min": min(ds),
+        "per_slot": per_slot_spread(rows_by_seed),
+    }
+
+
+def recall_floor(full_rows_by_seed, m2_rows_by_seed):
+    """D-03 / NOISE-02: the larger group floor, published beside v3.0's sampling floor and the
+    never-amended (b) margin."""
+    import phase19_floor  # torch-free constants
+
+    _prove(
+        list(full_rows_by_seed) == list(m2_rows_by_seed),
+        f"the full seeds {list(full_rows_by_seed)} != the M2 seeds {list(m2_rows_by_seed)}: the "
+        "whole seed holds both groups (D-15)",
+    )
+    full, m2 = group_floor(full_rows_by_seed), group_floor(m2_rows_by_seed)
+    tie = full["floor"] == m2["floor"]
+    group = "full" if full["floor"] >= m2["floor"] else "m2"
+    return {
+        "full": full,
+        "m2": m2,
+        "published": {"value": max(full["floor"], m2["floor"]), "group": group, "tie": tie},
+        "beside": {
+            "sampling_floor": phase19_floor.NONTARGET_NOISE_FLOOR,
+            "margin_at_gate": phase35_prereg.e1_condition_b_margin(),
+            "margin_amended": False,
+        },
+        "estimator": "e2_noise_floor_estimator (preference)",
+    }
