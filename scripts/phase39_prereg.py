@@ -946,3 +946,120 @@ def minted_members(slot):
     taught = next(fact.value for fact in phase14_factset.LOCKED_FACTS if fact.slot == slot)
     _prove(taught not in members, f"{slot}: the taught value is among the minted members")
     return members
+
+
+# =================================================================================================
+# (10) THE E6 DECOMPOSITION RULE AS CODE: ENTRIES["e6_decomposition_rule"] implemented verbatim.
+# Pure and torch-free; none of these reads a per-token value or a suffix sum (D-30 condition 2).
+# =================================================================================================
+
+_READING_KEYS = ("R_a", "R_q", "G_a", "G_q")
+
+
+def damage_reachable(count_k0, n):
+    """D-25: damage can fire at size n only if the drop to 0 is strictly above MARGIN, by the
+    committed formula with the best possible post count."""
+    _prove(0 <= count_k0 <= n, f"count_k0 {count_k0} outside 0..{n}")
+    return count_k0 / n - 0 / n > MARGIN
+
+
+def rank_status(rank_k, rank_k0):
+    """D-14 / D-25: a rank > 1 is lost under both events; ALREADY_AT_K0 when the k0 rank > 1."""
+    _prove(rank_k >= 1 and rank_k0 >= 1, f"ranks {rank_k}, {rank_k0} below 1")
+    if rank_k0 > 1:
+        return STATUSES[3]
+    return STATUSES[1] if rank_k > 1 else STATUSES[0]
+
+
+def count_status(event, count_k, count_k0, n, *, reference=False):
+    """D-14 / D-24 / D-25: a count's status under ``event`` against the k0 count of its context.
+
+    collapse: ALREADY_AT_K0 at a k0 count of 0, LOST at a count of 0. damage: UNREACHABLE_AT_SIZE
+    unless damage_reachable, LOST when count_k0 / n - count_k / n > MARGIN (D-33: the committed
+    formula, strict >, even where (count_k0 - count_k) / n decides differently).
+    """
+    _prove(event in EVENTS, f"event {event!r} is not one of {EVENTS}")
+    for name, count in (("count_k", count_k), ("count_k0", count_k0)):
+        _prove(0 <= count <= n, f"{name} {count} outside 0..{n}")
+    if event == "collapse":
+        if count_k0 == 0:
+            return STATUSES[3]
+        return STATUSES[1] if count_k == 0 else STATUSES[0]
+    _prove(not reference, "the k0 cell is the damage reference (D-25), not a damage cell")
+    if not damage_reachable(count_k0, n):
+        return STATUSES[2]
+    return STATUSES[1] if count_k0 / n - count_k / n > MARGIN else STATUSES[0]
+
+
+def _wr01(*statuses):
+    """The WR-01 outcome among ``statuses``, UNREACHABLE_AT_SIZE first; None if neither."""
+    return next((s for s in WR01_OUTCOMES if s in statuses), None)
+
+
+def classify_cell(statuses):
+    """D-15 / D-16 / D-25: the four-step precedence of ENTRIES["e6_decomposition_rule"]."""
+    _prove(
+        set(statuses) == set(_READING_KEYS),
+        f"statuses keyed {sorted(statuses)}, not {_READING_KEYS}",
+    )
+    for key in _READING_KEYS:
+        _prove(statuses[key] in STATUSES, f"{key} status {statuses[key]!r} not in {STATUSES}")
+    r_a, r_q, g_a, g_q = (statuses[key] for key in _READING_KEYS)
+    intact, lost = STATUSES[:2]
+    # Step 1.
+    outcome = _wr01(r_a, g_q)
+    if outcome is not None:
+        return {"class": outcome, "disagreement": None}
+    # Step 2.
+    if not (r_a == intact and g_q == lost):
+        return {"class": CLASSES[4], "disagreement": False}
+    # Step 3.
+    outcome = _wr01(r_q, g_a)
+    if outcome is not None:
+        return {"class": outcome, "disagreement": True}
+    # Step 4.
+    if r_q == lost and g_a == intact:
+        name = CLASSES[0]
+    elif g_a == lost and r_q == intact:
+        name = CLASSES[1]
+    elif r_q == lost and g_a == lost:
+        name = CLASSES[2]
+    else:
+        name = CLASSES[3]
+    return {"class": name, "disagreement": True}
+
+
+def class_counts(classified):
+    """D-16 / T-39-10: every class counted (zeros included) with both denominators, and each
+    class's share of the disagreement cells (None when there are none)."""
+    disagreeing = [cell for cell in classified if cell["disagreement"] is True]
+    names = CLASSES[:4] + WR01_OUTCOMES
+    by_disagreement = {name: sum(c["class"] == name for c in disagreeing) for name in names}
+    n = len(disagreeing)
+    return {
+        "cells": len(classified),
+        "disagreement_cells": n,
+        "by_class": {
+            name: sum(c["class"] == name for c in classified) for name in CLASSES + WR01_OUTCOMES
+        },
+        "disagreement_by_class": by_disagreement,
+        "shares": {name: (count / n if n else None) for name, count in by_disagreement.items()},
+        "denominator": "disagreement_cells",
+    }
+
+
+def n1(ranks):
+    """D-24: the number of questions at rank 1, R_q's criterion summary."""
+    return sum(rank == 1 for rank in ranks)
+
+
+def median_rank(ranks):
+    """D-10 / D-24: the median of an odd number of ranks; descriptive."""
+    _prove(len(ranks) % 2 == 1, f"{len(ranks)} ranks: the median needs an odd count")
+    return sorted(ranks)[len(ranks) // 2]
+
+
+def rank_of_mean_nll(nll_by_candidate, taught, members):
+    """D-10: the taught value's rank by its mean NLL over the questions; descriptive."""
+    means = {c: math.fsum(values) / len(values) for c, values in nll_by_candidate.items()}
+    return phase38_prereg.rank_in_prefix(means, taught, members)

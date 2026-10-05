@@ -906,3 +906,273 @@ def test_suffix_premise_holds_for_every_entry():
         ]
         assert (sum(carried), len(carried)) == (216, 216), reading
         assert {(d["fact_id"], d["tier"], d["seed_index"]) for d in a2} == set(by_key), reading
+
+
+# =================================================================================================
+# (9) PLAN 39-02 TASK 2: STATUSES, THE PER-CELL CLASSIFIER, CLASS COUNTS AND RANK SUMMARIES — the
+# full truth table and the committed-data oracle.
+# =================================================================================================
+
+_INTACT, _LOST, _UNREACH, _ALREADY = "INTACT", "LOST", "UNREACHABLE_AT_SIZE", "ALREADY_AT_K0"
+
+
+def test_lost_rank_status():
+    assert phase39_prereg.rank_status(1, 1) == _INTACT
+    assert phase39_prereg.rank_status(2, 1) == _LOST
+    assert phase39_prereg.rank_status(1, 2) == _ALREADY
+    assert phase39_prereg.rank_status(3, 2) == _ALREADY
+    for bad in ((0, 1), (1, 0)):
+        with pytest.raises(SystemExit, match=r"^\[phase39_prereg\]"):
+            phase39_prereg.rank_status(*bad)
+
+
+def test_lost_count_status_collapse():
+    status = phase39_prereg.count_status
+    assert status("collapse", 0, 5, 27) == _LOST
+    assert status("collapse", 3, 5, 27) == _INTACT
+    assert status("collapse", 0, 0, 27) == _ALREADY
+    assert status("collapse", 4, 0, 27) == _ALREADY
+    assert status("collapse", 0, 1, 1) == _LOST
+    assert status("collapse", 1, 0, 1) == _ALREADY
+    # The k0 cell is classified under collapse: its own count is its reference.
+    assert status("collapse", 26, 26, 27, reference=True) == _INTACT
+    for bad in (("planted", 0, 5, 27), ("collapse", 28, 5, 27), ("collapse", 0, -1, 27)):
+        with pytest.raises(SystemExit, match=r"^\[phase39_prereg\]"):
+            status(*bad)
+
+
+def test_lost_count_status_damage():
+    status = phase39_prereg.count_status
+    # person_name k8: the drop equals MARGIN exactly; strict > leaves it intact.
+    assert 26 / 27 - 18 / 27 == phase38_prereg.MARGIN
+    assert status("damage", 18, 26, 27) == _INTACT
+    # D-33: (21 - 13) / 27 == MARGIN, but the committed formula 21/27 - 13/27 is above it.
+    assert (21 - 13) / 27 == phase38_prereg.MARGIN < 21 / 27 - 13 / 27
+    assert status("damage", 13, 21, 27) == _LOST
+    assert status("damage", 17, 26, 27) == _LOST
+    assert status("damage", 0, 8, 27) == _UNREACH
+    assert status("damage", 0, 9, 27) == _LOST
+    assert status("damage", 0, 1, 1) == _LOST
+    assert status("damage", 1, 1, 1) == _INTACT
+    assert status("damage", 0, 0, 1) == _UNREACH
+    with pytest.raises(SystemExit, match=r"^\[phase39_prereg\] .*D-25"):
+        status("damage", 26, 26, 27, reference=True)
+
+
+def test_lost_count_status_damage_on_every_exact_eight_drop():
+    got = {c: phase39_prereg.count_status("damage", c - 8, c, 27) for c in range(8, 28)}
+    assert len(got) == 20
+    assert {c for c, s in got.items() if s == _LOST} == {15, 17, 19, 21}
+    assert {c for c, s in got.items() if s == _UNREACH} == {8}
+    assert sum(s == _INTACT for s in got.values()) == 15
+
+
+def test_reachability_threshold_is_derived():
+    reachable = [c for c in range(28) if phase39_prereg.damage_reachable(c, 27)]
+    assert reachable == list(range(9, 28))
+    assert phase39_prereg.damage_reachable(1, 1) is True
+    assert phase39_prereg.damage_reachable(0, 1) is False
+    with pytest.raises(SystemExit, match=r"^\[phase39_prereg\]"):
+        phase39_prereg.damage_reachable(28, 27)
+
+
+def _cell(r_a, r_q, g_a, g_q):
+    return phase39_prereg.classify_cell({"R_a": r_a, "R_q": r_q, "G_a": g_a, "G_q": g_q})
+
+
+def test_classify_cell_sufficiency_table():
+    table = {
+        (_LOST, _INTACT): "CONTEXT_SUFFICIENT",
+        (_INTACT, _LOST): "INSTRUMENT_SUFFICIENT",
+        (_LOST, _LOST): "EITHER",
+        (_INTACT, _INTACT): "INTERACTION_ONLY",
+    }
+    for (r_q, g_a), name in table.items():
+        assert _cell(_INTACT, r_q, g_a, _LOST) == {"class": name, "disagreement": True}
+
+
+def test_classify_cell_no_disagreement():
+    for r_a, g_q in ((_LOST, _LOST), (_LOST, _INTACT), (_INTACT, _INTACT)):
+        for r_q in phase39_prereg.STATUSES:
+            for g_a in phase39_prereg.STATUSES:
+                assert _cell(r_a, r_q, g_a, g_q) == {
+                    "class": "NO_DISAGREEMENT",
+                    "disagreement": False,
+                }
+
+
+def test_classify_cell_wr01_precedence():
+    assert _cell(_ALREADY, _LOST, _LOST, _LOST) == {"class": _ALREADY, "disagreement": None}
+    assert _cell(_ALREADY, _INTACT, _INTACT, _UNREACH) == {"class": _UNREACH, "disagreement": None}
+    assert _cell(_INTACT, _INTACT, _INTACT, _UNREACH) == {"class": _UNREACH, "disagreement": None}
+    assert _cell(_LOST, _INTACT, _INTACT, _ALREADY) == {"class": _ALREADY, "disagreement": None}
+    assert _cell(_INTACT, _LOST, _UNREACH, _LOST) == {"class": _UNREACH, "disagreement": True}
+    assert _cell(_INTACT, _ALREADY, _UNREACH, _LOST) == {"class": _UNREACH, "disagreement": True}
+    assert _cell(_INTACT, _ALREADY, _INTACT, _LOST) == {"class": _ALREADY, "disagreement": True}
+
+
+def test_classify_wr01_helper_orders_unreachable_first():
+    assert phase39_prereg._wr01(_ALREADY, _UNREACH) == _UNREACH
+    assert phase39_prereg._wr01(_INTACT, _ALREADY) == _ALREADY
+    assert phase39_prereg._wr01(_INTACT, _LOST) is None
+
+
+def test_classify_cell_exhaustive():
+    import itertools
+
+    sufficiency = set(phase39_prereg.CLASSES[:4])
+    names = set(phase39_prereg.CLASSES + phase39_prereg.WR01_OUTCOMES)
+    seen = set()
+    combos = list(itertools.product(phase39_prereg.STATUSES, repeat=4))
+    assert len(combos) == 256
+    for r_a, r_q, g_a, g_q in combos:
+        out = _cell(r_a, r_q, g_a, g_q)
+        assert set(out) == {"class", "disagreement"}
+        assert out["class"] in names
+        seen.add(out["class"])
+        decided = r_a in (_INTACT, _LOST) and g_q in (_INTACT, _LOST)
+        disagree = r_a == _INTACT and g_q == _LOST
+        assert out["disagreement"] == (disagree if decided else None)
+        if out["class"] in sufficiency:
+            assert disagree and r_q in (_INTACT, _LOST) and g_a in (_INTACT, _LOST)
+    assert seen == names
+    for bad in (
+        {"R_a": _INTACT, "R_q": _INTACT, "G_a": _INTACT},
+        {"R_a": _INTACT, "R_q": _INTACT, "G_a": _INTACT, "G_q": _LOST, "X": _LOST},
+        {"R_a": "planted", "R_q": _INTACT, "G_a": _INTACT, "G_q": _LOST},
+    ):
+        with pytest.raises(SystemExit, match=r"^\[phase39_prereg\]"):
+            phase39_prereg.classify_cell(bad)
+
+
+def test_class_counts_publish_denominators():
+    cells = [
+        _cell(_INTACT, _LOST, _INTACT, _LOST),
+        _cell(_INTACT, _LOST, _INTACT, _LOST),
+        _cell(_INTACT, _INTACT, _LOST, _LOST),
+        _cell(_INTACT, _INTACT, _UNREACH, _LOST),
+        _cell(_LOST, _LOST, _LOST, _LOST),
+        _cell(_ALREADY, _LOST, _LOST, _LOST),
+    ]
+    counts = phase39_prereg.class_counts(cells)
+    json.dumps(counts)
+    assert counts["cells"] == 6
+    assert counts["disagreement_cells"] == 4
+    assert counts["denominator"] == "disagreement_cells"
+    assert counts["by_class"] == {
+        "CONTEXT_SUFFICIENT": 2,
+        "INSTRUMENT_SUFFICIENT": 1,
+        "EITHER": 0,
+        "INTERACTION_ONLY": 0,
+        "NO_DISAGREEMENT": 1,
+        _UNREACH: 1,
+        _ALREADY: 1,
+    }
+    assert counts["disagreement_by_class"] == {
+        "CONTEXT_SUFFICIENT": 2,
+        "INSTRUMENT_SUFFICIENT": 1,
+        "EITHER": 0,
+        "INTERACTION_ONLY": 0,
+        _UNREACH: 1,
+        _ALREADY: 0,
+    }
+    assert counts["shares"] == {
+        "CONTEXT_SUFFICIENT": 2 / 4,
+        "INSTRUMENT_SUFFICIENT": 1 / 4,
+        "EITHER": 0.0,
+        "INTERACTION_ONLY": 0.0,
+        _UNREACH: 1 / 4,
+        _ALREADY: 0.0,
+    }
+    none = phase39_prereg.class_counts([_cell(_LOST, _LOST, _LOST, _LOST)])
+    assert none["disagreement_cells"] == 0
+    assert set(none["shares"].values()) == {None}
+    assert phase39_prereg.class_counts([])["cells"] == 0
+
+
+# Measured at plan time (39-02-PLAN interfaces): the published disagreement, R_a INTACT and G_q
+# LOST, on the committed ranks and counts. 39-RESEARCH M9's "12 collapse cells" does not reproduce:
+# pet_name at k78 and M2 has R_a rank 2 (LOST), so the measured 9 is pinned here.
+_DAMAGE_CELLS = {
+    ("k8", "hometown"),
+    ("k16", "person_name"),
+    ("k16", "pet_name"),
+    ("k16", "hometown"),
+    ("k32", "person_name"),
+    ("k32", "pet_name"),
+    ("k32", "sibling_name"),
+    ("k32", "hometown"),
+    ("k32", "street"),
+    ("k32", "house_number"),
+    ("k64", "person_name"),
+    ("k64", "pet_name"),
+    ("k64", "cat_name"),
+    ("k64", "sibling_name"),
+    ("k64", "hometown"),
+    ("k64", "street"),
+    ("k64", "house_number"),
+    ("k78", "person_name"),
+    ("k78", "cat_name"),
+    ("k78", "sibling_name"),
+    ("k78", "hometown"),
+    ("k78", "street"),
+    ("k78", "birth_year"),
+    ("k78", "house_number"),
+}
+_COLLAPSE_CELLS = {
+    ("k64", "person_name"),
+    ("k64", "pet_name"),
+    ("k64", "sibling_name"),
+    ("k64", "hometown"),
+    ("k64", "street"),
+    ("k78", "person_name"),
+    ("k78", "sibling_name"),
+    ("k78", "hometown"),
+    ("k78", "street"),
+}
+
+
+def test_classify_committed_disagreement_oracle():
+    ranks = phase38_prereg.committed_gate_ranks()
+    counts = phase39_prereg.committed_a2_counts()
+    ref = phase39_prereg.REFERENCE_READING
+    published = {}
+    for event, readings in (
+        ("collapse", phase39_prereg.CLASSIFIED_READINGS),
+        ("damage", phase39_prereg.DAMAGE_READINGS),
+    ):
+        cells = set()
+        for reading in readings:
+            for slot in _SLOT_ORDER:
+                r_a = phase39_prereg.rank_status(
+                    ranks[reading][slot]["rank"], ranks[ref][slot]["rank"]
+                )
+                g_q = phase39_prereg.count_status(
+                    event, counts[reading][slot], counts[ref][slot], _N_QUESTIONS
+                )
+                assert g_q in (_INTACT, _LOST), (event, reading, slot)
+                if r_a == _INTACT and g_q == _LOST:
+                    cells.add((reading, slot))
+        published[event] = cells
+    assert min(counts[ref].values()) >= 18
+    assert published["damage"] == _DAMAGE_CELLS and len(_DAMAGE_CELLS) == 24
+    assert published["collapse"] == _COLLAPSE_CELLS and len(_COLLAPSE_CELLS) == 9
+    assert not [c for c in published["damage"] | published["collapse"] if c[0] == "M2"]
+
+
+def test_rank_summaries():
+    import math
+    import random
+
+    assert phase39_prereg.n1([1, 2, 1]) == 2
+    assert phase39_prereg.median_rank([3, 1, 2]) == 2
+    with pytest.raises(SystemExit, match=r"^\[phase39_prereg\]"):
+        phase39_prereg.median_rank([1, 2])
+    rng = random.Random(1337)
+    for _ in range(300):
+        ranks = [rng.choice((1, 1, 2, 3, 8)) for _ in range(_N_QUESTIONS)]
+        assert (phase39_prereg.median_rank(ranks) == 1) == (phase39_prereg.n1(ranks) >= 14)
+    nll = {"taught": [1.0, 3.0], "a": [2.5, 2.4], "b": [0.5, 3.0]}
+    means = {c: math.fsum(v) / len(v) for c, v in nll.items()}
+    want = phase38_prereg.rank_in_prefix(means, "taught", ("a", "b"))
+    assert phase39_prereg.rank_of_mean_nll(nll, "taught", ("a", "b")) == want == 2
