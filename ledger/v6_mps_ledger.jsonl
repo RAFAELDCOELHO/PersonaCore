@@ -12,3 +12,5 @@
 {"event": "end", "flag": null, "front": "R1b", "phase": 37, "record": "results/phase37_r1b.json", "ruling": null, "run_id": "v6/37/R1b/replica", "seconds": null, "stop": null, "utc": "2026-10-04T00:25:13.714763+00:00"}
 {"event": "start", "flag": null, "front": "E5", "phase": 38, "record": null, "ruling": null, "run_id": "v6/38/E5/rank", "seconds": null, "stop": null, "utc": "2026-10-04T18:53:53.757496+00:00"}
 {"event": "end", "flag": null, "front": "E5", "phase": 38, "record": "results/phase38_rank.json", "ruling": null, "run_id": "v6/38/E5/rank", "seconds": null, "stop": null, "utc": "2026-10-04T18:58:57.202574+00:00"}
+{"event": "start", "flag": null, "front": "E6", "phase": 39, "record": null, "ruling": null, "run_id": "v6/39/E6/ctx", "seconds": null, "stop": null, "utc": "2026-10-05T16:15:38.312689+00:00"}
+{"event": "end", "flag": null, "front": "E6", "phase": 39, "record": "results/phase39_ctx.json", "ruling": null, "run_id": "v6/39/E6/ctx", "seconds": null, "stop": null, "utc": "2026-10-05T16:29:18.864060+00:00"}
