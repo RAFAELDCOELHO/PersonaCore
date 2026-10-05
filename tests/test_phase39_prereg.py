@@ -468,6 +468,22 @@ def _smallest_reachable_count(n):
 def test_no_derived_value_is_typed_in_the_prereg(tmp_path):
     budget = _budget()
     assert _smallest_reachable_count(27) == 9
+    steps = phase39_prereg.approval_block()["projection_steps"]
+    totals = phase39_prereg.report_k0_totals()
+    # WR-05: the D-11 priced minted NLLs, the reference total, the questions per slot, the cells per
+    # event and the WR-01 report figures, each computed here.
+    new_seeds = {
+        phase39_prereg.COMMITTED_ADAPTER_CAP
+        * phase39_prereg.N_ENTRIES
+        * (phase39_prereg.MINTED_SET_SIZE - 1),
+        phase39_prereg._reference_total(),
+        len(phase35_prereg.a2_corpus_entries()) // len(phase39_prereg.SLOTS),
+        len(phase39_prereg.cells("damage")),
+        sum(a for a, _ in totals.values()),
+        *(a for a, _ in totals.values()),
+        *(n for _, n in totals.values()),
+    }
+    assert new_seeds >= {10584, 56, 27, 48}, "meta-guard: a WR-05 seed is not the reviewed value"
     seeds = {
         len(phase35_prereg.a2_corpus_entries()),
         phase35_prereg.FULL_FIDELITY_K,
@@ -475,7 +491,9 @@ def test_no_derived_value_is_typed_in_the_prereg(tmp_path):
         phase39_prereg.MINTED_EXTRA_NLLS,
         phase39_prereg.GATE_EXTRA_NLLS_PRICED,
         phase39_prereg.GATE_EXTRA_NLLS_ACTUAL,
+        *new_seeds,
     }
+    new_floats = {steps["d11"], steps["d26"]}
     floats = {
         phase39_prereg.E6_PROJECTION_HOURS,
         phase39_prereg.E6_PROJECTION_HOURS_ACTUAL_GATE,
@@ -483,16 +501,20 @@ def test_no_derived_value_is_typed_in_the_prereg(tmp_path):
         phase38_prereg.MARGIN,
         budget["front_hours"]["E6"],
         budget["unit_prices"]["e5_nll_high"],
+        *new_floats,
     }
     assert all(type(f) is float for f in floats), "meta-guard: a census value is not a float"
     real = _ROOT / PREREG
     before = real.read_bytes()
     source = before.decode("utf-8")
     assert _literal_failures(source, seeds, floats, set()) == []
-    for name, line in (
+    plants = [
         ("stop.py", f"\nX = {phase39_prereg.E6_STOP_HOURS!r}\n"),
         ("entries.py", f"\nS = {len(phase35_prereg.a2_corpus_entries())!r}\n"),
-    ):
+    ]
+    plants += [(f"seed{i}.py", f"\nX = {v!r}\n") for i, v in enumerate(sorted(new_seeds))]
+    plants += [(f"float{i}.py", f"\nX = {v!r}\n") for i, v in enumerate(sorted(new_floats))]
+    for name, line in plants:
         planted = _planted(tmp_path, source, source + line, name)
         assert _literal_failures(planted, seeds, floats, set()), name
     assert real.read_bytes() == before
