@@ -977,6 +977,9 @@ def crosscheck(*, root=None, device="cpu"):
         {
             "device": device,
             "torch_version": torch.__version__,
+            # 39-REVIEW-3 IN-05: the tree this cross-check ran from (it may differ from the run's).
+            "git_sha": git_sha(),
+            "module_sha256": {rel: _sha256(_REPO / rel) for rel in DISCLOSED_MODULES},
             "started_utc": started,
             "finished_utc": _now(),
             "gate": gate,
@@ -1281,6 +1284,8 @@ def _cpu_block(cpu, blocks, gate_rows):
         "criterion": False,
         "device": cpu["device"],
         "torch_version": cpu["torch_version"],
+        "git_sha": cpu["git_sha"],  # 39-REVIEW-3 IN-05
+        "module_sha256": cpu["module_sha256"],
         "gate_cells": len(gate_cells),
         "gate_differing": len(gate_differing),
         "gate_differing_cells": gate_differing,
@@ -1925,6 +1930,8 @@ def _scored_sections(record):
         f"taught suffix sum is bitwise the pinned call's in {suffix['equal']} of "
         f"{suffix['compared']} (D-30a). {cpu['generation']}.",
         "",
+        f"- crosscheck git sha: `{cpu['git_sha']}`",
+        *(f"- crosscheck sha256 {rel}: `{digest}`" for rel, digest in cpu["module_sha256"].items()),
         *(
             f"- differing {kind} cell: {cell}"
             for kind in ("gate", "rq", "minted")

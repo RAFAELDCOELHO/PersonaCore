@@ -1799,8 +1799,15 @@ def test_crosscheck_writes_the_cpu_sidecar_once(crosscheck_rig, capsys):
         "rq",
         "minted",
         "suffix_equality",
+        "git_sha",
+        "module_sha256",
     }
     assert cpu["device"] == "cpu"
+    # 39-REVIEW-3 IN-05: the tree the cross-check ran from.
+    assert cpu["git_sha"] == _git("rev-parse", "HEAD")
+    assert cpu["module_sha256"] == {
+        rel: hashlib.sha256((_REPO / rel).read_bytes()).hexdigest() for rel in _DISCLOSED
+    }
     assert rig.models[loaded:] == [(r, "cpu") for r in _SHAPE["readings"]]
     gate = _sidecar(phase39_ctx.gate_sidecar(rig.root))
     assert cpu["gate"] == {
@@ -2335,6 +2342,7 @@ def test_emit_writes_the_record_once_through_the_prereg(scored_rig, monkeypatch,
     check = record["cpu_crosscheck"]
     assert check["criterion"] is False and check["generation"] == _D20
     assert (check["device"], check["torch_version"]) == (cpu["device"], cpu["torch_version"])
+    assert (check["git_sha"], check["module_sha256"]) == (cpu["git_sha"], cpu["module_sha256"])
     n_questions = len(rig.run["entries"]) * len(_SCORED_SHAPE["readings"])
     assert check["gate_cells"] == len(_SCORED_SHAPE["readings"]) * len(_SCORED_SHAPE["slots"])
     assert check["rq_cells"] == check["minted_cells"] == n_questions
@@ -2440,12 +2448,16 @@ def test_emit_cpu_block_and_hours_called_directly():
         "rq": {"k0": {"5": 1, "9": 3}},
         "minted": {"k0": {"5": 1, "9": 1}},
         "suffix_equality": {"compared": 2, "equal": 2, "unequal": []},
+        "git_sha": "c" * 40,
+        "module_sha256": {rel: "d" * 64 for rel in _DISCLOSED},
     }
     block = phase39_ctx._cpu_block(cpu, blocks, {"k0": {"pet_name": {"rank": 1}}})
     assert block == {
         "criterion": False,
         "device": "cpu",
         "torch_version": "t",
+        "git_sha": "c" * 40,
+        "module_sha256": {rel: "d" * 64 for rel in _DISCLOSED},
         "gate_cells": 1,
         "gate_differing": 0,
         "gate_differing_cells": [],
@@ -2895,6 +2907,9 @@ def test_render_report_renders_the_scored_record(scored_rig):
     assert f"{check['rq_differing']} of {check['rq_cells']}" in cpu
     suffix = check["suffix_equality"]
     assert f"{suffix['equal']} of {suffix['compared']}" in cpu and _D20 in cpu
+    assert f"- crosscheck git sha: `{check['git_sha']}`" in cpu  # IN-05
+    for rel, digest in check["module_sha256"].items():
+        assert f"- crosscheck sha256 {rel}: `{digest}`" in cpu
     assert "This record IS the CPU rehearsal" in _section(text, _SECTIONS[17])
     not_measured = _section(text, _SECTIONS[18])
     assert all(f"- {item}" in not_measured for item in phase39_prereg.NOT_MEASURED)
