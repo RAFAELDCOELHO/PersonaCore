@@ -664,3 +664,245 @@ def test_census_every_phase39_prereg_function_has_a_cpu_test(tmp_path):
     copied = _planted(tmp_path, source, planted, "untested.py")
     assert _untested_functions("phase39_prereg", copied, test_source) == ["planted_untested"]
     assert real.read_bytes() == before
+
+
+# =================================================================================================
+# (8) PLAN 39-02 TASK 1: GATE 2, THE COMMITTED COUNTS, THE D-07 RATES, THE D-17 PREDICTION, THE
+# ANCHOR SEED INDEX, THE MINTED MEMBERS AND THE D-23b PREMISE — on the real tracked JSON.
+# =================================================================================================
+
+_SLOT_ORDER = (
+    "person_name",
+    "pet_name",
+    "cat_name",
+    "sibling_name",
+    "hometown",
+    "street",
+    "birth_year",
+    "house_number",
+)
+# Measured at plan time (39-02-PLAN interfaces), in _SLOT_ORDER. The test holds them, never the
+# prereg.
+_A2_COUNTS = {
+    "k0": (26, 27, 27, 27, 21, 27, 18, 24),
+    "k8": (18, 24, 27, 27, 7, 27, 14, 24),
+    "k16": (10, 18, 27, 22, 3, 24, 13, 24),
+    "k32": (1, 2, 27, 10, 1, 11, 14, 10),
+    "k64": (0, 0, 6, 0, 0, 0, 11, 6),
+    "k78": (0, 0, 7, 0, 0, 0, 8, 5),
+    "M2": (26, 0, 27, 27, 18, 27, 18, 17),
+    "adapter_off": (0, 0, 0, 0, 0, 0, 0, 0),
+}
+_N_QUESTIONS = 27
+
+
+def _expected_counts():
+    return {r: dict(zip(_SLOT_ORDER, row, strict=True)) for r, row in _A2_COUNTS.items()}
+
+
+def test_gate2_reproduces_every_committed_count():
+    assert phase39_prereg.SLOTS == _SLOT_ORDER
+    gate = phase39_prereg.gate2()
+    json.dumps(gate)
+    assert gate["passed"] is True
+    assert tuple(gate["rows"]) == phase39_prereg.READINGS
+    assert gate["sha256"] == {r: pin["sha256"] for r, pin in phase39_prereg.A2_RECORDS.items()}
+    expected = _expected_counts()
+    cells = 0
+    for reading, rows in gate["rows"].items():
+        assert tuple(rows) == _SLOT_ORDER, reading
+        for slot, row in rows.items():
+            assert row["equal"] is True, (reading, slot)
+            assert row["n_questions"] == _N_QUESTIONS, (reading, slot)
+            assert row["count"] == row["committed"] == expected[reading][slot], (reading, slot)
+            cells += 1
+    assert cells == len(phase39_prereg.READINGS) * len(_SLOT_ORDER) == 64
+
+
+def _copy_a2_records(root):
+    import shutil
+
+    for pin in phase39_prereg.A2_RECORDS.values():
+        target = root / pin["path"]
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(_ROOT / pin["path"], target)
+
+
+def test_gate2_refuses_a_tampered_record(tmp_path):
+    _copy_a2_records(tmp_path)
+    # NON-VACUITY: the untampered copies verify.
+    assert phase39_prereg.verify_a2_records(root=tmp_path) == {
+        r: pin["sha256"] for r, pin in phase39_prereg.A2_RECORDS.items()
+    }
+    path = tmp_path / phase39_prereg.A2_RECORDS["k32"]["path"]
+    data = bytearray(path.read_bytes())
+    at = data.index(b'"completions": [') + len(b'"completions": [')
+    at = next(i for i in range(at, len(data)) if chr(data[i]).isalpha())
+    data[at] = ord("b") if data[at] != ord("b") else ord("c")
+    path.write_bytes(bytes(data))
+    with pytest.raises(SystemExit, match=r"^\[phase39_prereg\] k32: "):
+        phase39_prereg.gate2(root=tmp_path)
+
+
+def test_gate2_reports_a_count_mismatch(monkeypatch):
+    import copy
+
+    real = phase38_prereg.a2_counts()
+    off = copy.deepcopy(real)
+    off["person_name"]["counts"][8] += 1
+    monkeypatch.setattr(phase38_prereg, "a2_counts", lambda: off)
+    gate = phase39_prereg.gate2()
+    assert gate["passed"] is False
+    unequal = [
+        (r, s) for r, rows in gate["rows"].items() for s, row in rows.items() if not row["equal"]
+    ]
+    assert unequal == [("k8", "person_name")]
+    assert gate["rows"]["k8"]["person_name"]["committed"] == 19
+
+
+def test_a2_sha_verify_records():
+    digests = phase39_prereg.verify_a2_records()
+    assert digests == {r: pin["sha256"] for r, pin in phase39_prereg.A2_RECORDS.items()}
+    assert tuple(digests) == phase39_prereg.READINGS
+
+
+def test_committed_a2_counts_sources():
+    counts = phase39_prereg.committed_a2_counts()
+    assert tuple(counts) == phase39_prereg.CLASSIFIED_READINGS + phase39_prereg.DESCRIPTIVE_READINGS
+    assert counts == _expected_counts()
+    assert set(counts["adapter_off"].values()) == {0}
+    scores = _record(phase38_prereg.RETRAIN_SCORES)["retrain_scores"]
+    m2 = {row["slot"]: row["m2_answerable"] for row in scores["retained"].values()}
+    m2[scores["omitted_fact"]["slot"]] = scores["omitted_fact"]["successes"]
+    assert counts["M2"] == m2
+    a2 = phase38_prereg.a2_counts()
+    for k in phase39_prereg.PREFIXES:
+        assert counts[f"k{k}"] == {s: a2[s]["counts"][k] for s in _SLOT_ORDER}, k
+
+
+def test_values_are_the_locked_facts():
+    import phase14_factset
+
+    values = phase39_prereg._values()
+    assert values == {f.id: f.value for f in phase14_factset.LOCKED_FACTS}
+    assert len(values) == len(_SLOT_ORDER)
+
+
+def test_draw_rate_bounds_and_labels():
+    import erasure_gate
+    import phase20_gate_coverage
+
+    zero = phase39_prereg.draw_rate(0, 48)
+    json.dumps(zero)
+    assert zero["rate"] == 0.0 and zero["wilson_lower_95"] == 0.0
+    assert zero["wilson_upper_95"] == erasure_gate.wilson_upper_bound(0, 48)
+    assert zero["unit"] == "draw" and zero["descriptive"] is True
+    assert "D-07" in zero["note"] and "clustering" in zero["note"]
+    full = phase39_prereg.draw_rate(1296, 1296)
+    assert full["rate"] == 1.0 and full["wilson_upper_95"] == 1.0
+    some = phase39_prereg.draw_rate(7, 48)
+    assert some["successes"] == 7 and some["n"] == 48 and some["rate"] == 7 / 48
+    assert some["wilson_lower_95"] == phase20_gate_coverage.wilson_lower_bound(7, 48)
+    assert some["wilson_lower_95"] < some["rate"] < some["wilson_upper_95"]
+
+
+def test_draw_rate_unit_of():
+    assert phase39_prereg.unit_of([0, 0, 1]) == 1
+    assert phase39_prereg.unit_of([0, 0]) == 0
+    assert phase39_prereg.unit_of([True]) == 1
+    with pytest.raises(SystemExit, match=r"^\[phase39_prereg\]"):
+        phase39_prereg.unit_of([])
+
+
+def test_predicted_hit_rate():
+    import math
+
+    assert phase39_prereg.predicted_hit_rate(0.0) == 1.0
+    assert phase39_prereg.predicted_hit_rate(math.log(2)) == 0.5
+    assert phase39_prereg.predicted_hit_rate(3.0) == math.exp(-3.0)
+
+
+def test_anchor_seed_index_is_slot_position_times_k():
+    for i, slot in enumerate(_SLOT_ORDER):
+        assert phase39_prereg.anchor_seed_index(slot) == i * phase35_prereg.FULL_FIDELITY_K
+    with pytest.raises(SystemExit, match=r"^\[phase39_prereg\]"):
+        phase39_prereg.anchor_seed_index("planted")
+
+
+def test_anchor_seed_windows_coincide_with_a2_windows():
+    """D-28, declared: the anchor's sampled draws use the A2 seed window of seed_index = the slot's
+    position (draw_all passes ``seed_index * K`` as ``index``)."""
+    import phase14_recall
+    import phase18_extraction
+
+    k = phase39_prereg.K
+    assert phase18_extraction.K == k
+    for i, slot in enumerate(_SLOT_ORDER):
+        anchor = [
+            phase14_recall.SEED + phase39_prereg.anchor_seed_index(slot) + j for j in range(k - 1)
+        ]
+        a2 = [phase14_recall.question_seed(i * phase18_extraction.K) + j for j in range(k - 1)]
+        assert anchor == a2, slot
+
+
+def test_e6_entries_follow_the_fill():
+    import collections
+
+    pairs = phase39_prereg.e6_entries()
+    assert type(pairs) is tuple
+    assert len(pairs) == len(phase39_prereg.E6_ENTRY_SUBSET) == 216
+    assert tuple(i for i, _ in pairs) == phase39_prereg.E6_ENTRY_SUBSET
+    entries = phase35_prereg.a2_corpus_entries()
+    for i, entry in pairs:
+        assert entry is entries[i] or entry == entries[i]
+        assert entry["family"] == "A2"
+    per_slot = collections.Counter(entry["slot"] for _, entry in pairs)
+    assert per_slot == dict.fromkeys(_SLOT_ORDER, _N_QUESTIONS)
+
+
+def test_minted_members_are_the_cleared_prefix():
+    minting = _record(phase38_prereg.MINTING_RECORD)["slots"]
+    taught = {slot: value for slot, value in zip(_SLOT_ORDER, _taught_values(), strict=True)}
+    for slot in _SLOT_ORDER:
+        members = phase39_prereg.minted_members(slot)
+        assert len(members) == phase39_prereg.MINTED_SET_SIZE - 1 == 7, slot
+        assert list(members) == minting[slot]["cleared"][:7], slot
+        assert taught[slot] not in members, slot
+
+
+def _taught_values():
+    import phase14_factset
+
+    by_slot = {f.slot: f.value for f in phase14_factset.LOCKED_FACTS}
+    return [by_slot[slot] for slot in _SLOT_ORDER]
+
+
+def test_suffix_premise_holds_for_every_entry():
+    """D-23b: every A2 prompt is its guarded span plus the first realized_injection ids of the
+    taught value, and every committed A2 draw (all eight records, adapter-on included) carries its
+    entry's realized_injection."""
+    import phase18_extraction
+
+    from personacore.tokenizer.io import from_json
+
+    tok = from_json(_ROOT / "artifacts" / "tokenizer.json")
+    values = phase39_prereg._values()
+    entries = phase35_prereg.a2_corpus_entries()
+    held = [
+        list(e["prompt_ids"])
+        == phase18_extraction._guarded_span(e)
+        + tok.encode(values[e["fact_id"]])[: e["realized_injection"]]
+        for e in entries
+    ]
+    assert (sum(held), len(held)) == (216, 216)
+    assert {e["realized_injection"] for e in entries} == {1, 2}
+    by_key = {(e["fact_id"], e["tier"], e["seed_index"]): e["realized_injection"] for e in entries}
+    assert len(by_key) == 216
+    for reading, pin in phase39_prereg.A2_RECORDS.items():
+        a2 = [d for d in _record(pin["path"])["draws"] if d["family"] == "A2"]
+        carried = [
+            by_key[(d["fact_id"], d["tier"], d["seed_index"])] == d["realized_injection"]
+            for d in a2
+        ]
+        assert (sum(carried), len(carried)) == (216, 216), reading
+        assert {(d["fact_id"], d["tier"], d["seed_index"]) for d in a2} == set(by_key), reading

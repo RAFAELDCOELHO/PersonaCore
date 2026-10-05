@@ -7,10 +7,10 @@ bindings ``E6_ENTRY_SUBSET`` and ``E6_DECOMPOSITION_RULE``. Under the Phase 35 s
 every commit touching this file must strictly precede the first add of every ``results/phase39_*``
 record, so the rule is written in full before any E6 number exists and cannot be fitted to it.
 
-Plan 39-02 adds the pure functions that implement the written rule to this same file. D-27: its code
-review (plan 39-03) runs before any rehearsal, and the rehearsal pins its sha256. Any later
-correction is Rafael's ruling plus a dated continuation (``scripts/_addendum.py``), never a silent
-edit.
+Plan 39-02 added the pure functions that implement the written rule to this same file (section
+9). D-27: its code review (plan 39-03) runs before any rehearsal, and the rehearsal pins its sha256.
+Any later correction is Rafael's ruling plus a dated continuation (``scripts/_addendum.py``), never
+a silent edit.
 
 Every entry has exactly four fields, ``value``, ``derivation``, ``kind`` and ``source`` (no
 proposer). The projection and stop hours, the extra NLL counts and the entry count are computed at
@@ -22,7 +22,9 @@ which imports phase18_extraction (torch). Every other heavy import stays inside 
 
 import collections.abc
 import fnmatch
+import hashlib
 import json
+import math
 import pathlib
 import re
 import sys
@@ -803,3 +805,144 @@ E6_ENTRY_SUBSET = phase35_prereg.fill(
 E6_DECOMPOSITION_RULE = phase35_prereg.fill(
     "e6_decomposition_rule", decomposition=ENTRIES["e6_decomposition_rule"]
 )
+
+# =================================================================================================
+# (9) THE DEFINITIONS (plan 39-02): gate 2, the committed counts, the D-07 rates, the D-17
+# prediction, the anchor seed index, the entry and minted-member doors. Heavy imports stay inside.
+# =================================================================================================
+
+
+def _values():
+    """{fact_id: taught value} over the locked facts (the values score_records reads)."""
+    import phase14_factset
+
+    return {fact.id: fact.value for fact in phase14_factset.LOCKED_FACTS}
+
+
+def verify_a2_records(*, root=None):
+    """D-02 / D-19: each of the eight A2 records is byte for byte the pinned one."""
+    root = _REPO_ROOT if root is None else pathlib.Path(root)
+    digests = {}
+    for reading in READINGS:
+        path = A2_RECORDS[reading]["path"]
+        sha = hashlib.sha256((root / path).read_bytes()).hexdigest()
+        _prove(
+            sha == A2_RECORDS[reading]["sha256"],
+            f"{reading}: {path} is not the committed record (D-02/D-19); nothing is regenerated — "
+            "pause for Rafael",
+        )
+        digests[reading] = sha
+    return digests
+
+
+def committed_a2_counts():
+    """{reading: {slot: answered}} from the committed sources gate 2 compares against.
+
+    k0..k78: phase38_prereg.a2_counts(). M2: the retrain scores, retained[*].m2_answerable plus the
+    omitted fact's successes. adapter_off: 0 in every slot (results/phase18_extraction_report.md,
+    the adapter-off base 0/104 held-out and 0/112 taught); gate 2 re-derives it from the draws.
+    """
+    a2 = phase38_prereg.a2_counts()
+    out = {f"k{k}": {slot: a2[slot]["counts"][k] for slot in SLOTS} for k in PREFIXES}
+    scores = _read(phase38_prereg.RETRAIN_SCORES)["retrain_scores"]
+    rows = [(row["slot"], row["m2_answerable"]) for row in scores["retained"].values()]
+    rows.append((scores["omitted_fact"]["slot"], scores["omitted_fact"]["successes"]))
+    _prove(
+        sorted(slot for slot, _ in rows) == sorted(SLOTS),
+        f"the retrain scores cover {sorted(slot for slot, _ in rows)}, not each of {SLOTS} once",
+    )
+    out["M2"] = {slot: dict(rows)[slot] for slot in SLOTS}
+    out["adapter_off"] = dict.fromkeys(SLOTS, 0)
+    _prove(tuple(out) == CLASSIFIED_READINGS + DESCRIPTIVE_READINGS, f"readings {tuple(out)}")
+    return out
+
+
+def gate2(*, root=None):
+    """D-19: re-derive every committed A2 count from the SHA-verified draws.
+
+    A digest mismatch is a SystemExit; a count mismatch is returned (passed False, the row's equal
+    False) so the driver refuses and the record shows the whole table.
+    """
+    import phase18_extraction  # torch at import: lazy
+    import phase19_run  # same
+
+    root = _REPO_ROOT if root is None else pathlib.Path(root)
+    digests = verify_a2_records(root=root)
+    committed = committed_a2_counts()
+    values = _values()
+    rows = {}
+    for reading in READINGS:
+        draws = json.loads((root / A2_RECORDS[reading]["path"]).read_text(encoding="utf-8"))
+        pooled = phase19_run._pooled_rows(
+            draws["draws"], values, "A2", phase18_extraction.CORPUS_TIERS
+        )
+        by_slot = {}
+        for row in pooled.values():
+            _prove(row["slot"] not in by_slot, f"{reading}: two rows for slot {row['slot']}")
+            by_slot[row["slot"]] = {
+                "count": row["n_answerable"],
+                "n_questions": row["n_questions"],
+                "committed": committed[reading][row["slot"]],
+                "equal": row["n_answerable"] == committed[reading][row["slot"]],
+            }
+        _prove(set(by_slot) == set(SLOTS), f"{reading}: rows cover {sorted(by_slot)}, not {SLOTS}")
+        rows[reading] = {slot: by_slot[slot] for slot in SLOTS}
+    passed = all(row["equal"] for by_slot in rows.values() for row in by_slot.values())
+    return {"passed": passed, "rows": rows, "sha256": digests}
+
+
+def draw_rate(successes, n):
+    """D-07: a per-draw rate with one-sided 95% Wilson bounds, draw unit, descriptive."""
+    import erasure_gate
+    import phase20_gate_coverage
+
+    return {
+        "successes": successes,
+        "n": n,
+        "rate": successes / n,
+        "wilson_lower_95": phase20_gate_coverage.wilson_lower_bound(successes, n),
+        "wilson_upper_95": erasure_gate.wilson_upper_bound(successes, n),
+        "unit": "draw",
+        "descriptive": True,
+        "note": (
+            "one-sided 95% bounds, together a 90% two-sided interval; within-question clustering "
+            "ignored (D-07)"
+        ),
+    }
+
+
+def predicted_hit_rate(nll_sum):
+    """D-17: the hit rate the value's NLL predicts, exp(-nll_sum); descriptive."""
+    return math.exp(-nll_sum)
+
+
+def unit_of(hits):
+    """D-07: the common unit, some hit in the K draws."""
+    _prove(len(hits) >= 1, "a unit over zero draws is undefined")
+    return int(any(hits))
+
+
+def anchor_seed_index(slot):
+    """D-28: the slot's LOCKED_FACTS position times K, never its position in a partial list."""
+    _prove(slot in SLOTS, f"{slot!r} is not one of {SLOTS}")
+    return SLOTS.index(slot) * K
+
+
+def e6_entries():
+    """CTX-01: (index, A2 corpus entry) for each E6_ENTRY_SUBSET index; the driver's only door."""
+    entries = phase35_prereg.a2_corpus_entries()
+    return tuple((i, entries[i]) for i in E6_ENTRY_SUBSET)
+
+
+def minted_members(slot):
+    """D-11 (ii): the first MINTED_SET_SIZE - 1 cleared names of the committed minting record."""
+    members = _read(phase38_prereg.MINTING_RECORD)["slots"][slot]["cleared"][: MINTED_SET_SIZE - 1]
+    _prove(
+        len(members) == MINTED_SET_SIZE - 1,
+        f"{slot}: {len(members)} minted members, expected {MINTED_SET_SIZE - 1}",
+    )
+    import phase14_factset
+
+    taught = next(fact.value for fact in phase14_factset.LOCKED_FACTS if fact.slot == slot)
+    _prove(taught not in members, f"{slot}: the taught value is among the minted members")
+    return members
