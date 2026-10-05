@@ -769,9 +769,9 @@ reproducible by an outsider. No closed verdict is reopened; v6.0 publishes besid
 
 ### Instrument × context (CTX) — E6
 
-- [ ] **CTX-01**: Which of the 216 A2 corpus entries enter the full-context NLL is pre-registered before any scoring
-- [ ] **CTX-02**: On the same adapters (k = 0, 8, 16, 32, 64, 78 and M2), NLL and rank are scored at (a) the answer anchor without the question and (b) the full A2 question, and generation runs in both contexts where it is defined
-- [ ] **CTX-03**: The report separates how much of the rank/generation disagreement comes from the instrument and how much from the context
+- [x] **CTX-01**: Which of the 216 A2 corpus entries enter the full-context NLL is pre-registered before any scoring
+- [x] **CTX-02**: On the same adapters (k = 0, 8, 16, 32, 64, 78 and M2), NLL and rank are scored at (a) the answer anchor without the question and (b) the full A2 question, and generation runs in both contexts where it is defined
+- [x] **CTX-03**: The report separates how much of the rank/generation disagreement comes from the instrument and how much from the context
 
 ### Report and close (RPT)
 
@@ -837,9 +837,9 @@ reproducible by an outsider. No closed verdict is reopened; v6.0 publishes besid
 | RANK-01 | Phase 38 | Complete |
 | RANK-02 | Phase 38 | Complete |
 | RANK-03 | Phase 38 | Complete |
-| CTX-01 | Phase 39 | Pending |
-| CTX-02 | Phase 39 | Pending |
-| CTX-03 | Phase 39 | Pending |
+| CTX-01 | Phase 39 | Complete |
+| CTX-02 | Phase 39 | Complete |
+| CTX-03 | Phase 39 | Complete |
 | RPT-07 | Phase 45 | Pending |
 | RPT-08 | Phase 45 | Pending |
 | RPT-09 | Phase 45 | Pending |

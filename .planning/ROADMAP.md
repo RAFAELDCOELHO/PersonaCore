@@ -1440,7 +1440,7 @@ never over them.
 - [x] **Phase 36: MPS Cost Probes and Budget Commitment** - Every MPS front priced by a probe on the M3; the v6.0 budget and stop line committed inside the 90 h MPS ceiling, or the work halts and the cut options go to Rafael (completed 2026-10-02; verification passed 4/4 SC, ecdce31; budget 77.72 h, stop line 90 h, approved by Rafael; suite 3782/4/0 at e72c17a)
 - [x] **Phase 37: Clean Reproduction of the Phase 19 Verdict** - R1a: one CPU command re-derives the Phase 19 verdict exactly; R1b: an MPS replica of k = 78 under a pre-registered tolerance, published beside the verdict (completed 2026-10-04; verification passed 4/4 SC; R1a fe715c5 re-derives FAILURE; R1b 8a289fc REPLICATED, all four keys abs_diff 0, draws bit-identical; approved by Rafael; suite 3928/4/0 at 8a289fc)
 - [x] **Phase 38: Exposure Rank at Larger Minted Sets** - E5: the committed ablation prefixes re-scored against same-slot sets minted by a pre-registered rule (completed 2026-10-04; verification passed 4/4 SC; minting record 7357577 (stop_draw 58195), rank record d6984f4 (gate 64/64, CPU 0/256, 0.084 h MPS), report 7043e9c; approved by Rafael; suite 4103/4/0 at 7043e9c)
-- [ ] **Phase 39: Instrument × Context 2×2** - E6: NLL, rank and generation at the answer anchor and the full A2 question on the same adapters
+- [x] **Phase 39: Instrument × Context 2×2** - E6: NLL, rank and generation at the answer anchor and the full A2 question on the same adapters (completed 2026-10-05; verification passed 4/4 SC; prereg frozen 9366134 after Rafael's reviewed; E6 MPS run 820.6 s SCORED — gate 64/64, copy 448/448 bitwise, IN-02 8/8, CPU 0 differing; ledger 4268f26, record 78d2605, report 86de12a; approved by Rafael; suite 4300/4/0 at 86de12a)
 - [ ] **Phase 40: M2 Seed Noise Floor** - E2: M2 retrained at S seeds, published beside v3.0's sampling floor
 - [ ] **Phase 41: Erasure Across Facts, Orderings and Seeds** - E1: the four facts tied at 13/13, two orderings, two seeds, no PASS without second-seed replication
 - [ ] **Phase 42: DP-SGD Recipe Search at Large ε** - E3: a pre-registered grid of 4 recipes × σ ∈ {0, 0.5, 1} (σ = 0 is each recipe's own control), n = 8, each configuration's ε published with `selection_accounted = false`
@@ -1741,43 +1741,43 @@ measured on the same adapters at the answer anchor and at the full A2 question
 Plans:
 **Wave 1**
 
-- [ ] 39-01-PLAN.md — `scripts/phase39_prereg.py` + ancestry test: paths, the eight A2 record pins, the D-11/D-26/D-30 approval and projection (0.7294 h <= stop 0.7424 h, computed), twenty ENTRIES with the written decomposition rule, both fills (e6_entry_subset = all 216, e6_decomposition_rule)
+- [x] 39-01-PLAN.md — `scripts/phase39_prereg.py` + ancestry test: paths, the eight A2 record pins, the D-11/D-26/D-30 approval and projection (0.7294 h <= stop 0.7424 h, computed), twenty ENTRIES with the written decomposition rule, both fills (e6_entry_subset = all 216, e6_decomposition_rule)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 39-02-PLAN.md — the pure E6 definitions in the prereg: gate 2 on the committed A2 draws, statuses, the per-cell classifier with the WR-01 precedence, class counts with denominators, rank summaries, D-07 rates, D-17 prediction, anchor seed index, minted members
+- [x] 39-02-PLAN.md — the pure E6 definitions in the prereg: gate 2 on the committed A2 draws, statuses, the per-cell classifier with the WR-01 precedence, class counts with denominators, rank summaries, D-07 rates, D-17 prediction, anchor seed index, minted members
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 39-03-PLAN.md — code review of the prereg; Rafael confirms D-27..D-29, D-30a and the planner's D-25 readings; full suite (the prereg is frozen from here, D-27)
+- [x] 39-03-PLAN.md — code review of the prereg; Rafael confirms D-27..D-29, D-30a and the planner's D-25 readings; full suite (the prereg is frozen from here, D-27)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 39-04-PLAN.md — `scripts/phase39_ctx.py` part 1: the D-30 copy (per-token + suffix sum) proved bitwise on CPU, anchor ids and draws, gate cells, question scoring, preflight refusals (caps without adapters, D-20 digests, A2 SHA-256, gate 2)
+- [x] 39-04-PLAN.md — `scripts/phase39_ctx.py` part 1: the D-30 copy (per-token + suffix sum) proved bitwise on CPU, anchor ids and draws, gate cells, question scoring, preflight refusals (caps without adapters, D-20 digests, A2 SHA-256, gate 2)
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 39-05-PLAN.md — `scripts/phase39_ctx.py` part 2: run (gate 1 with the bitwise STOP, then anchor/(b)/(ii) per reading), ledger lines, rehearsal identity with the D-27 prereg pin and the 38-REVIEW DR-01..03 fixes, AST censuses
+- [x] 39-05-PLAN.md — `scripts/phase39_ctx.py` part 2: run (gate 1 with the bitwise STOP, then anchor/(b)/(ii) per reading), ledger lines, rehearsal identity with the D-27 prereg pin and the 38-REVIEW DR-01..03 fixes, AST censuses
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 39-06-PLAN.md — `scripts/phase39_ctx.py` part 3: CPU cross-check (NLL/rank, suffix equality), the per-cell readings and classification for collapse and damage, descriptive blocks, build_record, emit
+- [x] 39-06-PLAN.md — `scripts/phase39_ctx.py` part 3: CPU cross-check (NLL/rank, suffix equality), the per-cell readings and classification for collapse and damage, descriptive blocks, build_record, emit
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 39-07-PLAN.md — `scripts/phase39_ctx.py` part 4: report renderer and CLI; CPU rehearsal on the real checkpoints (8 readings x pet_name, birth_year) fed to the report
+- [x] 39-07-PLAN.md — `scripts/phase39_ctx.py` part 4: report renderer and CLI; CPU rehearsal on the real checkpoints (8 readings x pet_name, birth_year) fed to the report
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
-- [ ] 39-08-PLAN.md — code review of the driver, pre-launch gate, Rafael's approved, the E6 MPS run + crosscheck + emit (no commits)
+- [x] 39-08-PLAN.md — code review of the driver, pre-launch gate, Rafael's approved, the E6 MPS run + crosscheck + emit (no commits)
 
 **Wave 9** *(blocked on Wave 8 completion)*
 
-- [ ] 39-09-PLAN.md — E6 record: Rafael's approved, ledger then record in single-path commits, full suite
+- [x] 39-09-PLAN.md — E6 record: Rafael's approved, ledger then record in single-path commits, full suite
 
 **Wave 10** *(blocked on Wave 9 completion)*
 
-- [ ] 39-10-PLAN.md — report from the committed record, Rafael's approved, single-path commit, SC1-SC4 evidence; STATE/ROADMAP/REQUIREMENTS closed by hand
+- [x] 39-10-PLAN.md — report from the committed record, Rafael's approved, single-path commit, SC1-SC4 evidence; STATE/ROADMAP/REQUIREMENTS closed by hand
 
 ### Phase 40: M2 Seed Noise Floor
 
@@ -1998,7 +1998,7 @@ Next (v5.0): `/gsd:plan-phase 29`.
 | 36. MPS Cost Probes and Budget Commitment | v6.0 | 8/8 | Complete | 2026-10-02 — verification passed 4/4 SC (ecdce31); probe records + ledger f7b9962..0d59b6d; Rafael's ruling (spread_scaled, E6 a2_regenerated_entries = 0, no cuts) + approved → fill 9a5718a, budget 6b57231 (77.72 h, stop line 90 h, S = 5); review fixes b3ab341; suite 3782/4/0 at e72c17a; zero gsd-sdk mutation handlers |
 | 37. Clean Reproduction of the Phase 19 Verdict | v6.0 | 7/7 | Complete | 2026-10-04 — verification passed 4/4 SC; review eeeb804 (0/5/6) fixed 2781bd6..5896ae3 before the prereg freeze; R1a record fe715c5 (FAILURE re-derived on CPU); R1b one MPS attempt 4104 s → REPLICATED, ledger 3f87acf, arm 57dcd4b, record 8a289fc; Rafael approved each; suite 3928/4/0 at 8a289fc; zero gsd-sdk mutation handlers |
 | 38. Exposure Rank at Larger Minted Sets | v6.0 | 10/10 | Complete | 2026-10-04 — verification passed 4/4 SC; reviews 1e4b3e2 (WR-01 fixed d33986c per Rafael) and 6475b14 (nothing to fix); minting 7357577, sizes b2416ee, ledger 8ae5994, rank d6984f4, report 7043e9c, each after Rafael's approved; suite 4103/4/0 at 7043e9c; zero gsd-sdk mutation handlers |
-| 39. Instrument × Context 2×2 | v6.0 | 0/TBD | Not started | - |
+| 39. Instrument × Context 2×2 | v6.0 | 10/10 | Complete | 2026-10-05 — verification passed 4/4 SC; prereg reviewed and frozen 9366134 (39-REVIEW, -2); driver review 39-REVIEW-3 (7 fixes, re-rehearsed); ledger 4268f26, record 78d2605, report 86de12a, each after Rafael's approved; suite 4300/4/0 |
 | 40. M2 Seed Noise Floor | v6.0 | 0/TBD | Not started | - |
 | 41. Erasure Across Facts, Orderings and Seeds | v6.0 | 0/TBD | Not started | - |
 | 42. DP-SGD Recipe Search at Large ε | v6.0 | 0/TBD | Not started | - |
