@@ -1051,3 +1051,365 @@ def recall_floor(full_rows_by_seed, m2_rows_by_seed):
         },
         "estimator": "e2_noise_floor_estimator (preference)",
     }
+
+
+def committed_adapter_off():
+    """D-09 / R-1: the committed adapter-off dialogue PPL, read from phase19_run.NOISE_FLOORS_PATH
+    (identical across its two seeds), never retyped."""
+    import phase19_run  # torch at import: lazy
+
+    record = json.loads(phase19_run.NOISE_FLOORS_PATH.read_text(encoding="utf-8"))
+    block = record["dialogue_ppl_noise_floor"]
+    _prove(
+        block["adapter_off_identical_across_seeds"] is True
+        and block["seed_a"]["adapter_off"] == block["seed_b"]["adapter_off"],
+        "the committed adapter-off reading is not identical across the two v3.0 seeds",
+    )
+    return block["seed_a"]["adapter_off"]
+
+
+def dialogue_gap(record, committed_off, *, device):
+    """D-09 / R-1 / R-2: adapter_on - adapter_off of an A2 arm record's dialogue reading, under
+    Rafael's device-scoped adapter-off rule and his pre != post rule (both read at call time)."""
+    post = record["dialogue_ppl"]
+    pre = record["pre_erasure"]["dialogue_ppl"]
+    _prove(
+        pre["n_targets"] == post["n_targets"],
+        f"pre_erasure n_targets {pre['n_targets']} != post {post['n_targets']}: not one corpus",
+    )
+    _prove(isinstance(device, str) and device, f"device {device!r} is not a non-empty str")
+    pre_post_equal = pre == post
+    on, off = post["adapter_on"], post["adapter_off"]
+    if not pre_post_equal:
+        _prove(
+            PRE_POST_RULE != "refuse",
+            f"pre_erasure and post dialogue readings differ on the same adapter (R-2 refuse): "
+            f"pre {pre}, post {post}",
+        )
+        if PRE_POST_RULE == "mean":
+            on = statistics.fmean([pre["adapter_on"], post["adapter_on"]])
+            off = statistics.fmean([pre["adapter_off"], post["adapter_off"]])
+    matches = off == committed_off
+    if ADAPTER_OFF_RULE == "mps-equality" and device == "mps":
+        _prove(
+            matches,
+            f"adapter-off {off!r} != committed {committed_off!r} on mps (D-09, R-1 mps-equality)",
+        )
+    return {
+        "gap": on - off,
+        "adapter_on": on,
+        "adapter_off": off,
+        "committed_adapter_off": committed_off,
+        "adapter_off_matches_committed": matches,
+        "device": device,
+        "rehearsal": device != "mps",
+        "pre_post_equal": pre_post_equal,
+        "pre_post_abs_difference": {
+            "adapter_on": abs(pre["adapter_on"] - post["adapter_on"]),
+            "adapter_off": abs(pre["adapter_off"] - post["adapter_off"]),
+        },
+        "rules": {"R-1": ADAPTER_OFF_RULE, "R-2": PRE_POST_RULE},
+        "criterion": False,
+    }
+
+
+def gap_noise_floor(gaps_by_seed):
+    """D-10: the mean |gap_i - gap_j| over every pair of whole full-group seeds, the max beside."""
+    import phase19_floor  # torch-free constants
+
+    pairs = [
+        {"seeds": [i, j], "abs_gap_difference": abs(gaps_by_seed[i] - gaps_by_seed[j])}
+        for i, j in _pairs(list(gaps_by_seed))
+    ]
+    diffs = [p["abs_gap_difference"] for p in pairs]
+    value = statistics.fmean(diffs)
+    _prove(math.isfinite(value) and value >= 0, f"gap noise floor {value!r} is not finite >= 0")
+    return {
+        "value": value,
+        "max": max(diffs),
+        "pairs": pairs,
+        "gaps": dict(gaps_by_seed),
+        "n_pairs": len(pairs),
+        "beside": phase19_floor.DIALOGUE_PPL_NOISE_FLOOR,
+    }
+
+
+def v3_delta_taught_to_m2():
+    """D-12: v3.0's signed delta_taught_to_m2 per gated slot, read from RETRAIN_SCORES_PATH."""
+    import phase19_erasure as pin  # torch at import: lazy
+    import phase19_run  # torch at import: lazy
+
+    record = json.loads(phase19_run.RETRAIN_SCORES_PATH.read_text(encoding="utf-8"))
+    retained = record["retrain_scores"]["retained"]
+    deltas = {
+        row["slot"]: row["delta_taught_to_m2"]
+        for row in retained.values()
+        if row["slot"] in pin.GATED_NONTARGET_SLOTS
+    }
+    _prove(set(deltas) == set(pin.GATED_NONTARGET_SLOTS), f"v3.0 deltas cover {sorted(deltas)}")
+    return deltas
+
+
+def d12_table(full_rows_by_seed, m2_rows_by_seed):
+    """D-12: per gated slot, m2 rate - full rate for every (full seed, M2 seed) pair, the same-seed
+    pairs marked, beside v3.0's delta_taught_to_m2; descriptive."""
+    import phase19_erasure as pin  # torch at import: lazy
+
+    v3 = v3_delta_taught_to_m2()
+    full = {seed: slot_rows(rows) for seed, rows in full_rows_by_seed.items()}
+    m2 = {seed: slot_rows(rows) for seed, rows in m2_rows_by_seed.items()}
+    per_slot = {}
+    for slot in pin.GATED_NONTARGET_SLOTS:
+        pairs = [
+            {
+                "full_seed": fs,
+                "m2_seed": ms,
+                "same_seed": fs == ms,
+                "m2_minus_full": m2[ms][slot]["rate"] - full[fs][slot]["rate"],
+            }
+            for fs in full
+            for ms in m2
+        ]
+        _prove(len(pairs) == len(full) * len(m2), f"slot {slot}: {len(pairs)} pairs")
+        per_slot[slot] = {"v3_delta_taught_to_m2": v3[slot], "pairs": pairs}
+    return {"per_slot": per_slot, "criterion": False}
+
+
+def count_deltas(new_rows, committed_rows):
+    """D-07 / D-08b: per core slot, the new and committed [n_answerable, n_questions] and the count
+    difference, at equal denominators."""
+    new, committed = slot_rows(new_rows), slot_rows(committed_rows)
+    counts = {}
+    for slot, row in new.items():
+        other = committed[slot]
+        _prove(
+            row["n_questions"] == other["n_questions"],
+            f"slot {slot}: denominators {row['n_questions']} != {other['n_questions']}",
+        )
+        counts[slot] = {
+            "new": [row["n_answerable"], row["n_questions"]],
+            "committed": [other["n_answerable"], other["n_questions"]],
+            "delta": row["n_answerable"] - other["n_answerable"],
+        }
+    return counts
+
+
+def d07_reading(tensor_identical, new_rows, committed_rows):
+    """D-07 amended: the count difference of a new vs committed adapter; a non-identical pair's is
+    same-seed re-run noise; descriptive."""
+    return {
+        "tensor_identical": tensor_identical,
+        "counts": count_deltas(new_rows, committed_rows),
+        "label": None
+        if tensor_identical
+        else "ruído de re-execução com a mesma semente (same-seed re-run noise)",
+        "criterion": False,
+    }
+
+
+D08B_OUTCOMES = ("NO_RESIDUAL", "V3_LIMITATION", "NOT_SEPARABLE")
+
+
+def d08b_reading(weights_identical, phase18_rows, full1337_rows):
+    """D-08b: the residual of Phase 18's run_arm counts against the new full@1337, one of
+    D08B_OUTCOMES with its measured size."""
+    counts = count_deltas(full1337_rows, phase18_rows)
+    if not weights_identical:
+        outcome = "NOT_SEPARABLE"
+    elif all(c["delta"] == 0 for c in counts.values()):
+        outcome = "NO_RESIDUAL"
+    else:
+        outcome = "V3_LIMITATION"
+    return {
+        "outcome": outcome,
+        "counts": counts,
+        "max_abs_rate_difference": max(abs(c["delta"]) / c["new"][1] for c in counts.values()),
+        "criterion": False,
+    }
+
+
+def seed_outcomes(ledger_lines, seeds):
+    """D-15: each seed whole / dropped / not_run from its LAST ledger attempt of run_id(seed)."""
+    import phase36_ledger  # torch-free; lazy so the import surface stays small
+
+    attempts = phase36_ledger._attempts(ledger_lines)
+    outcomes = {}
+    for seed in seeds:
+        mine = [(start, close) for start, close in attempts if start["run_id"] == run_id(seed)]
+        if not mine:
+            outcomes[seed] = "not_run"
+            continue
+        _prove(
+            all(close is not None for _, close in mine),
+            f"seed {seed}: an attempt is still open: phase36_ledger.py reconcile first",
+        )
+        close = mine[-1][1]
+        if close["event"] == "lost":
+            outcomes[seed] = "dropped"
+        else:
+            _prove(
+                close["record"] == seed_record(seed),
+                f"seed {seed}: the end line names {close['record']!r}, not {seed_record(seed)}",
+            )
+            outcomes[seed] = "whole"
+    return outcomes
+
+
+def pending_seeds(outcomes, rerun=frozenset()):
+    """D-15 / R-3: the not_run seeds, plus each dropped seed in ``rerun`` if DROPPED_SEED_RERUN."""
+    _prove(
+        all(outcomes.get(s) == "dropped" for s in rerun),
+        f"R-3 b: only a dropped seed can be re-run, never a whole or not-run one ({sorted(rerun)})",
+    )
+    return tuple(
+        seed
+        for seed, outcome in outcomes.items()
+        if outcome == "not_run" or (DROPPED_SEED_RERUN and outcome == "dropped" and seed in rerun)
+    )
+
+
+# R-3 b (c): a crashed attempt's partial outputs are kept (never deleted) under DROPPED_ROOT, which
+# .gitignore's data/ covers, and listed in the records.
+DROPPED_ROOT = "data/phase40_dropped"
+DROPPED_MANIFEST = "manifest.json"
+DROPPED_MANIFEST_KEYS = (
+    "seed",
+    "run_id",
+    "lost_utc",
+    "cause_note",
+    "approved",
+    "head_at_dropped_attempt",
+    "relaunch_git_sha",
+    "head_change_declared",
+    "kept",
+)
+RELAUNCH_DECLARATION_KEYS = ("launch_git_sha", "head_change_declared", "approved")
+_KEPT_KEYS = ("from", "path", "sha256")
+
+
+def lost_attempts(ledger_lines, seed):
+    """R-3 b (e): the utc of every lost line of run_id(seed), in ledger order; reconcile writes a
+    lost line only for an open start, so each closes a crashed attempt."""
+    return [
+        line["utc"]
+        for line in ledger_lines
+        if line["event"] == "lost" and line["run_id"] == run_id(seed)
+    ]
+
+
+def dropped_attempt_dir(seed, lost_utc):
+    """R-3 b (c): where a crashed attempt's kept outputs and its manifest live (no ':' in it)."""
+    _prove(seed in SEEDS, f"seed {seed!r} is not one of SEEDS {SEEDS}")
+    _prove(isinstance(lost_utc, str) and lost_utc, f"lost_utc {lost_utc!r} is not a non-empty str")
+    return f"{DROPPED_ROOT}/{run_id(seed).replace('/', '_')}_{lost_utc.replace(':', '')}"
+
+
+def _text(value):
+    """A str non-empty after strip."""
+    return isinstance(value, str) and bool(value.strip())
+
+
+def dropped_manifest_failures(manifest, *, seed, lost_utc):
+    """R-3 b (a, b, c, e): the failures of a crashed attempt's manifest, checked on the manifest
+    ALONE; [] when every condition holds. Never raises on a bad manifest."""
+    keys = tuple(manifest)
+    if set(keys) != set(DROPPED_MANIFEST_KEYS) or len(keys) != len(DROPPED_MANIFEST_KEYS):
+        missing = sorted(set(DROPPED_MANIFEST_KEYS) - set(keys))
+        extra = sorted(set(keys) - set(DROPPED_MANIFEST_KEYS))
+        return [f"manifest keys: missing {missing}, extra {extra}"]
+    failures = []
+    if manifest["seed"] != seed:
+        failures.append(f"seed {manifest['seed']!r} != {seed!r} (b: same seed)")
+    if manifest["run_id"] != run_id(seed):
+        failures.append(f"run_id {manifest['run_id']!r} != {run_id(seed)!r} (b: same seed)")
+    if manifest["lost_utc"] != lost_utc:
+        failures.append(f"lost_utc {manifest['lost_utc']!r} != {lost_utc!r} (e: that attempt)")
+    if not _text(manifest["cause_note"]):
+        failures.append("cause_note is empty (a: a cause note)")
+    if not (isinstance(manifest["approved"], str) and "approved" in manifest["approved"]):
+        failures.append(f"approved {manifest['approved']!r} lacks Rafael's 'approved' (a)")
+    head, relaunch = manifest["head_at_dropped_attempt"], manifest["relaunch_git_sha"]
+    for key, sha in (("head_at_dropped_attempt", head), ("relaunch_git_sha", relaunch)):
+        if not _text(sha):
+            failures.append(f"{key} {sha!r} is not a non-empty str (b)")
+    declared = manifest["head_change_declared"]
+    if head == relaunch and declared is not None:
+        failures.append("head_change_declared is set but the HEAD did not change (b)")
+    if head != relaunch and not _text(declared):
+        failures.append(f"head_change_declared {declared!r}: HEAD {head} -> {relaunch} (b)")
+    kept = manifest["kept"]
+    if not isinstance(kept, list):
+        return [*failures, f"kept is {type(kept).__name__}, not a list (c)"]
+    prefix = dropped_attempt_dir(seed, lost_utc) + "/"
+    for index, item in enumerate(kept):
+        if not (isinstance(item, dict) and tuple(sorted(item)) == _KEPT_KEYS):
+            found = sorted(item) if isinstance(item, dict) else type(item).__name__
+            failures.append(f"kept[{index}] keys {found} are not {list(_KEPT_KEYS)} (c)")
+            continue
+        if not all(isinstance(item[k], str) for k in _KEPT_KEYS):
+            failures.append(f"kept[{index}] has a non-str field (c)")
+        elif not item["path"].startswith(prefix):
+            failures.append(f"kept[{index}] path {item['path']!r} is not under {prefix} (c)")
+    return failures
+
+
+def relaunch_declaration_name(launch_git_sha):
+    """R-3 b (b): the file, in the attempt directory, declaring a HEAD moved after drop_attempt."""
+    _prove(_text(launch_git_sha), f"launch_git_sha {launch_git_sha!r} is not a non-empty str")
+    return f"relaunch_{launch_git_sha}.json"
+
+
+def relaunch_declaration_failures(declaration, *, relaunch_git_sha):
+    """R-3 b (b): the failures of a relaunch declaration of a HEAD that moved after drop_attempt,
+    declared and approved by Rafael before that launch; [] when it holds."""
+    keys = tuple(declaration)
+    if set(keys) != set(RELAUNCH_DECLARATION_KEYS) or len(keys) != len(RELAUNCH_DECLARATION_KEYS):
+        missing = sorted(set(RELAUNCH_DECLARATION_KEYS) - set(keys))
+        extra = sorted(set(keys) - set(RELAUNCH_DECLARATION_KEYS))
+        return [f"declaration keys: missing {missing}, extra {extra}"]
+    failures = []
+    launch = declaration["launch_git_sha"]
+    if not _text(launch) or launch == relaunch_git_sha:
+        failures.append(f"launch_git_sha {launch!r} is empty or the drop-time HEAD (b)")
+    if not _text(declaration["head_change_declared"]):
+        failures.append("head_change_declared is empty (b)")
+    approved = declaration["approved"]
+    if not (isinstance(approved, str) and "approved" in approved):
+        failures.append(f"approved {approved!r} lacks Rafael's 'approved' (b)")
+    return failures
+
+
+def latest_head_failures(manifest, declaration, *, launch_git_sha):
+    """R-3 b (b), only for a seed's latest crashed attempt: the launch HEAD is the drop-time HEAD,
+    or a relaunch declaration covers the move."""
+    relaunch = manifest["relaunch_git_sha"]
+    if launch_git_sha == relaunch:
+        return []
+    if declaration is None:
+        return [f"HEAD moved after drop_attempt ({relaunch} -> {launch_git_sha}), undeclared (b)"]
+    failures = relaunch_declaration_failures(declaration, relaunch_git_sha=relaunch)
+    if declaration.get("launch_git_sha") != launch_git_sha:
+        failures.append(
+            f"declaration launch_git_sha {declaration.get('launch_git_sha')!r} != the launch "
+            f"{launch_git_sha!r} (b)"
+        )
+    return failures
+
+
+def d13_block(*, curve, gate_rank, a2_rank, committed_ranks, minted_ranks):
+    """D-13: the M2 adapter's anchor curve, anchor gate and R_q n1 (phase39_prereg.n1); only when
+    Rafael approved D-13; descriptive."""
+    _prove(D13_INCLUDED, "D-13 was not approved: its block is never computed")
+    return {
+        "anchor_curve": curve,
+        "anchor_gate": {
+            "rank": gate_rank,
+            "a2_record_rank": a2_rank,
+            "equal": gate_rank == a2_rank,
+        },
+        "r_q": {
+            name: {"ranks": list(ranks), "n1": phase39_prereg.n1(ranks), "n": len(ranks)}
+            for name, ranks in (("committed", committed_ranks), ("minted", minted_ranks))
+        },
+        "criterion": False,
+    }

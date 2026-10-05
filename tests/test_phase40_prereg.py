@@ -14,6 +14,7 @@ It reads only tracked files and git history and writes nothing under results/.
 """
 
 import ast
+import copy
 import fnmatch
 import functools
 import inspect
@@ -1015,3 +1016,397 @@ def test_recall_floor_publishes_the_larger_group_beside_v3():
     assert tie["published"] == {"value": tie["full"]["floor"], "group": "full", "tie": True}
     with pytest.raises(SystemExit, match=r"^\[phase40_prereg\]"):
         phase40_prereg.recall_floor(full, {1337: _rows({}), 1338: _rows({})})
+
+
+# The CPU adapter-off reading with MPS hidden (B1, orchestrator 2026-10-05), typed in the TEST only.
+_CPU_ADAPTER_OFF = 4.573348505014267
+_COMMITTED_ON = 6.007920892362744
+_COMMITTED_OFF = 4.573349214207799
+
+
+def _with_off(record, off):
+    planted = copy.deepcopy(record)
+    for reading in (planted["dialogue_ppl"], planted["pre_erasure"]["dialogue_ppl"]):
+        reading["adapter_off"] = off
+    return planted
+
+
+def test_gap_on_the_committed_m2_record(monkeypatch):
+    committed = phase40_prereg.committed_adapter_off()
+    assert committed == _COMMITTED_OFF
+    record = _record(_RETRAIN)
+    for rule in phase40_prereg.ADAPTER_OFF_RULES:
+        monkeypatch.setattr(phase40_prereg, "ADAPTER_OFF_RULE", rule)
+        gap = phase40_prereg.dialogue_gap(record, committed, device="mps")
+        assert gap["gap"] == _COMMITTED_ON - _COMMITTED_OFF
+        assert gap["adapter_on"] == _COMMITTED_ON and gap["adapter_off"] == _COMMITTED_OFF
+        assert gap["adapter_off_matches_committed"] is True
+        assert gap["rehearsal"] is False and gap["pre_post_equal"] is True
+        assert gap["pre_post_abs_difference"] == {"adapter_on": 0.0, "adapter_off": 0.0}
+        assert gap["rules"] == {"R-1": rule, "R-2": phase40_prereg.PRE_POST_RULE}
+        assert gap["device"] == "mps" and gap["criterion"] is False
+    planted = copy.deepcopy(record)
+    planted["pre_erasure"]["dialogue_ppl"]["n_targets"] += 1
+    with pytest.raises(SystemExit, match=r"^\[phase40_prereg\]"):
+        phase40_prereg.dialogue_gap(planted, committed, device="mps")
+    with pytest.raises(SystemExit, match=r"^\[phase40_prereg\]"):
+        phase40_prereg.dialogue_gap(record, committed, device="")
+
+
+def test_gap_device_scoped_adapter_off_truth_table(monkeypatch):
+    committed = phase40_prereg.committed_adapter_off()
+    record = _record(_RETRAIN)
+    cpu = _with_off(record, _CPU_ADAPTER_OFF)
+    assert _CPU_ADAPTER_OFF != committed, "meta-guard: the CPU reading equals the committed one"
+    for rule in phase40_prereg.ADAPTER_OFF_RULES:
+        monkeypatch.setattr(phase40_prereg, "ADAPTER_OFF_RULE", rule)
+        gap = phase40_prereg.dialogue_gap(cpu, committed, device="cpu")
+        assert gap["gap"] == _COMMITTED_ON - _CPU_ADAPTER_OFF
+        assert gap["adapter_off_matches_committed"] is False and gap["rehearsal"] is True
+        own = phase40_prereg.dialogue_gap(record, committed, device="cpu")
+        assert own["adapter_off_matches_committed"] is True and own["rehearsal"] is True
+    monkeypatch.setattr(phase40_prereg, "ADAPTER_OFF_RULE", "mps-equality")
+    with pytest.raises(SystemExit, match="R-1"):
+        phase40_prereg.dialogue_gap(cpu, committed, device="mps")
+    monkeypatch.setattr(phase40_prereg, "ADAPTER_OFF_RULE", "record-only")
+    gap = phase40_prereg.dialogue_gap(cpu, committed, device="mps")
+    assert gap["adapter_off_matches_committed"] is False and gap["rehearsal"] is False
+    assert gap["committed_adapter_off"] == committed
+
+
+def test_gap_pre_post_rule_truth_table(monkeypatch):
+    committed = phase40_prereg.committed_adapter_off()
+    record = _record(_RETRAIN)
+    planted = copy.deepcopy(record)
+    pre = planted["pre_erasure"]["dialogue_ppl"]
+    pre["adapter_on"] += 0.5
+    post = planted["dialogue_ppl"]
+    monkeypatch.setattr(phase40_prereg, "PRE_POST_RULE", "post")
+    gap = phase40_prereg.dialogue_gap(planted, committed, device="mps")
+    assert gap["gap"] == post["adapter_on"] - post["adapter_off"]
+    assert gap["pre_post_equal"] is False
+    assert gap["pre_post_abs_difference"]["adapter_on"] > 0
+    assert gap["pre_post_abs_difference"]["adapter_off"] == 0.0
+    monkeypatch.setattr(phase40_prereg, "PRE_POST_RULE", "mean")
+    gap = phase40_prereg.dialogue_gap(planted, committed, device="mps")
+    on = statistics.fmean([pre["adapter_on"], post["adapter_on"]])
+    off = statistics.fmean([pre["adapter_off"], post["adapter_off"]])
+    assert gap["gap"] == on - off and gap["rules"]["R-2"] == "mean"
+    monkeypatch.setattr(phase40_prereg, "PRE_POST_RULE", "refuse")
+    with pytest.raises(SystemExit, match="R-2"):
+        phase40_prereg.dialogue_gap(planted, committed, device="mps")
+    for rule in phase40_prereg.PRE_POST_RULES:
+        monkeypatch.setattr(phase40_prereg, "PRE_POST_RULE", rule)
+        gap = phase40_prereg.dialogue_gap(record, committed, device="mps")
+        assert gap["gap"] == _COMMITTED_ON - _COMMITTED_OFF and gap["pre_post_equal"] is True
+
+
+def test_gap_noise_floor_truth_table():
+    import phase19_floor
+
+    two = phase40_prereg.gap_noise_floor({1337: 1.0, 2024: 1.25})
+    assert two["value"] == two["max"] == abs(1.0 - 1.25)
+    assert two["n_pairs"] == math.comb(2, 2)
+    assert two["pairs"] == [{"seeds": [1337, 2024], "abs_gap_difference": 0.25}]
+    assert two["gaps"] == {1337: 1.0, 2024: 1.25}
+    assert two["beside"] == phase19_floor.DIALOGUE_PPL_NOISE_FLOOR
+    three = phase40_prereg.gap_noise_floor({1337: 1.0, 2024: 1.25, 1338: 2.0})
+    assert three["n_pairs"] == math.comb(3, 2)
+    assert [p["abs_gap_difference"] for p in three["pairs"]] == [0.25, 1.0, 0.75]
+    assert three["value"] == statistics.fmean([0.25, 1.0, 0.75]) and three["max"] == 1.0
+    assert math.isfinite(three["value"]) and three["value"] >= 0
+    # The committed v3.0 pair reproduces the D-07 gap prediction's reference.
+    block = _record("results/phase19_noise_floors.json")["dialogue_ppl_noise_floor"]
+    gaps = {
+        block[k]["seed"]: block[k]["adapter_on"] - block[k]["adapter_off"]
+        for k in ("seed_a", "seed_b")
+    }
+    assert phase40_prereg.gap_noise_floor(gaps)["value"] == phase19_floor.DIALOGUE_PPL_NOISE_FLOOR
+    for bad in (math.inf, math.nan):
+        with pytest.raises(SystemExit, match=r"^\[phase40_prereg\]"):
+            phase40_prereg.gap_noise_floor({1337: 1.0, 2024: bad})
+    with pytest.raises(SystemExit, match="INSUFFICIENT_SEEDS"):
+        phase40_prereg.gap_noise_floor({1337: 1.0})
+
+
+def test_d12_table_shape_and_signs():
+    import phase19_erasure as pin
+
+    v3 = phase40_prereg.v3_delta_taught_to_m2()
+    retained = _record("results/phase19_retrain_scores.json")["retrain_scores"]["retained"]
+    assert v3 == {row["slot"]: row["delta_taught_to_m2"] for row in retained.values()}
+    assert set(v3) == set(pin.GATED_NONTARGET_SLOTS)
+    full = {1337: _committed_rows(_PHASE18), 2024: _committed_rows(_REPLICATE)}
+    m2 = {1337: _committed_rows(_RETRAIN), 2024: _committed_rows(_RETRAIN)}
+    table = phase40_prereg.d12_table(full, m2)
+    assert table["criterion"] is False
+    assert tuple(table["per_slot"]) == pin.GATED_NONTARGET_SLOTS
+    for slot, entry in table["per_slot"].items():
+        assert entry["v3_delta_taught_to_m2"] == v3[slot]
+        pairs = entry["pairs"]
+        assert len(pairs) == len(full) * len(m2)
+        assert sum(p["same_seed"] for p in pairs) == len(full)
+        assert [(p["full_seed"], p["m2_seed"]) for p in pairs] == [
+            (1337, 1337),
+            (1337, 2024),
+            (2024, 1337),
+            (2024, 2024),
+        ]
+        for p in pairs:
+            m2_rate = phase40_prereg.slot_rows(m2[p["m2_seed"]])[slot]["rate"]
+            full_rate = phase40_prereg.slot_rows(full[p["full_seed"]])[slot]["rate"]
+            assert p["m2_minus_full"] == m2_rate - full_rate
+        assert pairs[0]["m2_minus_full"] == v3[slot], slot
+    same = {slot: e["pairs"][0]["m2_minus_full"] for slot, e in table["per_slot"].items()}
+    assert same == {
+        "cat_name": 0.0,
+        "street": 0.0,
+        "sibling_name": 0.0,
+        "person_name": 0.0,
+        "house_number": -0.2592592592592592,
+        "birth_year": 0.0,
+        "hometown": -0.11111111111111116,
+    }
+
+
+_SAME_SEED_LABEL = "ruído de re-execução com a mesma semente (same-seed re-run noise)"
+
+
+def test_d07_reading_labels():
+    import phase19_erasure as pin
+
+    q = pin.N_TARGET_QUESTIONS
+    rows = _rows({"house_number": 17})
+    same = phase40_prereg.d07_reading(True, rows, rows)
+    assert same["tensor_identical"] is True and same["label"] is None
+    assert same["criterion"] is False
+    assert {c["delta"] for c in same["counts"].values()} == {0}
+    assert tuple(same["counts"]) == (*pin.GATED_NONTARGET_SLOTS, pin.TARGET_SLOT)
+    moved = phase40_prereg.d07_reading(False, _rows({"house_number": 19}), rows)
+    assert moved["label"] == _SAME_SEED_LABEL
+    assert moved["counts"]["house_number"] == {"new": [19, q], "committed": [17, q], "delta": 2}
+    assert moved["counts"]["street"]["delta"] == 0
+    assert phase40_prereg.count_deltas(rows, rows) == same["counts"]
+    with pytest.raises(SystemExit, match=r"^\[phase40_prereg\]"):
+        phase40_prereg.count_deltas(rows, _rows({}, n_questions=q + 1))
+
+
+def test_d08b_truth_table():
+    import phase19_erasure as pin
+
+    q = pin.N_TARGET_QUESTIONS
+    rows = _rows({"house_number": 17})
+    assert phase40_prereg.D08B_OUTCOMES == ("NO_RESIDUAL", "V3_LIMITATION", "NOT_SEPARABLE")
+    equal = phase40_prereg.d08b_reading(True, rows, rows)
+    assert equal["outcome"] == "NO_RESIDUAL" and equal["max_abs_rate_difference"] == 0.0
+    differ = _rows({"house_number": 20})
+    limited = phase40_prereg.d08b_reading(True, rows, differ)
+    assert limited["outcome"] == "V3_LIMITATION"
+    assert limited["counts"]["house_number"]["delta"] == 3
+    assert limited["max_abs_rate_difference"] == 3 / q
+    assert limited["criterion"] is False
+    for full in (rows, differ):
+        apart = phase40_prereg.d08b_reading(False, rows, full)
+        assert apart["outcome"] == "NOT_SEPARABLE"
+    assert phase40_prereg.d08b_reading(False, rows, differ)["max_abs_rate_difference"] == 3 / q
+    committed = _committed_rows(_PHASE18)
+    assert phase40_prereg.d08b_reading(True, committed, committed)["outcome"] == "NO_RESIDUAL"
+
+
+def _ledger_line(event, seed, utc, record=None):
+    return {
+        "utc": utc,
+        "event": event,
+        "run_id": phase40_prereg.run_id(seed),
+        "phase": 40,
+        "front": "E2",
+        "record": record,
+        "seconds": None,
+        "flag": None,
+        "stop": None,
+        "ruling": None,
+    }
+
+
+def _ledger_lines():
+    seed_record = phase40_prereg.seed_record
+    return [
+        _ledger_line("start", 1337, "t1"),
+        _ledger_line("end", 1337, "t2", seed_record(1337)),
+        _ledger_line("start", 2024, "t3"),
+        _ledger_line("lost", 2024, "t4"),
+        _ledger_line("start", 2025, "t5"),
+        _ledger_line("lost", 2025, "t6"),
+        _ledger_line("start", 2025, "t7"),
+        _ledger_line("end", 2025, "t8", seed_record(2025)),
+    ]
+
+
+def test_seed_outcomes_whole_dropped_not_run(monkeypatch):
+    seeds = phase40_prereg.SEEDS
+    outcomes = phase40_prereg.seed_outcomes(_ledger_lines(), seeds)
+    assert outcomes == {
+        1337: "whole",
+        2024: "dropped",
+        1338: "not_run",
+        2025: "whole",
+        1339: "not_run",
+    }
+    assert tuple(outcomes) == seeds
+    other = _ledger_lines()
+    other[1] = _ledger_line("end", 1337, "t2", phase40_prereg.seed_record(2024))
+    with pytest.raises(SystemExit, match=r"^\[phase40_prereg\]"):
+        phase40_prereg.seed_outcomes(other, seeds)
+    opened = [*_ledger_lines(), _ledger_line("start", 1338, "t9")]
+    with pytest.raises(SystemExit, match="reconcile"):
+        phase40_prereg.seed_outcomes(opened, seeds)
+    monkeypatch.setattr(phase40_prereg, "DROPPED_SEED_RERUN", False)
+    assert phase40_prereg.pending_seeds(outcomes) == (1338, 1339)
+    assert phase40_prereg.pending_seeds(outcomes, rerun=frozenset({2024})) == (1338, 1339)
+    monkeypatch.setattr(phase40_prereg, "DROPPED_SEED_RERUN", True)
+    assert phase40_prereg.pending_seeds(outcomes) == (1338, 1339)
+    assert phase40_prereg.pending_seeds(outcomes, rerun=frozenset({2024})) == (2024, 1338, 1339)
+    for bad in (frozenset({1337}), frozenset({1338})):
+        with pytest.raises(SystemExit, match="R-3 b"):
+            phase40_prereg.pending_seeds(outcomes, rerun=bad)
+
+
+def test_seed_outcomes_lost_attempts_and_dropped_dir():
+    lines = [
+        _ledger_line("start", 2025, "s1"),
+        _ledger_line("lost", 2025, "A"),
+        _ledger_line("start", 1337, "s2"),
+        _ledger_line("end", 1337, "s3", phase40_prereg.seed_record(1337)),
+        _ledger_line("start", 2025, "s4"),
+        _ledger_line("lost", 2025, "B"),
+        _ledger_line("start", 2025, "s5"),
+        _ledger_line("end", 2025, "s6", phase40_prereg.seed_record(2025)),
+    ]
+    assert phase40_prereg.lost_attempts(lines, 2025) == ["A", "B"]
+    assert phase40_prereg.lost_attempts(lines, 1337) == []
+    assert phase40_prereg.lost_attempts(lines, 1338) == []
+    path = phase40_prereg.dropped_attempt_dir(2024, "2026-10-06T01:02:03.000004+00:00")
+    assert path == "data/phase40_dropped/v6_40_E2_seed2024_2026-10-06T010203.000004+0000"
+    assert ":" not in path and not fnmatch.fnmatch(path, phase40_prereg.RECORD_GLOB)
+    assert phase40_prereg.DROPPED_ROOT == "data/phase40_dropped"
+    assert phase40_prereg.DROPPED_MANIFEST == "manifest.json"
+    with pytest.raises(SystemExit, match=r"^\[phase40_prereg\]"):
+        phase40_prereg.dropped_attempt_dir(9999, "A")
+    with pytest.raises(SystemExit, match=r"^\[phase40_prereg\]"):
+        phase40_prereg.dropped_attempt_dir(2024, "")
+
+
+_U = "2026-10-06T01:02:03.000004+00:00"
+
+
+def _manifest(**changes):
+    manifest = {
+        "seed": 2024,
+        "run_id": phase40_prereg.run_id(2024),
+        "lost_utc": _U,
+        "cause_note": "x",
+        "approved": "approved",
+        "head_at_dropped_attempt": "H",
+        "relaunch_git_sha": "H",
+        "head_change_declared": None,
+        "kept": [
+            {
+                "from": "checkpoints/a.pt",
+                "path": phase40_prereg.dropped_attempt_dir(2024, _U) + "/checkpoints/a.pt",
+                "sha256": "0" * 64,
+            }
+        ],
+    }
+    manifest.update(changes)
+    return manifest
+
+
+def _manifest_failures(manifest):
+    return phase40_prereg.dropped_manifest_failures(manifest, seed=2024, lost_utc=_U)
+
+
+def test_seed_outcomes_dropped_manifest_truth_table():
+    assert phase40_prereg._text(" x ") is True
+    assert [phase40_prereg._text(v) for v in ("", "  ", None, 1)] == [False] * 4
+    assert tuple(_manifest()) == phase40_prereg.DROPPED_MANIFEST_KEYS
+    assert _manifest_failures(_manifest()) == []
+    assert _manifest_failures(_manifest(kept=[])) == []
+    assert _manifest_failures(_manifest(relaunch_git_sha="H2", head_change_declared="y")) == []
+    item = _manifest()["kept"][0]
+    missing = _manifest()
+    del missing["cause_note"]
+    plants = [
+        ("cause_note", missing),
+        ("planted", _manifest(planted=1)),
+        ("seed", _manifest(seed=1337)),
+        ("run_id", _manifest(run_id=phase40_prereg.run_id(1337))),
+        ("lost_utc", _manifest(lost_utc="2026-10-06T09:09:09+00:00")),
+        ("cause_note", _manifest(cause_note="")),
+        ("cause_note", _manifest(cause_note="   ")),
+        ("approved", _manifest(approved="ok")),
+        ("relaunch_git_sha", _manifest(relaunch_git_sha="")),
+        ("head_change_declared", _manifest(relaunch_git_sha="H2")),
+        ("head_change_declared", _manifest(head_change_declared="y")),
+        ("kept", _manifest(kept=[{**item, "path": "data/elsewhere/a.pt"}])),
+        ("sha256", _manifest(kept=[{k: v for k, v in item.items() if k != "sha256"}])),
+        ("extra", _manifest(kept=[{**item, "extra": 1}])),
+    ]
+    for key, manifest in plants:
+        failures = _manifest_failures(manifest)
+        assert failures, key
+        assert any(key in failure for failure in failures), (key, failures)
+
+
+def test_seed_outcomes_relaunch_head_truth_table():
+    assert phase40_prereg.relaunch_declaration_name("h2") == "relaunch_h2.json"
+    with pytest.raises(SystemExit, match=r"^\[phase40_prereg\]"):
+        phase40_prereg.relaunch_declaration_name("")
+    manifest = _manifest()
+    assert phase40_prereg.latest_head_failures(manifest, None, launch_git_sha="H") == []
+    moved = phase40_prereg.latest_head_failures(manifest, None, launch_git_sha="H2")
+    assert len(moved) == 1 and "HEAD moved" in moved[0]
+    declaration = {"launch_git_sha": "H2", "head_change_declared": "y", "approved": "approved"}
+    assert tuple(declaration) == phase40_prereg.RELAUNCH_DECLARATION_KEYS
+    assert phase40_prereg.latest_head_failures(manifest, declaration, launch_git_sha="H2") == []
+    assert phase40_prereg.relaunch_declaration_failures(declaration, relaunch_git_sha="H") == []
+    missing = dict(declaration)
+    del missing["approved"]
+    plants = [
+        ("approved", missing),
+        ("planted", {**declaration, "planted": 1}),
+        ("launch_git_sha", {**declaration, "launch_git_sha": "H"}),
+        ("head_change_declared", {**declaration, "head_change_declared": " "}),
+        ("approved", {**declaration, "approved": "ok"}),
+    ]
+    for key, planted in plants:
+        failures = phase40_prereg.relaunch_declaration_failures(planted, relaunch_git_sha="H")
+        assert failures and any(key in f for f in failures), (key, failures)
+    other = phase40_prereg.latest_head_failures(manifest, declaration, launch_git_sha="H3")
+    assert other and any("launch_git_sha" in f for f in other)
+
+
+def test_d13_block_reduction(monkeypatch):
+    monkeypatch.setattr(phase40_prereg, "D13_INCLUDED", True)
+    curve = {"8": 3, "32": 4}
+    block = phase40_prereg.d13_block(
+        curve=curve, gate_rank=2, a2_rank=2, committed_ranks=[1, 1, 3], minted_ranks=[2, 1]
+    )
+    assert block["anchor_curve"] == curve
+    assert block["anchor_gate"] == {"rank": 2, "a2_record_rank": 2, "equal": True}
+    assert block["r_q"]["committed"] == {
+        "ranks": [1, 1, 3],
+        "n1": phase39_prereg.n1([1, 1, 3]),
+        "n": 3,
+    }
+    assert block["r_q"]["committed"]["n1"] == 2
+    assert block["r_q"]["minted"] == {"ranks": [2, 1], "n1": 1, "n": 2}
+    assert block["criterion"] is False
+    unequal = phase40_prereg.d13_block(
+        curve=curve, gate_rank=2, a2_rank=3, committed_ranks=[], minted_ranks=[]
+    )
+    assert unequal["anchor_gate"]["equal"] is False
+    monkeypatch.setattr(phase40_prereg, "D13_INCLUDED", False)
+    with pytest.raises(SystemExit, match="D-13"):
+        phase40_prereg.d13_block(
+            curve=curve, gate_rank=2, a2_rank=2, committed_ranks=[], minted_ranks=[]
+        )
