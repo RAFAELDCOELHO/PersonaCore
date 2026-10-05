@@ -18,9 +18,11 @@ data/phase39_ctx_*.
 import ast
 import contextlib
 import hashlib
+import inspect
 import json
 import math
 import pathlib
+import re
 import subprocess
 import sys
 import types
@@ -49,7 +51,7 @@ import phase39_ctx  # noqa: E402  (same; never aliased — _untested_functions c
 import phase39_prereg  # noqa: E402  (same; frozen, import only)
 
 from test_phase29_prereg import _git, _planted  # noqa: E402
-from test_phase36_prereg import _skip_failures  # noqa: E402
+from test_phase36_prereg import _skip_failures, _untested_functions  # noqa: E402
 
 READINGS = phase39_prereg.READINGS
 SLOTS = phase39_prereg.SLOTS
@@ -2520,3 +2522,551 @@ def test_the_record_carries_the_rehearsal_disclosure(scored_rig, monkeypatch):
     assert record["rehearsal_disclosure"] == expected
     assert record["rehearsal_disclosure"]["slice_read"]["slots"] == ["pet_name", "birth_year"]
     assert not _record_path(rig).exists()  # build_record writes nothing
+
+
+# =================================================================================================
+# (10) Plan 07 Task 1: render_report, report, main — the report is the record rendered, nothing
+# else (CTX-03); the CLI calls each command with no argument from the repository root.
+# =================================================================================================
+
+_SECTIONS = [
+    "# Phase 39 — E6 instrument × context 2×2",
+    "## Status",
+    "## Approval and cost (D-11, D-26, D-30)",
+    "## Gate 1: committed anchor ranks and the copy's equality (D-18, D-30)",
+    "## Gate 2: committed A2 counts re-derived (D-19)",
+    "## The four readings per slot and adapter (D-13)",
+    "## Baseline at k0 (ruling f)",
+    "## Decomposition under collapse (D-15, D-16)",
+    "## Decomposition under damage (D-15, D-16)",
+    "## Instrument share and context share (CTX-03)",
+    "## Reverse disagreement and undecided cells (ruling e, IN-01)",
+    "## Drop-formula audit (D-33, descriptive)",
+    "## Common unit and per-draw rates (D-07, descriptive)",
+    "## Predicted vs observed hit rate (D-17, D-23c, D-29, descriptive)",
+    "## Adapter-off (D-11 i, descriptive)",
+    "## Minted sets under the full question at |R| = 8 (D-11 ii, D-26, descriptive)",
+    "## CPU cross-check (D-20, descriptive)",
+    "## Rehearsal disclosure (D-21, D-27)",
+    "## Not measured (D-12, D-23d)",
+    "## Limitations (D-22)",
+    "## Provenance",
+]
+_GATE_FAILED_SECTIONS = [*_SECTIONS[:5], *_SECTIONS[-4:]]
+_KEYS = ("R_a", "R_q", "G_a", "G_q")
+
+
+def _emitted(rig):
+    phase39_ctx.emit(root=rig.root)
+    return _sidecar(_record_path(rig))
+
+
+def _headings(text):
+    return re.findall(r"^#{1,2} .+$", text, flags=re.M)
+
+
+def _section(text, heading):
+    start = text.index(heading + "\n")
+    end = text.find("\n## ", start + len(heading))
+    return text[start : end if end != -1 else len(text)]
+
+
+def _gfm_cells(line):
+    return re.split(r"(?<!\\)\|", line.strip())[1:-1]
+
+
+def _assert_gfm_tables(text):
+    """Every table's header, delimiter and body rows have the same cell count, so GFM renders
+    them as tables (an unescaped pipe inside a cell, e.g. |R|, adds cells)."""
+    lines = text.splitlines()
+    tables = 0
+    for i, line in enumerate(lines[:-1]):
+        if line.startswith("|") and re.fullmatch(r"\|(---\|)+", lines[i + 1]):
+            tables += 1
+            width = len(_gfm_cells(lines[i + 1]))
+            assert len(_gfm_cells(line)) == width, line
+            body = lines[i + 2 :]
+            end = next((j for j, x in enumerate(body) if not x.startswith("|")), len(body))
+            for row in body[:end]:
+                assert len(_gfm_cells(row)) == width, row
+    assert tables
+
+
+def _tables(section):
+    """Each GFM table of ``section``: its body rows (header and delimiter dropped) as lists of
+    stripped cell strings."""
+    tables, current = [], None
+    for line in section.splitlines():
+        if line.startswith("|"):
+            if current is None:
+                current = []
+                tables.append(current)
+            current.append([c.strip() for c in _gfm_cells(line)])
+        else:
+            current = None
+    return [table[2:] for table in tables]
+
+
+def _fraction(cell):
+    return tuple(int(x) for x in re.fullmatch(r"(\d+)/(\d+)", cell).groups())
+
+
+def _count_of(cell):
+    return tuple(int(x) for x in re.fullmatch(r"(\d+) of (\d+)", cell).groups())
+
+
+def test_render_report_renders_the_scored_record(scored_rig):
+    record = _emitted(scored_rig)
+    text = phase39_ctx.render_report(record)
+    assert _headings(text) == _SECTIONS
+    _assert_gfm_tables(text)
+    assert "\n".join(phase39_ctx._scored_sections(record)) in text
+    # Approval and cost: D-11 verbatim, the projection steps, the stop, the cost block.
+    approval = _section(text, _SECTIONS[2])
+    assert phase39_prereg.D11_RULING in approval
+    for step, hours in record["approval"]["projection_steps"].items():
+        assert f"- projection step {step}: {hours!r}" in approval
+    assert f"- e6_stop_hours: {record['approval']['e6_stop_hours']!r}" in approval
+    for key, value in record["cost"].items():
+        assert f"- cost {key}: {value!r}" in approval
+    # Gate 1: the rows, then the copy sentence with cells compared and equal.
+    gate1 = _section(text, _SECTIONS[3])
+    (gate_rows,) = _tables(gate1)
+    rows = record["gate"]["rows"]
+    assert [r[:2] for r in gate_rows] == [
+        [reading, slot] for reading in _SCORED_SHAPE["readings"] for slot in _SCORED_SHAPE["slots"]
+    ]
+    for r in gate_rows:
+        row = rows[r[0]][r[1]]
+        assert [int(r[2]), int(r[3]), int(r[4]), r[5]] == [
+            row["n_references"],
+            row["rank"],
+            row["committed_rank"],
+            str(row["equal"]),
+        ]
+    equality = record["gate"]["copy_equality"]
+    assert (
+        f"cells compared {equality['cells_compared']}, cells equal {equality['cells_equal']}"
+        in gate1
+    )
+    assert record["context_b_instrument"] in gate1
+    # Gate 2: every committed row, the WR-01 independent flag on the target row.
+    (g2_rows,) = _tables(_section(text, _SECTIONS[4]))
+    assert len(g2_rows) == len(READINGS) * len(SLOTS)
+    for r in g2_rows:
+        row = record["gate2"]["rows"][r[0]][r[1]]
+        assert [int(r[2]), int(r[3]), int(r[4]), r[5]] == [
+            row["count"],
+            row["committed"],
+            row["n_questions"],
+            str(row["equal"]),
+        ]
+        assert r[6] == str(row.get("independent", "—"))
+    # The four readings, parsed back and compared with the record cell by cell.
+    (four,) = _tables(_section(text, _SECTIONS[5]))
+    assert [(r[0].split(" ")[0], r[1]) for r in four] == [
+        (reading, slot)
+        for reading in READINGS
+        if reading in record["readings"]
+        for slot in SLOTS
+        if slot in record["readings"][reading]
+    ]
+    for r in four:
+        reading = r[0].split(" ")[0]
+        assert (r[0] == f"{reading} (descriptive)") is (reading == "adapter_off")
+        block = record["readings"][reading][r[1]]
+        rank, ga, gq = block["rank"], block["generation"]["G_a"], block["generation"]["G_q"]
+        assert int(r[2]) == block["R_a"]
+        assert _fraction(r[3]) == (rank["n1"], len(rank["ranks"]))
+        assert (int(r[4]), int(r[5])) == (rank["median"], rank["rank_of_mean_nll"])
+        assert int(r[6]) == ga["unit"]
+        assert (
+            _fraction(r[7])
+            == (ga["h"], len(ga["hits"]))
+            == (ga["rate"]["successes"], phase39_prereg.K)
+        )
+        assert _fraction(r[8]) == (gq["count"], len(gq["per_question"]))
+        assert _fraction(r[9]) == (gq["total"], gq["rate"]["n"])
+    # Baseline: the record's reason on a partial slot set.
+    assert f"No baseline table: {record['baseline_reason']}." in _section(text, _SECTIONS[6])
+    # Decomposition: one row per door cell, statuses, values, k0 values, class, disagreement.
+    for event, heading in zip(phase39_prereg.EVENTS, _SECTIONS[7:9], strict=True):
+        (table,) = _tables(_section(text, heading))
+        cells = record["classification"][event]["cells"]
+        assert len(table) == len(cells)
+        for r, cell in zip(table, cells, strict=True):
+            assert r[:2] == [cell["reading"], cell["slot"]]
+            for key, shown in zip(_KEYS, r[2:6], strict=True):
+                status, value = re.fullmatch(r"(\w+) \((\d+)\)", shown).groups()
+                assert (status, int(value)) == (cell["statuses"][key], cell["values"][key])
+            assert [int(x) for x in r[6:10]] == [cell["k0"][key] for key in _KEYS]
+            assert r[10:] == [cell["class"], str(cell["disagreement"])]
+    # The shares: every outcome, of its cells and of its disagreement cells, per group and event.
+    shares = _section(text, _SECTIONS[9])
+    assert record["classification"]["collapse"]["counts"]["m2_label"] in shares
+    (share_rows,) = _tables(shares)
+    groups = ("prefixes", phase39_prereg.RETRAIN_READING, "combined")
+    assert [r[:3] for r in share_rows] == [
+        [event, group, name]
+        for event in phase39_prereg.EVENTS
+        for group in groups
+        for name in phase39_prereg.OUTCOMES
+    ]
+    for r in share_rows:
+        tally = record["classification"][r[0]]["counts"][r[1]]
+        assert _count_of(r[3]) == (tally["by_class"][r[2]], tally["cells"])
+        if r[2] in tally["disagreement_by_class"]:
+            assert _count_of(r[4]) == (
+                tally["disagreement_by_class"][r[2]],
+                tally["disagreement_cells"],
+            )
+            share = tally["shares"][r[2]]
+            assert r[5] == ("—" if share is None else repr(share))
+        else:
+            assert r[4] == r[5] == "—"
+    for event in phase39_prereg.EVENTS:
+        tally = record["classification"][event]["counts"]["combined"]
+        d = tally["disagreement_cells"]
+        (line,) = [x for x in shares.splitlines() if x.startswith(f"- {event}, combined: ")]
+        for name, label in (
+            ("INSTRUMENT_SUFFICIENT", "instrument share"),
+            ("CONTEXT_SUFFICIENT", "context share"),
+        ):
+            share = tally["shares"][name]
+            assert (
+                f"{label} ({name}) {tally['disagreement_by_class'][name]} of {d} disagreement "
+                f"cells (share {'—' if share is None else repr(share)})" in line
+            )
+    # Reverse disagreement and undecided cells, apart.
+    apart = _section(text, _SECTIONS[10])
+    (apart_rows,) = _tables(apart)
+    for r in apart_rows:
+        tally = record["classification"][r[0]]["counts"][r[1]]
+        assert _count_of(r[2]) == (tally["reverse_disagreement_cells"], tally["cells"])
+        assert _count_of(r[3]) == (tally["undecided_cells"], tally["cells"])
+    assert "No reverse disagreement and no undecided cell under collapse." in apart
+    # D-33: the exact tie listed apart from the differing counts, with the class by both formulas.
+    audit = record["drop_formula_audit"]
+    d33 = _section(text, _SECTIONS[11])
+    assert ["k8", "person_name", "G_q"] in audit["exact_ties"]
+    tie = next(c for c in audit["cells"] if (c["reading"], c["slot"]) == ("k8", "person_name"))
+    assert tie["audits"]["G_q"]["differs"] is False
+    assert (
+        f"- `k8` `person_name` G_q: exact margin tie decided by strict >; class "
+        f"{tie['class_committed']} by the committed formula, {tie['class_exact']} by the exact "
+        "formula" in d33
+    )
+    differing = [r[:3] for table in _tables(d33) for r in table]
+    assert ["k8", "person_name", "G_q"] not in differing
+    assert differing == [
+        [c["reading"], c["slot"], key]
+        for c in audit["cells"]
+        for key in _KEYS[1:]
+        if c["audits"][key]["differs"]
+    ]
+    assert "Criterion: False" in d33
+    assert "No count status changes between the two formulas." in d33
+    # Rates, prediction, adapter-off, (ii), CPU cross-check.
+    rates = _section(text, _SECTIONS[12])
+    assert "1-vs-27" in rates and "clustering ignored" in rates
+    (rate_rows,) = _tables(rates)
+    for r in rate_rows:
+        rate = record["readings"][r[0]][r[1]]["generation"]["G_q"]["rate"]
+        assert r[-3:] == [
+            repr(rate["rate"]),
+            repr(rate["wilson_lower_95"]),
+            repr(rate["wilson_upper_95"]),
+        ]
+    predicted = _section(text, _SECTIONS[13])
+    block = record["readings"]["k0"]["pet_name"]["descriptive"]["predicted"]
+    assert block["caveat"] in predicted and block["conditioning"] in predicted
+    off = _section(text, _SECTIONS[14])
+    assert record["adapter_off"] in off
+    assert [r[0] for r in _tables(off)[0]] == list(_SCORED_SHAPE["slots"])
+    (minted,) = _tables(_section(text, _SECTIONS[15]))
+    for r in minted:
+        ii = record["minted_ii"][r[0]][r[1]]
+        assert (int(r[2]), _fraction(r[3]), int(r[5])) == (
+            ii["size"],
+            (ii["n1"], len(ii["ranks"])),
+            ii["anchor_side_rank"],
+        )
+    cpu = _section(text, _SECTIONS[16])
+    check = record["cpu_crosscheck"]
+    assert f"{check['rq_differing']} of {check['rq_cells']}" in cpu
+    suffix = check["suffix_equality"]
+    assert f"{suffix['equal']} of {suffix['compared']}" in cpu and _D20 in cpu
+    assert "This record IS the CPU rehearsal" in _section(text, _SECTIONS[17])
+    not_measured = _section(text, _SECTIONS[18])
+    assert all(f"- {item}" in not_measured for item in phase39_prereg.NOT_MEASURED)
+    limitations = _section(text, _SECTIONS[19])
+    assert all(f"- {item}" in limitations for item in record["limitations"])
+    assert record["provenance"]["run"]["git_sha_at_launch"] in _section(text, _SECTIONS[20])
+
+
+def test_render_report_other_branches_from_the_record(scored_rig):
+    record = _emitted(scored_rig)
+    # A flip, a reverse disagreement and an undecided cell planted in copies of the record.
+    planted = json.loads(json.dumps(record))
+    audit = planted["drop_formula_audit"]
+    audit["flips"] = [["k8", "pet_name", "R_q"]]
+    cell = next(c for c in audit["cells"] if (c["reading"], c["slot"]) == ("k8", "pet_name"))
+    cells = planted["classification"]["collapse"]["cells"]
+    cells[0].update({"class": phase39_prereg.REVERSE_DISAGREEMENT, "disagreement": False})
+    cells[1].update({"class": "UNREACHABLE_AT_SIZE", "disagreement": None})
+    text = phase39_ctx.render_report(planted)
+    d33 = _section(text, "## Drop-formula audit (D-33, descriptive)")
+    assert (
+        f"- `k8` `pet_name` R_q: margin tie decided by rounding; class {cell['class_committed']} "
+        f"by the committed formula, {cell['class_exact']} by the exact formula" in d33
+    )
+    assert "No count status changes" not in d33
+    apart = _section(text, "## Reverse disagreement and undecided cells (ruling e, IN-01)")
+    assert f"- collapse `{cells[0]['reading']}` `{cells[0]['slot']}`: REVERSE_DISAGREEMENT" in apart
+    assert f"- collapse `{cells[1]['reading']}` `{cells[1]['slot']}`: UNREACHABLE_AT_SIZE" in apart
+    assert "under collapse." not in apart
+    # The full baseline table (ruling f), every slot and reading key with both events' status.
+    full = json.loads(json.dumps(record))
+    k0 = {slot: dict(zip(_KEYS, (1, 20, 1, 21))) for slot in SLOTS}
+    full["baseline"] = json.loads(json.dumps(phase39_prereg.baseline_table(k0)))
+    full["baseline_reason"] = None
+    (baseline,) = _tables(_section(phase39_ctx.render_report(full), "## Baseline at k0 (ruling f)"))
+    assert len(baseline) == len(SLOTS) * len(_KEYS)
+    for r in baseline:
+        row = full["baseline"][r[0]][r[1]]
+        assert [int(r[2]), r[3], r[4]] == [row["value"], row["collapse"], row["damage"]]
+    # Nothing classified: each decomposition section and the audit carry the record's reason.
+    empty = json.loads(json.dumps(record))
+    for key in ("classification", "drop_formula_audit"):
+        empty.update({key: None, f"{key}_reason": "no cell reading scored: test"})
+    empty_text = phase39_ctx.render_report(empty)
+    assert _headings(empty_text) == _SECTIONS
+    for heading in _SECTIONS[7:12]:
+        assert "no cell reading scored: test" in _section(empty_text, heading)
+
+
+def test_render_report_on_a_gate_failed_record(crosscheck_rig):
+    rig = crosscheck_rig
+    rig.table[("k78", "pet_name", TAUGHT["pet_name"])] = 3.0
+    rig.ulp = ("k0", "birth_year", TAUGHT["birth_year"])
+    assert phase39_ctx.run(root=rig.root, **rig.paths, **_SHAPE) == "GATE_FAILED"
+    record = _emitted(rig)
+    text = phase39_ctx.render_report(record)
+    assert _headings(text) == _GATE_FAILED_SECTIONS
+    _assert_gfm_tables(text)
+    assert "GATE_FAILED" in _section(text, "## Status")
+    gate1 = _section(text, _SECTIONS[3])
+    (rows,) = _tables(gate1)
+    assert len(rows) == len(_SHAPE["readings"]) * len(_SHAPE["slots"])
+    assert [r[:2] for r in rows if r[5] == "False"] == [["k78", "pet_name"]]
+    assert "- rank not reproduced: `k78` `pet_name`" in gate1
+    assert f"- unequal cell: `k0` `birth_year` `{TAUGHT['birth_year']}`" in gate1
+    assert len(_tables(_section(text, _SECTIONS[4]))[0]) == len(READINGS) * len(SLOTS)
+    assert "This record IS the CPU rehearsal" in _section(text, _SECTIONS[17])
+    assert "Decomposition" not in text and "Drop-formula audit" not in text
+
+
+def test_render_report_disclosure_branches(scored_rig):
+    record = _emitted(scored_rig)
+    disclosure = {
+        "statement": "The CPU rehearsal (39-07) read pet_name under 8 readings.",
+        "slice_read": {"readings": list(READINGS), "slots": ["pet_name"]},
+        "rehearsal_git_sha": "a" * 40,
+        "rehearsal_module_sha256": {rel: "1" * 64 for rel in _DISCLOSED},
+        "launch_git_sha": "b" * 40,
+        "launch_module_sha256": {rel: "1" * 64 for rel in _DISCLOSED},
+        "changed": {rel: False for rel in _DISCLOSED},
+        "prereg_changed": False,
+        "driver_changed": False,
+        "commits": [],
+    }
+    empty = phase39_ctx.render_report({**record, "rehearsal_disclosure": disclosure})
+    section = _section(empty, "## Rehearsal disclosure (D-21, D-27)")
+    assert disclosure["statement"] in section and "a" * 40 in section and "b" * 40 in section
+    assert (
+        "No commit touched scripts/phase39_ctx.py or scripts/phase39_prereg.py between the "
+        "rehearsal and the launch." in section
+    )
+    assert "This record IS the CPU rehearsal" not in section
+    assert len(_tables(section)[0]) == len(_DISCLOSED)
+    commit = {"sha": "c" * 40, "reason": "fix(39-07): why", "modules": [_DISCLOSED[0]]}
+    changed = {
+        **disclosure,
+        "changed": {_DISCLOSED[0]: True, _DISCLOSED[1]: False},
+        "driver_changed": True,
+        "commits": [commit],
+    }
+    listed = _section(
+        phase39_ctx.render_report({**record, "rehearsal_disclosure": changed}),
+        "## Rehearsal disclosure (D-21, D-27)",
+    )
+    assert f"- `{'c' * 40}` fix(39-07): why (touched: {_DISCLOSED[0]})" in listed
+    assert "No commit touched" not in listed
+    rehearsal = phase39_ctx._disclosure_lines(record["rehearsal_disclosure"])
+    assert rehearsal[0].startswith("This record IS the CPU rehearsal (D-21, D-27)")
+    assert "person_name, pet_name" in rehearsal[0]
+
+
+def test_report_helpers_called_directly():
+    assert phase39_ctx._table(("a", "b"), [[1, "x"]]) == ["| a | b |", "|---|---|", "| 1 | x |", ""]
+    escaped = phase39_ctx._table(("|R|",), [["a|b"]])
+    assert (escaped[0], escaped[2]) == ("| \\|R\\| |", "| a\\|b |")
+    assert phase39_ctx._slots({"street": 1, "pet_name": 2}) == ["pet_name", "street"]
+    assert phase39_ctx._readings(["k78", "M2", "adapter_off", "k0", "k16"]) == [
+        "k0",
+        "k16",
+        "k78",
+        "M2",
+        "adapter_off",
+    ]
+
+
+def test_report_writes_once_and_the_real_root_needs_a_committed_record(
+    scored_rig, monkeypatch, capsys
+):
+    rig = scored_rig
+    with pytest.raises(SystemExit, match=r"^\[phase39_ctx\] .*phase39_ctx\.json is missing"):
+        phase39_ctx.report(root=rig.root)
+    record = _emitted(rig)
+    out = rig.root / phase39_prereg.REPORT_RECORD
+    monkeypatch.setattr(phase39_ctx, "_ROOT", rig.root)
+    monkeypatch.setattr(phase39_ctx, "_tracked_and_clean", lambda rel: False)
+    with pytest.raises(SystemExit, match=r"^\[phase39_ctx\] .*committed and unmodified"):
+        phase39_ctx.report()
+    assert not out.exists()
+    monkeypatch.setattr(phase39_ctx, "_tracked_and_clean", lambda rel: True)
+    assert phase39_ctx.report() == out  # the real-root branch, on the rig root
+    assert out.read_text(encoding="utf-8") == phase39_ctx.render_report(record)
+    out.unlink()
+    monkeypatch.undo()
+    assert phase39_ctx.report(root=rig.root) == out
+    assert f"REPORT {out}" in capsys.readouterr().out
+    assert out.read_text(encoding="utf-8") == phase39_ctx.render_report(record)
+    before = out.read_bytes()
+    with pytest.raises(SystemExit, match=r"^\[phase39_ctx\] .*REFUSING to overwrite"):
+        phase39_ctx.report(root=rig.root)
+    assert out.read_bytes() == before
+
+
+def test_report_tracked_and_clean_reads_git():
+    assert phase39_ctx._tracked_and_clean("scripts/phase39_prereg.py") is True
+    assert phase39_ctx._tracked_and_clean("results/phase39_never_written.json") is False
+
+
+def test_the_full_fake_chain_through_the_commands(crosscheck_rig):
+    rig = crosscheck_rig
+    assert phase39_ctx.run(root=rig.root, **rig.paths, **_SCORED_SHAPE) == "SCORED"
+    phase39_ctx.crosscheck(root=rig.root)
+    phase39_ctx.emit(root=rig.root)
+    out = phase39_ctx.report(root=rig.root)
+    assert out == rig.root / phase39_prereg.REPORT_RECORD
+    artifacts = (
+        phase39_ctx.run_sidecar(rig.root),
+        phase39_ctx.gate_sidecar(rig.root),
+        phase39_ctx.cpu_sidecar(rig.root),
+        _record_path(rig),
+        out,
+    )
+    assert all(path.exists() for path in artifacts)
+    record = _sidecar(_record_path(rig))
+    assert out.read_text(encoding="utf-8") == phase39_ctx.render_report(record)
+    assert [x["event"] for x in _lines(rig)] == ["start", "end"]
+
+
+@pytest.mark.parametrize("command", ["preflight", "run", "crosscheck", "emit", "report"])
+def test_main_dispatches_with_no_arguments_from_the_repo(tmp_path, monkeypatch, command):
+    real = getattr(phase39_ctx, command)
+    seen = []
+
+    def recorder(*args, **kwargs):
+        inspect.signature(real).bind(*args, **kwargs)
+        seen.append((args, kwargs, pathlib.Path.cwd()))
+
+    monkeypatch.setattr(phase39_ctx, command, recorder)
+    monkeypatch.chdir(tmp_path)
+    assert phase39_ctx.main([command]) == 0
+    assert seen == [((), {}, phase39_ctx._REPO)]
+
+
+@pytest.mark.parametrize("argv", [[], ["bogus"], ["run", "x"]])
+def test_main_refuses_anything_else(argv):
+    with pytest.raises(SystemExit) as raised:
+        phase39_ctx.main(argv)
+    assert raised.value.code == phase39_ctx.__doc__
+
+
+def test_main_the_cli_exits_non_zero_on_a_bogus_command():
+    done = subprocess.run(
+        [sys.executable, "scripts/phase39_ctx.py", "bogus"], cwd=_REPO, capture_output=True
+    )
+    assert done.returncode != 0
+
+
+def test_census_helpers_called_directly(tmp_path):
+    # _kept_identity: absent, the same slice kept, another slice refused (DR-02).
+    path = tmp_path / "id.json"
+    shape = {"readings": ["k0"], "slots": ["pet_name"]}
+    assert phase39_ctx._kept_identity(path, **shape) is None
+    phase39_ctx.record_rehearsal(path, **shape)
+    assert phase39_ctx._kept_identity(path, **shape) == _sidecar(path)
+    with pytest.raises(SystemExit, match=r"^\[phase39_ctx\] .*different slice"):
+        phase39_ctx._kept_identity(path, readings=["k0"], slots=["street"])
+    # _classified: the door's cells only (no k0, no adapter-off), against k0.
+    values = _values(k0=(1, 20, 1, 21), k8=(1, 3, 0, 13), adapter_off=(5, 0, 0, 0))
+    for event in phase39_prereg.EVENTS:
+        cell = phase39_prereg.cell_spec(event, "k8", "pet_name")
+        assert phase39_ctx._classified(values, event) == [
+            phase39_prereg.classify_cell(cell, values["k8"]["pet_name"], values["k0"]["pet_name"])
+        ]
+    # _cost: every number from the budget record (I1).
+    run = {
+        "readings": ["k0", "k8"],
+        "started_utc": "2026-10-05T00:00:00+00:00",
+        "finished_utc": "2026-10-05T00:30:00+00:00",
+    }
+    setup = _read(phase39_prereg.BUDGET_RECORD)["unit_prices"]["adapter_setup_high"]
+    cost = phase39_ctx._cost(run)
+    assert cost["run_hours"] == 0.5
+    assert (cost["setups_priced"], cost["setups_run"]) == (2, 4)
+    assert cost["extra_setup_hours"] == 2 * setup / 3600
+    assert cost["projection_with_double_load_hours"] == (
+        phase39_prereg.E6_PROJECTION_HOURS + 2 * setup / 3600
+    )
+    # _descriptive_block: exp(-nll_sum) beside the observed rates; per-token values carried.
+    K = phase39_prereg.K
+    gate = {
+        "T": {"pinned": {"nll_sum": 2.0}, "copy": {"per_token": [1.0, 1.0]}},
+        "a": {"pinned": {"nll_sum": 3.0}, "copy": {"per_token": [3.0]}},
+    }
+    questions = [
+        {
+            "index": 7,
+            "tier": "core_taught",
+            "seed_index": 0,
+            "references": {"T": {"suffix_nll_sum": 1.0, "per_token": [0.5, 1.0]}},
+            "minted": {"m": {"per_token": [4.0]}},
+        }
+    ]
+    block = phase39_ctx._descriptive_block(gate, questions, {"core_taught/0": 3}, "T", 2)
+    assert block["predicted"]["a"] == math.exp(-2.0)
+    assert block["predicted"]["a_observed"] == 2 / K
+    assert block["predicted"]["b_per_question"] == [
+        {"index": 7, "predicted": math.exp(-1.0), "observed": 3 / K}
+    ]
+    assert block["predicted"]["b_mean_predicted"] == math.exp(-1.0)
+    assert block["predicted"]["b_observed"] == 3 / K
+    assert block["per_token"] == {
+        "anchor": {"T": [1.0, 1.0], "a": [3.0]},
+        "question": {"7": {"T": [0.5, 1.0], "m": [4.0]}},
+    }
+
+
+def test_census_every_phase39_ctx_function_has_a_cpu_test(tmp_path):
+    source = (_SCRIPTS / "phase39_ctx.py").read_text(encoding="utf-8")
+    test_source = pathlib.Path(__file__).read_text(encoding="utf-8")
+    defs = [n for n in ast.parse(source).body if isinstance(n, ast.FunctionDef)]
+    assert {"render_report", "report", "main", "_tracked_and_clean"} <= {n.name for n in defs}
+    assert _untested_functions("phase39_ctx", source, test_source) == []
+    planted = source + '\n\ndef planted_untested():\n    """Planted."""\n'
+    copied = _planted(tmp_path, source, planted, "untested.py")
+    assert _untested_functions("phase39_ctx", copied, test_source) == ["planted_untested"]

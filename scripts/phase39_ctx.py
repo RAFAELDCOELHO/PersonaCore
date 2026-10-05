@@ -38,6 +38,7 @@ import gc
 import hashlib
 import json
 import math
+import os
 import pathlib
 import subprocess
 import sys
@@ -1421,3 +1422,674 @@ def emit(*, root=None):
     phase25_run.atomic_write_json(out, record)
     print(f"EMITTED {record['status']} {out}", flush=True)
     return record
+
+
+# The report (CTX-03): the record rendered, nothing else. No number is typed in the template text;
+# every sentence about the data (limitations, not measured, caveats) comes from the record.
+_KEYS = ("R_a", "R_q", "G_a", "G_q")
+
+
+def _table(header, rows):
+    """A GFM table; a pipe inside a cell (|R|) is escaped, else it would add cells."""
+
+    def line(cells):
+        return "| " + " | ".join(str(c).replace("|", "\\|") for c in cells) + " |"
+
+    return [line(header), "|" + "---|" * len(header), *(line(row) for row in rows), ""]
+
+
+def _slots(keys):
+    """The record's slots in the locked SLOTS order (the JSON keys are sorted)."""
+    return [slot for slot in _prereg().SLOTS if slot in keys]
+
+
+def _readings(keys):
+    """The record's readings in READINGS order (the JSON keys are sorted)."""
+    return [reading for reading in _prereg().READINGS if reading in keys]
+
+
+def _disclosure_lines(disclosure):
+    if disclosure.get("this_is_the_rehearsal"):
+        part = disclosure["slice"]
+        return [
+            "This record IS the CPU rehearsal (D-21, D-27): it read slots "
+            f"{', '.join(part['slots'])} under the readings {', '.join(part['readings'])}, all "
+            "their A2 entries, before the driver review and the MPS run. The real record lists "
+            f"every later commit to {' or '.join(DISCLOSED_MODULES)} with its reason.",
+            "",
+        ]
+    part = disclosure["slice_read"]
+    modules = [rel for rel in DISCLOSED_MODULES if rel in disclosure["changed"]]
+    lines = [
+        disclosure["statement"],
+        "",
+        f"- slice read: slots {', '.join(part['slots'])}, readings {', '.join(part['readings'])}",
+        f"- rehearsal git sha: `{disclosure['rehearsal_git_sha']}`",
+        f"- launch git sha: `{disclosure['launch_git_sha']}`",
+        f"- driver changed: {disclosure['driver_changed']}; prereg changed: "
+        f"{disclosure['prereg_changed']}",
+        "",
+        *_table(
+            ("module", "rehearsal sha256", "launch sha256", "changed"),
+            [
+                [
+                    rel,
+                    f"`{disclosure['rehearsal_module_sha256'][rel]}`",
+                    f"`{disclosure['launch_module_sha256'][rel]}`",
+                    disclosure["changed"][rel],
+                ]
+                for rel in modules
+            ],
+        ),
+    ]
+    if not disclosure["commits"]:
+        return [
+            *lines,
+            f"No commit touched {' or '.join(modules)} between the rehearsal and the launch.",
+            "",
+        ]
+    return [
+        *lines,
+        *(
+            f"- `{c['sha']}` {c['reason']} (touched: {', '.join(c['modules'])})"
+            for c in disclosure["commits"]
+        ),
+        "",
+    ]
+
+
+def _scored_sections(record):
+    """The sections only a SCORED record has, from the four readings to the CPU cross-check."""
+    prereg = _prereg()
+    readings = record["readings"]
+    pairs = [(r, s) for r in _readings(readings) for s in _slots(readings[r])]
+    out = [
+        "## The four readings per slot and adapter (D-13)",
+        "",
+        "R_a: the taught value's rank in the anchor context (a). R_q: n1, the questions whose "
+        "taught value ranks 1 in the question context (b), with the median rank and the rank of "
+        "the mean NLL. G_a: the common unit (some hit in K anchor draws) and its hits. G_q: the "
+        "committed A2 answered count and its hits. Adapter-off is descriptive (D-11 i).",
+        "",
+        *_table(
+            (
+                "reading",
+                "slot",
+                "R_a rank",
+                "R_q n1",
+                "R_q median",
+                "R_q rank of mean NLL",
+                "G_a unit",
+                "G_a hits/K",
+                "G_q answered",
+                "G_q hits/(n K)",
+            ),
+            [
+                [
+                    f"{r} (descriptive)" if r in prereg.DESCRIPTIVE_READINGS else r,
+                    s,
+                    b["R_a"],
+                    f"{b['rank']['n1']}/{len(b['rank']['ranks'])}",
+                    b["rank"]["median"],
+                    b["rank"]["rank_of_mean_nll"],
+                    b["generation"]["G_a"]["unit"],
+                    f"{b['generation']['G_a']['h']}/{len(b['generation']['G_a']['hits'])}",
+                    f"{b['generation']['G_q']['count']}/"
+                    f"{len(b['generation']['G_q']['per_question'])}",
+                    f"{b['generation']['G_q']['total']}/{b['generation']['G_q']['rate']['n']}",
+                ]
+                for r, s in pairs
+                for b in [readings[r][s]]
+            ],
+        ),
+        "## Baseline at k0 (ruling f)",
+        "",
+    ]
+    if record["baseline"] is None:
+        out += [f"No baseline table: {record['baseline_reason']}.", ""]
+    else:
+        out += [
+            f"k0 ({prereg.REFERENCE_READING}) is the reference in both events and a cell in "
+            "neither: each reading's k0 value with its status under each event against itself.",
+            "",
+            *_table(
+                ("slot", "reading", "k0 value", "collapse", "damage"),
+                [
+                    [s, key, row["value"], row["collapse"], row["damage"]]
+                    for s in _slots(record["baseline"])
+                    for key in _KEYS
+                    if key in record["baseline"][s]
+                    for row in [record["baseline"][s][key]]
+                ],
+            ),
+        ]
+    classification = record["classification"]
+    groups = ("prefixes", prereg.RETRAIN_READING, "combined")
+    for event in prereg.EVENTS:
+        out += [f"## Decomposition under {event} (D-15, D-16)", ""]
+        if classification is None:
+            out += [f"Not classified: {record['classification_reason']}.", ""]
+            continue
+        out += [
+            "Each cell: the status of each reading (its value), the k0 values of the same slot "
+            "(the reference, ruling f), the class of the four-step precedence and whether the "
+            "published disagreement (R_a INTACT, G_q LOST) holds. k0 is never a cell; adapter-off "
+            "is never classified (D-11 i).",
+            "",
+            *_table(
+                (
+                    "reading",
+                    "slot",
+                    *_KEYS,
+                    *(f"k0 {key}" for key in _KEYS),
+                    "class",
+                    "disagreement",
+                ),
+                [
+                    [
+                        c["reading"],
+                        c["slot"],
+                        *(f"{c['statuses'][key]} ({c['values'][key]})" for key in _KEYS),
+                        *(c["k0"][key] for key in _KEYS),
+                        c["class"],
+                        c["disagreement"],
+                    ]
+                    for c in classification[event]["cells"]
+                ],
+            ),
+        ]
+    out += ["## Instrument share and context share (CTX-03)", ""]
+    if classification is None:
+        out += [f"Not classified: {record['classification_reason']}.", ""]
+    else:
+        counts = {event: classification[event]["counts"] for event in prereg.EVENTS}
+        out += [
+            f"Per event, the prefix readings ({', '.join(prereg.CELL_PREFIX_READINGS)}) apart "
+            f"from {prereg.RETRAIN_READING}, then combined. {counts['collapse']['m2_label']}. "
+            "Each outcome is counted of the cells and, for the outcomes reached through a "
+            "published disagreement, of the disagreement cells with its share; a share is never "
+            "given without its denominator.",
+            "",
+        ]
+        for event in prereg.EVENTS:
+            for group in groups:
+                tally = counts[event][group]
+                d = tally["disagreement_cells"]
+                parts = [
+                    f"{label} ({name}) {tally['disagreement_by_class'][name]} of {d} disagreement "
+                    f"cells (share {'—' if share is None else repr(share)})"
+                    for name, label in (
+                        ("INSTRUMENT_SUFFICIENT", "instrument share"),
+                        ("CONTEXT_SUFFICIENT", "context share"),
+                    )
+                    for share in [tally["shares"][name]]
+                ]
+                out.append(f"- {event}, {group}: {'; '.join(parts)}; {tally['cells']} cells.")
+        out += [
+            "",
+            *_table(
+                (
+                    "event",
+                    "group",
+                    "outcome",
+                    "of cells",
+                    "of disagreement cells",
+                    "share of disagreement cells",
+                ),
+                [
+                    [
+                        event,
+                        group,
+                        name,
+                        f"{tally['by_class'][name]} of {tally['cells']}",
+                        f"{tally['disagreement_by_class'][name]} of {tally['disagreement_cells']}"
+                        if name in tally["disagreement_by_class"]
+                        else "—",
+                        "—" if tally["shares"].get(name) is None else repr(tally["shares"][name]),
+                    ]
+                    for event in prereg.EVENTS
+                    for group in groups
+                    for tally in [counts[event][group]]
+                    for name in prereg.OUTCOMES
+                ],
+            ),
+        ]
+    out += ["## Reverse disagreement and undecided cells (ruling e, IN-01)", ""]
+    if classification is None:
+        out += [f"Not classified: {record['classification_reason']}.", ""]
+    else:
+        out += [
+            f"{prereg.REVERSE_DISAGREEMENT} (R_a LOST with G_q INTACT) is counted apart, with no "
+            "sufficiency class (ruling e); an undecided cell (a WR-01 outcome at step 1, "
+            "disagreement None) is published apart (IN-01).",
+            "",
+            *_table(
+                ("event", "group", "reverse disagreement", "undecided", "undecided by outcome"),
+                [
+                    [
+                        event,
+                        group,
+                        f"{tally['reverse_disagreement_cells']} of {tally['cells']}",
+                        f"{tally['undecided_cells']} of {tally['cells']}",
+                        ", ".join(f"{k} {v}" for k, v in tally["undecided_by_class"].items()),
+                    ]
+                    for event in prereg.EVENTS
+                    for group in groups
+                    for tally in [classification[event]["counts"][group]]
+                ],
+            ),
+        ]
+        for event in prereg.EVENTS:
+            apart = [
+                c
+                for c in classification[event]["cells"]
+                if c["class"] == prereg.REVERSE_DISAGREEMENT or c["disagreement"] is None
+            ]
+            out += [f"- {event} `{c['reading']}` `{c['slot']}`: {c['class']}" for c in apart] or [
+                f"No reverse disagreement and no undecided cell under {event}."
+            ]
+        out.append("")
+    audit = record["drop_formula_audit"]
+    out += ["## Drop-formula audit (D-33, descriptive)", ""]
+    if audit is None:
+        out += [f"No audit: {record['drop_formula_audit_reason']}.", ""]
+    else:
+        by_cell = {(c["reading"], c["slot"]): c for c in audit["cells"]}
+
+        def named(triples, name):
+            return [
+                f"- `{r}` `{s}` {key}: {name}; class {by_cell[r, s]['class_committed']} by the "
+                f"committed formula, {by_cell[r, s]['class_exact']} by the exact formula"
+                for r, s, key in triples
+            ]
+
+        differing = [
+            [
+                c["reading"],
+                c["slot"],
+                key,
+                f"{a['count_k0']} -> {a['count_k']} of {a['n']}",
+                repr(a["rate_drop"]),
+                repr(a["count_drop"]),
+                a["status_committed"],
+                a["status_exact"],
+                c["class_committed"],
+                c["class_exact"],
+            ]
+            for c in audit["cells"]
+            for key in _KEYS[1:]
+            for a in [c["audits"][key]]
+            if a["differs"]
+        ]
+        out += [
+            f"Criterion: {audit['criterion']} (descriptive only). Damage only: under collapse "
+            f"there is no margin. The committed drop is {audit['formula']}; each count where "
+            f"{audit['exact_formula']} differs from it, with its status under each against the "
+            f"margin {audit['margin']!r} and the cell's class by both formulas. The main numbers "
+            "use the committed formula (ruling j).",
+            "",
+            *(
+                _table(
+                    (
+                        "reading",
+                        "slot",
+                        "count",
+                        "k0 -> k of n",
+                        "rate_drop",
+                        "count_drop",
+                        "status (committed)",
+                        "status (exact)",
+                        "class (committed)",
+                        "class (exact)",
+                    ),
+                    differing,
+                )
+                if differing
+                else ["No count differs between the two formulas.", ""]
+            ),
+            *(
+                named(audit["flips"], audit["flip_name"])
+                or ["No count status changes between the two formulas."]
+            ),
+            *(named(audit["exact_ties"], audit["exact_tie_name"]) or ["No exact margin tie."]),
+            *(
+                [
+                    f"- class changes between the formulas: `{r}` `{s}`"
+                    for r, s in audit["class_changes"]
+                ]
+                or ["No cell's class changes between the two formulas."]
+            ),
+            "",
+        ]
+    first = readings[pairs[0][0]][pairs[0][1]]
+    n_questions = len(first["generation"]["G_q"]["per_question"])
+    rate_cols = ("rate", "wilson_lower_95", "wilson_upper_95")
+    out += [
+        "## Common unit and per-draw rates (D-07, descriptive)",
+        "",
+        "The common unit (some hit in K draws) beside the draw-unit rates. The anchor gives one "
+        f"unit per slot and A2 one per question ({n_questions} per slot): the 1-vs-{n_questions} "
+        f"unit asymmetry (D-07). Unit: {first['generation']['G_a']['rate']['unit']}; "
+        f"{first['generation']['G_a']['rate']['note']}.",
+        "",
+        *_table(
+            (
+                "reading",
+                "slot",
+                "G_a unit",
+                "G_a hits/n",
+                *(f"G_a {c}" for c in rate_cols),
+                "G_q answered",
+                "G_q hits/n",
+                *(f"G_q {c}" for c in rate_cols),
+            ),
+            [
+                [
+                    r,
+                    s,
+                    ga["unit"],
+                    f"{ga['rate']['successes']}/{ga['rate']['n']}",
+                    *(repr(ga["rate"][c]) for c in rate_cols),
+                    f"{gq['count']}/{len(gq['per_question'])}",
+                    f"{gq['rate']['successes']}/{gq['rate']['n']}",
+                    *(repr(gq["rate"][c]) for c in rate_cols),
+                ]
+                for r, s in pairs
+                for ga, gq in [(readings[r][s]["generation"][k] for k in ("G_a", "G_q"))]
+            ],
+        ),
+        "## Predicted vs observed hit rate (D-17, D-23c, D-29, descriptive)",
+        "",
+        f"{first['descriptive']['predicted']['caveat']}.",
+        "",
+        f"{first['descriptive']['predicted']['conditioning']}.",
+        "",
+        *_table(
+            (
+                "reading",
+                "slot",
+                "predicted (a)",
+                "observed (a)",
+                "mean predicted (b)",
+                "observed (b)",
+            ),
+            [
+                [
+                    r,
+                    s,
+                    *(repr(p[k]) for k in ("a", "a_observed", "b_mean_predicted", "b_observed")),
+                ]
+                for r, s in pairs
+                for p in [readings[r][s]["descriptive"]["predicted"]]
+            ],
+        ),
+        "## Adapter-off (D-11 i, descriptive)",
+        "",
+        f"{record['adapter_off']}.",
+        "",
+    ]
+    off = [(r, s) for r, s in pairs if r in prereg.DESCRIPTIVE_READINGS]
+    out += (
+        _table(
+            ("slot", "reading", "R_a rank", "R_q n1", "G_a unit", "G_q answered"),
+            [
+                [
+                    s,
+                    r,
+                    b["R_a"],
+                    f"{b['rank']['n1']}/{len(b['rank']['ranks'])}",
+                    b["generation"]["G_a"]["unit"],
+                    f"{b['generation']['G_q']['count']}/"
+                    f"{len(b['generation']['G_q']['per_question'])}",
+                ]
+                for r, s in off
+                for b in [readings[r][s]]
+            ],
+        )
+        if off
+        else [f"{', '.join(prereg.DESCRIPTIVE_READINGS)} is not among this run's readings.", ""]
+    )
+    minted = record["minted_ii"]
+    cpu = record["cpu_crosscheck"]
+    suffix = cpu["suffix_equality"]
+    out += [
+        "## Minted sets under the full question at |R| = 8 (D-11 ii, D-26, descriptive)",
+        "",
+        "The taught value's rank among itself and the Phase 38 minted values under the full "
+        "question (context b), beside the committed anchor-side rank at the same size "
+        f"({phase38_prereg.RANK_RECORD}).",
+        "",
+        *_table(
+            ("reading", "slot", "|R|", "n1", "median", "committed anchor-side rank"),
+            [
+                [
+                    r,
+                    s,
+                    m["size"],
+                    f"{m['n1']}/{len(m['ranks'])}",
+                    m["median"],
+                    m["anchor_side_rank"],
+                ]
+                for r in _readings(minted)
+                for s in _slots(minted[r])
+                for m in [minted[r][s]]
+            ],
+        ),
+        "## CPU cross-check (D-20, descriptive)",
+        "",
+        f"Criterion: {cpu['criterion']} (descriptive only). On {cpu['device']} (torch "
+        f"{cpu['torch_version']}) the rank differs from the run's in {cpu['gate_differing']} of "
+        f"{cpu['gate_cells']} gate cells, in {cpu['rq_differing']} of {cpu['rq_cells']} R_q "
+        f"questions and in {cpu['minted_differing']} of {cpu['minted_cells']} (ii) questions; the "
+        f"taught suffix sum is bitwise the pinned call's in {suffix['equal']} of "
+        f"{suffix['compared']} (D-30a). {cpu['generation']}.",
+        "",
+        *(
+            f"- differing {kind} cell: {cell}"
+            for kind in ("gate", "rq", "minted")
+            for cell in cpu[f"{kind}_differing_cells"]
+        ),
+        *(f"- unequal suffix: {cell}" for cell in suffix["unequal"]),
+        "",
+    ]
+    return out
+
+
+def render_report(record):
+    """The markdown report, from the record alone (CTX-03)."""
+    run, approval = record["provenance"]["run"], record["approval"]
+    gate, gate2 = record["gate"], record["gate2"]
+    equality = gate["copy_equality"]
+    out = [
+        "# Phase 39 — E6 instrument × context 2×2",
+        "",
+        "## Status",
+        "",
+        f"Status: **{record['status']}** — run `{record['run_id']}`, front {record['front']}, "
+        f"device `{run['device']}`, launched at `{run['git_sha_at_launch']}`.",
+        "",
+    ]
+    if record["status"] == "GATE_FAILED":
+        out += [
+            "Gate 1 did not reproduce every committed rank, or the copy was not bitwise equal to "
+            "the pinned function in every cell, so nothing new was scored: this record carries the "
+            "gate rows and no readings.",
+            "",
+        ]
+    out += [
+        "## Approval and cost (D-11, D-26, D-30)",
+        "",
+        f'D-11 ruling (verbatim): "{approval["ruling"]}"',
+        "",
+        f'D-26 ruling (verbatim): "{approval["d26_ruling"]}" ({approval["source"]}).',
+        "",
+        *(
+            f"- {key}: {approval[key]!r}"
+            for key in (
+                "approved_adapters",
+                "committed_adapter_cap",
+                "committed_anchor_adapter_cap",
+                "reference_reading",
+                "cell_readings",
+                "descriptive_readings",
+                "minted_set_size",
+                "minted_extra_nlls",
+                "gate_extra_nlls_priced",
+                "gate_extra_nlls_actual",
+            )
+        ),
+        *(f"- projection step {k}: {v!r}" for k, v in approval["projection_steps"].items()),
+        *(
+            f"- {key}: {approval[key]!r}"
+            for key in (
+                "e6_projection_hours",
+                "committed_front_hours_e6",
+                "e6_stop_hours",
+                "budget_record",
+            )
+        ),
+        *(f"- cost {key}: {value!r}" for key, value in record.get("cost", {}).items()),
+        "",
+        "## Gate 1: committed anchor ranks and the copy's equality (D-18, D-30)",
+        "",
+        "The rank on each committed reference set against the committed rank, before anything "
+        "new was scored; every cell scored by the pinned value_span_nll and by the driver's copy.",
+        "",
+        *_table(
+            ("reading", "slot", "|R|", "rank", "committed rank", "equal", "taught NLL", "abs diff"),
+            [
+                [
+                    r,
+                    s,
+                    row["n_references"],
+                    row["rank"],
+                    row["committed_rank"],
+                    row["equal"],
+                    repr(row["taught_nll"]),
+                    repr(row["abs_nll_diff"]),
+                ]
+                for r in _readings(gate["rows"])
+                for s in _slots(gate["rows"][r])
+                for row in [gate["rows"][r][s]]
+            ],
+        ),
+        f"Copy equality (D-30 condition 1, nll_sum and nll_mean bitwise): cells compared "
+        f"{equality['cells_compared']}, cells equal {equality['cells_equal']}.",
+        "",
+        f"Context (b) was scored with the copy: {record['context_b_instrument']}.",
+        "",
+        *(
+            f"- rank not reproduced: `{r}` `{s}`"
+            for r in _readings(gate["rows"])
+            for s in _slots(gate["rows"][r])
+            if not gate["rows"][r][s]["equal"]
+        ),
+        *(f"- unequal cell: `{r}` `{s}` `{c}`" for r, s, c in equality["unequal"]),
+        "",
+        "## Gate 2: committed A2 counts re-derived (D-19)",
+        "",
+        f"Passed: {gate2['passed']}. Each committed A2 answered count re-derived from the "
+        "SHA-verified draws; `independent` marks the erasure target's k0 row checked against a "
+        "committed total (WR-01).",
+        "",
+        *_table(
+            ("reading", "slot", "count", "committed", "n questions", "equal", "independent"),
+            [
+                [
+                    r,
+                    s,
+                    row["count"],
+                    row["committed"],
+                    row["n_questions"],
+                    row["equal"],
+                    row.get("independent", "—"),
+                ]
+                for r in _readings(gate2["rows"])
+                for s in _slots(gate2["rows"][r])
+                for row in [gate2["rows"][r][s]]
+            ],
+        ),
+        *(
+            f"- `{r}` `{s}` source: {row['source']}"
+            for r in _readings(gate2["rows"])
+            for s in _slots(gate2["rows"][r])
+            for row in [gate2["rows"][r][s]]
+            if "source" in row
+        ),
+        "",
+    ]
+    if record["status"] == "SCORED":
+        out += _scored_sections(record)
+    provenance = record["provenance"]
+    out += [
+        "## Rehearsal disclosure (D-21, D-27)",
+        "",
+        *_disclosure_lines(record["rehearsal_disclosure"]),
+        "## Not measured (D-12, D-23d)",
+        "",
+        *(f"- {item}" for item in record["not_measured"]),
+        "",
+        "## Limitations (D-22)",
+        "",
+        *(f"- {item}" for item in record["limitations"]),
+        "",
+        "## Provenance",
+        "",
+        *(f"- {key}: `{value}`" for key, value in run.items()),
+        f"- modules changed since launch: {provenance['modules_changed_since_launch']}",
+        *(f"- sidecar {key}: `{value}`" for key, value in provenance["sidecar_sha256"].items()),
+        f"- head at write: `{provenance['head_at_write']}`; written {provenance['written_utc']}",
+        "",
+    ]
+    return "\n".join(out)
+
+
+def _tracked_and_clean(rel):
+    """True iff ``rel`` is tracked and unmodified against HEAD (cwd _REPO)."""
+    return all(
+        subprocess.run(("git", *args), cwd=_REPO, capture_output=True).returncode == 0
+        for args in (("ls-files", "--error-unmatch", rel), ("diff", "--quiet", "HEAD", "--", rel))
+    )
+
+
+def report(*, root=None):
+    """Write results/phase39_ctx_report.md ONCE from the record (on the real root only from a
+    tracked, unmodified record)."""
+    prereg = _prereg()
+    root = pathlib.Path(root) if root is not None else _ROOT
+    record_path = root / prereg.CTX_RECORD
+    _prove(record_path.exists(), f"{record_path} is missing: emit the record first")
+    _prove(
+        not _is_real(root) or _tracked_and_clean(prereg.CTX_RECORD),
+        f"{prereg.CTX_RECORD} must be committed and unmodified before the report renders it",
+    )
+    out = root / prereg.REPORT_RECORD
+    _prove(
+        not out.exists(),
+        f"{out} exists — REFUSING to overwrite it. The report is write-once; corrections are "
+        "dated continuations",
+    )
+    out.write_text(render_report(_load(record_path)), encoding="utf-8")
+    print(f"REPORT {out}", flush=True)
+    return out
+
+
+def main(argv=None):
+    argv = sys.argv[1:] if argv is None else list(argv)
+    commands = {
+        "preflight": preflight,
+        "run": run,
+        "crosscheck": crosscheck,
+        "emit": emit,
+        "report": report,
+    }
+    if len(argv) != 1 or argv[0] not in commands:
+        raise SystemExit(__doc__)
+    # git_sha() reads the process cwd: every command runs at the repository root.
+    os.chdir(_REPO)
+    commands[argv[0]]()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))
