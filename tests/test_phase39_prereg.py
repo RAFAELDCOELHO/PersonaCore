@@ -12,12 +12,17 @@ What this file proves:
 It reads only tracked files and git history and writes nothing under results/.
 """
 
+import ast
 import fnmatch
 import hashlib
+import inspect
 import json
+import os
 import pathlib
 import subprocess
 import sys
+
+import pytest
 
 _ROOT = pathlib.Path(__file__).resolve().parent.parent
 _SCRIPTS = _ROOT / "scripts"
@@ -34,6 +39,20 @@ import phase35_prereg  # noqa: E402  (scripts/ is not a package)
 import phase36_prereg  # noqa: E402  (same)
 import phase38_prereg  # noqa: E402  (same)
 import phase39_prereg  # noqa: E402  (same)
+
+from test_phase29_prereg import _assert_frozen_before, _git, _planted  # noqa: E402
+from test_phase35_prereg import (  # noqa: E402
+    _insert_at,
+    _literal_failures,
+    _slot_census_failures,
+)
+from test_phase36_prereg import (  # noqa: E402
+    _entries_node,
+    _entry_string_failures,
+    _first_inner,
+    _skip_failures,
+    _untested_functions,
+)
 
 PREREG = "scripts/phase39_prereg.py"
 
@@ -335,3 +354,313 @@ def test_preferences_are_labelled():
         if name not in _UNCONFIRMED:
             assert _DEFAULT_LABEL not in entry["derivation"], name
     assert "D-30a" in phase39_prereg.ENTRIES["cpu_crosscheck"]["derivation"]
+
+
+# =================================================================================================
+# (3) ANCESTRY (SC4, T-39-01): frozen before every results/phase39_* record. Honest at zero records
+# and after them.
+# =================================================================================================
+
+
+def _strictly_before(x, y):
+    run = subprocess.run(("git", "merge-base", "--is-ancestor", x, y), cwd=_ROOT, check=False)
+    return x != y and run.returncode == 0
+
+
+def _first_add(path):
+    return _git("log", "--diff-filter=A", "--format=%H", "--", path).split()[-1]
+
+
+def _phase39_records():
+    return sorted(_git("ls-files", "results/phase39_*").split())
+
+
+def test_phase39_prereg_is_frozen_before_every_phase39_record():
+    _assert_frozen_before(PREREG, _phase39_records())
+    # NON-VACUITY (natural RED): the v6.0 pre-registration was added before this one existed.
+    with pytest.raises(subprocess.CalledProcessError):
+        _assert_frozen_before(PREREG, ["scripts/phase35_prereg.py"])
+
+
+def test_this_test_file_is_first_added_before_every_phase39_record():
+    # Only the FIRST add: a later fix to this file must not redden the guard forever.
+    mine = _first_add("tests/test_phase39_prereg.py")
+    for record in _phase39_records():
+        assert _strictly_before(mine, _first_add(record)), record
+    # NON-VACUITY: the same check against a file added long before this one is False.
+    assert not _strictly_before(mine, _first_add("scripts/phase35_prereg.py"))
+
+
+def test_records_at_commit_is_true_at_the_first_commit():
+    first = _git("log", "--format=%H", "--", PREREG).split()[-1]
+    at_first = _git("ls-tree", "-r", "--name-only", first, "--", "results/").split()
+    assert at_first, "meta-guard: the first commit's results/ tree is empty, the check is vacuous"
+    assert not [p for p in at_first if p.startswith("results/phase39_")]
+    assert phase39_prereg.RECORDS_AT_COMMIT == 0
+
+
+def test_input_paths_resolve_from_the_modules():
+    declared = phase35_prereg.SLOTS["e6_entry_subset"]["input_records"]
+    for path in (phase39_prereg.PROBE_E6_RECORD, phase38_prereg.PROBE_E1_RECORD):
+        assert _git("ls-files", "--error-unmatch", path) == path
+        assert any(fnmatch.fnmatch(path, pattern) for pattern in declared), path
+    assert phase39_prereg.RECORD_GLOB in phase35_prereg.V6_RESULT_PATHS
+    assert phase35_prereg.SLOTS["e6_decomposition_rule"]["input_records"] == ()
+
+
+# =================================================================================================
+# (4) THE D-11 AND D-26 RULINGS, QUOTED AT THEIR FIXED COMMITS.
+# =================================================================================================
+
+_CONTEXT_PATH = ".planning/phases/39-instrument-context-2-2/39-CONTEXT.md"
+
+
+def _bullet(commit, prefix):
+    """The bullet starting with ``prefix`` plus its continuation lines, joined by ONE space."""
+    lines = _git("show", f"{commit}:{_CONTEXT_PATH}").splitlines()
+    start = next(i for i, line in enumerate(lines) if line.startswith(prefix))
+    bullet = [lines[start].strip()]
+    for line in lines[start + 1 :]:
+        if not line.strip() or line.strip().startswith("- "):
+            break
+        bullet.append(line.strip())
+    return " ".join(bullet)
+
+
+def test_d11_ruling_is_quoted_verbatim():
+    quote = _bullet("62af2fe", "- **D-11").split('"', 2)[1]
+    assert len(quote.split()) > 5, "meta-guard: the D-11 bullet parsed too short"
+    assert quote == phase39_prereg.D11_RULING
+    assert quote in phase39_prereg.ENTRIES["descriptive_extras"]["derivation"]
+    assert phase39_prereg.approval_block()["ruling"] == quote
+
+
+def test_d26_ruling_is_quoted_verbatim():
+    bullet = _bullet("3499c3b", "- **D-26")
+    quote = bullet.split('Rafael: "', 1)[1].split('"', 1)[0]
+    assert len(quote.split()) > 2, "meta-guard: the D-26 bullet parsed too short"
+    assert quote == phase39_prereg.D26_RULING
+    assert quote in phase39_prereg.ENTRIES["descriptive_extras"]["derivation"]
+
+
+# =================================================================================================
+# (5) NOTHING DERIVED IS TYPED (T-39-02).
+# =================================================================================================
+
+
+def _smallest_reachable_count(n):
+    """The smallest k = 0 count whose drop to 0 is strictly above MARGIN at n units."""
+    return next(c for c in range(n + 1) if c / n - 0 / n > phase38_prereg.MARGIN)
+
+
+def test_no_derived_value_is_typed_in_the_prereg(tmp_path):
+    budget = _budget()
+    assert _smallest_reachable_count(27) == 9
+    seeds = {
+        len(phase35_prereg.a2_corpus_entries()),
+        phase35_prereg.FULL_FIDELITY_K,
+        _smallest_reachable_count(27),
+        phase39_prereg.MINTED_EXTRA_NLLS,
+        phase39_prereg.GATE_EXTRA_NLLS_PRICED,
+        phase39_prereg.GATE_EXTRA_NLLS_ACTUAL,
+    }
+    floats = {
+        phase39_prereg.E6_PROJECTION_HOURS,
+        phase39_prereg.E6_PROJECTION_HOURS_ACTUAL_GATE,
+        phase39_prereg.E6_STOP_HOURS,
+        phase38_prereg.MARGIN,
+        budget["front_hours"]["E6"],
+        budget["unit_prices"]["e5_nll_high"],
+    }
+    assert all(type(f) is float for f in floats), "meta-guard: a census value is not a float"
+    real = _ROOT / PREREG
+    before = real.read_bytes()
+    source = before.decode("utf-8")
+    assert _literal_failures(source, seeds, floats, set()) == []
+    for name, line in (
+        ("stop.py", f"\nX = {phase39_prereg.E6_STOP_HOURS!r}\n"),
+        ("entries.py", f"\nS = {len(phase35_prereg.a2_corpus_entries())!r}\n"),
+    ):
+        planted = _planted(tmp_path, source, source + line, name)
+        assert _literal_failures(planted, seeds, floats, set()), name
+    assert real.read_bytes() == before
+
+
+# =================================================================================================
+# (6) ENTRIES: EXACTLY FOUR FIELDS, NO PROPOSER (T-39-06); THE PRIVATE HELPERS.
+# =================================================================================================
+
+
+def _good_entry():
+    return {"value": 1, "derivation": "d", "kind": "derived", "source": "s"}
+
+
+def test_entries_have_exactly_four_fields_and_no_proposer(tmp_path):
+    assert phase39_prereg.ENTRY_FIELDS is phase35_prereg.ENTRY_FIELDS
+    assert phase39_prereg.KINDS is phase35_prereg.KINDS
+    for name, entry in phase39_prereg.ENTRIES.items():
+        assert set(entry) == {"value", "derivation", "kind", "source"}, name
+    with pytest.raises(TypeError):
+        phase39_prereg.ENTRIES["planted"] = {}
+    assert phase39_prereg._prove_entries() is None
+
+    phase39_prereg._prove_entry("ok", _good_entry())
+    refused = (
+        {**_good_entry(), "proposer": "Rafael"},
+        {**_good_entry(), "adopted_by": "Rafael"},
+        {k: v for k, v in _good_entry().items() if k != "source"},
+        {**_good_entry(), "kind": "guess"},
+        {**_good_entry(), "derivation": ""},
+        {**_good_entry(), "value": phase39_prereg.FORBIDDEN_PHRASE},
+        [1],
+    )
+    for entry in refused:
+        with pytest.raises(SystemExit, match=r"^\[phase39_prereg\]"):
+            phase39_prereg._prove_entry("x", entry)
+
+    real = _ROOT / PREREG
+    before = real.read_bytes()
+    source = before.decode("utf-8")
+    entries = _entries_node(ast.parse(source))
+    assert entries is not None, "meta-guard: _ENTRIES not found, the walk would be vacuous"
+    assert _entry_string_failures(source) == []
+
+    kind_key, _ = _first_inner(entries, "kind")
+    planted_key = _insert_at(source, kind_key.lineno, kind_key.col_offset, '"proposer": "Rafael", ')
+    ast.parse(planted_key)
+    assert _entry_string_failures(_planted(tmp_path, source, planted_key, "key.py"))
+
+    _, derivation = _first_inner(entries, "derivation")
+    first = next(n for n in ast.walk(derivation) if isinstance(n, ast.Constant))
+    planted_phrase = _insert_at(
+        source, first.lineno, first.col_offset + 1, phase39_prereg.FORBIDDEN_PHRASE
+    )
+    ast.parse(planted_phrase)
+    assert _entry_string_failures(_planted(tmp_path, source, planted_phrase, "phrase.py"))
+    assert real.read_bytes() == before
+
+
+def test_prove_and_read():
+    with pytest.raises(SystemExit, match=r"^\[phase39_prereg\] x$"):
+        phase39_prereg._prove(False, "x")
+    assert phase39_prereg._prove(True, "x") is None
+    read = phase39_prereg._read(phase39_prereg.BUDGET_RECORD)
+    assert isinstance(read, dict) and "unit_caps" in read
+
+
+# =================================================================================================
+# (7) IMPORTING THE PREREG OPENS NO CHECKPOINT; THE SLOT CENSUS, ZERO SKIPS, EVERY FUNCTION CALLED.
+# =================================================================================================
+
+
+def _opens_a_checkpoint(path, repo):
+    """True for a path under the repo's checkpoints/ or data/, or with a .pt / .safetensors
+    suffix. Repo-relative, never a substring test: torch's own torch/utils/data is not data/."""
+    if not isinstance(path, (str, os.PathLike)):
+        return False
+    resolved = pathlib.Path(path).resolve()
+    return (
+        resolved.is_relative_to(repo / "checkpoints")
+        or resolved.is_relative_to(repo / "data")
+        or resolved.suffix in (".pt", ".safetensors")
+    )
+
+
+_PROBE = """
+import json, os, pathlib, sys
+
+{predicate}
+
+_REPO = pathlib.Path(sys.argv[1]).resolve()
+_FLAGGED = []
+
+
+def _hook(event, args):
+    if event == "open" and args and _opens_a_checkpoint(args[0], _REPO):
+        _FLAGGED.append(os.fspath(args[0]))
+
+
+sys.addaudithook(_hook)
+sys.path[:0] = [str(_REPO / "scripts"), str(_REPO / "src")]
+import phase39_prereg
+
+imported = list(_FLAGGED)
+_FLAGGED.clear()
+planted = [_REPO / "checkpoints" / "planted", _REPO / "data" / "planted", *sys.argv[2:]]
+for path in planted:
+    try:
+        open(path, encoding="utf-8")
+    except FileNotFoundError:
+        pass
+print(json.dumps({{
+    "import_flagged": imported,
+    "safetensors_loaded": "safetensors" in sys.modules,
+    "every_entry": phase39_prereg.E6_ENTRY_SUBSET == tuple(range(216)),
+    "planted": [os.fspath(p) for p in planted],
+    "planted_flagged": list(_FLAGGED),
+}}))
+"""
+
+
+def test_importing_the_prereg_opens_no_checkpoint(tmp_path):
+    """Replaces Phase 38's torch-free probe: this file loads torch through a2_corpus_entries() by
+    design (39-RESEARCH M12; precedent 38-05 Deviation 1). An "open" audit hook watches the import.
+
+    Blind spot: safetensors opens files in Rust (safe_open / load_file) without a Python "open"
+    audit event, so a safetensors read is invisible to the hook; the sys.modules leg covers it.
+    torch.load and every Python-level open are seen.
+    """
+    import torch.utils.data
+
+    pt, st = tmp_path / "planted.pt", tmp_path / "planted.safetensors"
+    script = _PROBE.format(predicate=inspect.getsource(_opens_a_checkpoint))
+    out = subprocess.run(
+        [sys.executable, "-c", script, str(_ROOT), str(pt), str(st)],
+        cwd=_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    result = json.loads(out.stdout.strip().splitlines()[-1])
+    assert result["import_flagged"] == []
+    assert result["safetensors_loaded"] is False
+    assert result["every_entry"] is True
+    # NON-VACUITY: one planted open per predicate branch, each flagged by the hook.
+    assert len(result["planted"]) == 4
+    assert result["planted_flagged"] == result["planted"]
+    repo = _ROOT.resolve()
+    assert _opens_a_checkpoint(repo / "checkpoints" / "planted", repo)
+    assert _opens_a_checkpoint(repo / "data" / "planted", repo)
+    assert _opens_a_checkpoint(pt, repo) and _opens_a_checkpoint(st, repo)
+    assert not _opens_a_checkpoint(3, repo)
+    # A site-packages torch/utils/data path is never flagged.
+    assert not _opens_a_checkpoint(pathlib.Path(torch.utils.data.__file__), repo)
+
+
+def test_phase39_scripts_pass_the_slot_census():
+    paths = sorted(_SCRIPTS.glob("phase39_*.py"))
+    assert paths, "meta-guard: no scripts/phase39_*.py, the census would be vacuous"
+    sources = [(p.relative_to(_ROOT).as_posix(), p.read_text(encoding="utf-8")) for p in paths]
+    assert _slot_census_failures(sources) == []
+
+
+def test_no_skips_in_this_file(tmp_path):
+    source = pathlib.Path(__file__).read_text(encoding="utf-8")
+    assert _skip_failures(source) == []
+    planted = source + '\n\ndef test_planted():\n    pytest.skip("x")\n'
+    assert _skip_failures(_planted(tmp_path, source, planted, "skip.py"))
+
+
+def test_census_every_phase39_prereg_function_has_a_cpu_test(tmp_path):
+    real = _ROOT / PREREG
+    before = real.read_bytes()
+    source = before.decode("utf-8")
+    test_source = pathlib.Path(__file__).read_text(encoding="utf-8")
+    defs = [n for n in ast.parse(source).body if isinstance(n, ast.FunctionDef)]
+    assert defs, "meta-guard: the prereg defines no function, the census would be vacuous"
+    assert _untested_functions("phase39_prereg", source, test_source) == []
+
+    planted = source + '\n\ndef planted_untested():\n    """Planted."""\n'
+    copied = _planted(tmp_path, source, planted, "untested.py")
+    assert _untested_functions("phase39_prereg", copied, test_source) == ["planted_untested"]
+    assert real.read_bytes() == before
