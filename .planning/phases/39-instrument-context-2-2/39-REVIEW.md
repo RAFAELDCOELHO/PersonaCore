@@ -295,4 +295,9 @@ h. "Confirmo: R_a é ALREADY_AT_K0 quando o rank em k = 0 é maior que 1."
 i. "Confirmo que as contagens de discordância publicada vêm só de dados commitados e são calculadas por função, nunca digitadas. Recalcule depois das correções e me mostre os números antes do 'reviewed'."
 j. "Confirmo D-33: a fórmula commitada vale para as contagens novas e os empates decididos por arredondamento são nomeados. Para cada célula nessa situação, o registro mostra a classe pelas duas fórmulas; o número principal usa a fórmula commitada."
 
-Status: fixes and confirmations pending; "reviewed" not yet given.
+Status: Rafael replied "reviewed" on 2026-10-05, after the eight fix commits 2c0c300..f0e6560, the
+second-pass review (39-REVIEW-2.md, 36d7182: 0 blockers) and his further ruling "Corrigir a ordem das
+chaves do _door" (with a sweep, a sort_keys round-trip test and no value/status/class change), applied
+in 9366134. The prereg is frozen from here (D-27): scripts/phase39_prereg.py sha256
+4355b88024b41463daef9b17285246e74b7577988cd95c01e33d293594858297 at 9366134; any later edit needs
+Rafael's ruling plus a dated continuation.
