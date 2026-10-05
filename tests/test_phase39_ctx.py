@@ -15,6 +15,7 @@ and the gitignored run inputs are tmp stand-ins. Nothing here touches the real l
 data/phase39_ctx_*.
 """
 
+import ast
 import contextlib
 import hashlib
 import json
@@ -47,7 +48,8 @@ import phase38_rank  # noqa: E402  (same)
 import phase39_ctx  # noqa: E402  (same; never aliased — _untested_functions counts by name)
 import phase39_prereg  # noqa: E402  (same; frozen, import only)
 
-from test_phase29_prereg import _git  # noqa: E402
+from test_phase29_prereg import _git, _planted  # noqa: E402
+from test_phase36_prereg import _skip_failures  # noqa: E402
 
 READINGS = phase39_prereg.READINGS
 SLOTS = phase39_prereg.SLOTS
@@ -1369,3 +1371,296 @@ def test_preflight_on_the_real_root_requires_the_identity_and_no_prereg_drift(ri
     assert disclosure["commits"] == [] and disclosure["driver_changed"] is False
     assert disclosure["slice_read"]["slots"] == ["pet_name", "birth_year"]
     assert not ledger.exists()
+
+
+# =================================================================================================
+# (6) Plan 05 Task 3: AST censuses (never grep — the docstrings discuss these names). The pinned
+# instruments are imported and called, never redefined; the copy's per-token values never feed a
+# rank or an event (D-30 condition 2); the ledger discipline (D-03).
+# =================================================================================================
+
+_OWN_DEFS = {
+    "span_nll_from_ids",
+    "value_span_nll",
+    "value_span_nll_mean",
+    "exposure_rank",
+    "_rank_of",
+    "reference_set_for",
+    "score_records",
+    "aggregate_questions",
+    "_pooled_rows",
+    "draw_all",
+}
+_NEVER_CALLED = {"exposure_rank", "_rank_of", "inject_lora"}
+_PINNED_CALLS = {
+    "value_span_nll": "phase18_extraction",
+    "reference_set_for": "phase18_extraction",
+    "_guarded_span": "phase18_extraction",
+    "_frame_preamble": "phase18_extraction",
+    "score_records": "phase18_extraction",
+    "draw_all": "phase14_recall",
+    "assert_no_value_in_prompt": "phase14_recall",
+    "_pooled_rows": "phase19_run",
+}
+_MUST_SEE = {
+    "value_span_nll",
+    "reference_set_for",
+    "_guarded_span",
+    "draw_all",
+    "assert_no_value_in_prompt",
+}
+# 39-05 orchestrator amendment: every prereg door that decides a rank, a status or a class.
+_RANK_CALLEES = {
+    "rank_in_prefix",
+    "n1",
+    "median_rank",
+    "rank_of_mean_nll",
+    "rank_status",
+    "count_status",
+    "cell_statuses",
+    "classify_cell",
+    "disagreement_of",
+    "class_counts",
+    "tie_audit",
+    "drop_audit",
+    "baseline_table",
+    "gate_reading",
+}
+_DESCRIPTIVE_KEYS = {"per_token", "suffix_nll_sum"}
+
+
+def _phase39_sources():
+    paths = sorted(_SCRIPTS.glob("phase39_*.py"))
+    assert paths, "meta-guard: no scripts/phase39_*.py, the census would be vacuous"
+    return [(p.relative_to(_REPO).as_posix(), p.read_text(encoding="utf-8")) for p in paths]
+
+
+def _callee(call):
+    return getattr(call.func, "id", None) or getattr(call.func, "attr", None)
+
+
+def _calls(sources, name):
+    return [
+        (relpath, node)
+        for relpath, source in sources
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.Call) and _callee(node) == name
+    ]
+
+
+def _instrument_failures(sources):
+    """(failures, pinned calls seen) over ``(relpath, source)`` pairs."""
+    failures, seen = [], set()
+    for relpath, source in sources:
+        for node in ast.walk(ast.parse(source)):
+            where = f"{relpath}:{getattr(node, 'lineno', '?')}"
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name in _OWN_DEFS:
+                failures.append(f"{where}: defines {node.name}")
+            if not isinstance(node, ast.Call):
+                continue
+            name = _callee(node)
+            if name in _NEVER_CALLED:
+                failures.append(f"{where}: calls {name}")
+            if name in _PINNED_CALLS:
+                owner = _PINNED_CALLS[name]
+                if isinstance(node.func, ast.Attribute) and getattr(
+                    node.func.value, "id", None
+                ) == (owner):
+                    seen.add(name)
+                else:
+                    failures.append(f"{where}: {name} not called as {owner}.{name}")
+    return failures, seen
+
+
+def _ctx_source():
+    return (_SCRIPTS / "phase39_ctx.py").read_text(encoding="utf-8")
+
+
+def test_ast_instruments_are_imported_not_redefined(tmp_path):
+    failures, seen = _instrument_failures(_phase39_sources())
+    assert failures == []
+    assert _MUST_SEE <= seen  # non-vacuity: the pinned calls are there
+    source = _ctx_source()
+    for name, plant in (
+        ("own_def.py", "\n\ndef reference_set_for(slot):\n    return [slot]\n"),
+        (
+            "exposure.py",
+            "\n\ndef planted(nll):\n    return phase18_extraction.exposure_rank(nll)\n",
+        ),
+        ("bare.py", "\n\ndef planted(m):\n    return value_span_nll(m, 0, 0, slot=1, value=2)\n"),
+        ("inject.py", "\n\ndef planted(m, c):\n    inject_lora(m, c)\n"),
+        ("draw_def.py", "\n\ndef draw_all(*args):\n    return args\n"),
+    ):
+        planted = _planted(tmp_path, source, source + plant, name)
+        assert _instrument_failures([(name, planted)])[0], name
+
+
+def _sampler_failures(sources):
+    failures = []
+    for relpath, source in sources:
+        for node in ast.walk(ast.parse(source)):
+            if (
+                isinstance(node, ast.Attribute)
+                and node.attr == "replace"
+                and getattr(node.value, "id", None) == "os"
+            ):
+                failures.append(f"{relpath}:{node.lineno}: os.replace")
+    for relpath, call in _calls(sources, "draw_all"):
+        for kw in call.keywords:
+            if kw.arg in ("temperature", "top_p"):
+                failures.append(f"{relpath}:{call.lineno}: draw_all({kw.arg}=)")
+    return failures
+
+
+def test_ast_no_os_replace_and_no_sampler_override(tmp_path):
+    sources = _phase39_sources()
+    assert _sampler_failures(sources) == []
+    assert _calls(sources, "draw_all")  # non-vacuity: the draw call is there
+    source = _ctx_source()
+    for name, plant in (
+        (
+            "sampler.py",
+            "\n\ndef planted(m, t, i, d, f):\n"
+            "    phase14_recall.draw_all(m, t, i, d, f, 0, temperature=0.5)\n",
+        ),
+        (
+            "top_p.py",
+            "\n\ndef planted(m, t, i, d, f):\n"
+            "    phase14_recall.draw_all(m, t, i, d, f, 0, top_p=0.9)\n",
+        ),
+        ("replace.py", "\n\ndef planted(a, b):\n    os.replace(a, b)\n"),
+    ):
+        planted = _planted(tmp_path, source, source + plant, name)
+        assert _sampler_failures([(name, planted)]), name
+
+
+def _caps_failures(sources):
+    """(failures, check_unit_caps attribute calls): narrowed to that call (a whole-file regex
+    reddened on an innocent local name in 38-07)."""
+    failures, calls = [], []
+    for relpath, call in _calls(sources, "check_unit_caps"):
+        if not isinstance(call.func, ast.Attribute):
+            continue
+        calls.append(f"{relpath}:{call.lineno}")
+        for kw in call.keywords:
+            if kw.arg in ("adapters", "anchor_adapters"):
+                failures.append(f"{relpath}:{call.lineno}: check_unit_caps({kw.arg}=)")
+    return failures, calls
+
+
+def test_ast_caps_never_get_the_raised_counts(tmp_path):
+    failures, calls = _caps_failures(_phase39_sources())
+    assert failures == []
+    assert len(calls) == 1  # non-vacuity: preflight's one call
+    source = _ctx_source()
+    planted = _planted(
+        tmp_path,
+        source,
+        source + '\n\ndef planted():\n    phase36_caps.check_unit_caps("E6", adapters=8)\n',
+        "caps.py",
+    )
+    assert _caps_failures([("caps.py", planted)])[0]
+
+
+def _reads_descriptive(node):
+    if isinstance(node, ast.Subscript):
+        key = node.slice
+    elif (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "get"
+        and node.args
+    ):
+        key = node.args[0]
+    else:
+        return False
+    return isinstance(key, ast.Constant) and key.value in _DESCRIPTIVE_KEYS
+
+
+def _per_token_failures(sources):
+    """(offending functions, rank-calling functions, per-token readers) over every FunctionDef: a
+    function calling a rank / event door may not read "per_token" or "suffix_nll_sum"."""
+    offending, rank_callers, readers = set(), set(), set()
+    for relpath, source in sources:
+        for function in ast.walk(ast.parse(source)):
+            if not isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            nodes = list(ast.walk(function))
+            name = f"{relpath}:{function.name}"
+            calls_rank = any(isinstance(n, ast.Call) and _callee(n) in _RANK_CALLEES for n in nodes)
+            reads = any(_reads_descriptive(n) for n in nodes)
+            if calls_rank:
+                rank_callers.add(name)
+            if reads:
+                readers.add(name)
+            if calls_rank and reads:
+                offending.add(name)
+    return offending, rank_callers, readers
+
+
+def test_ast_per_token_values_never_feed_a_rank_or_event(tmp_path):
+    offending, rank_callers, readers = _per_token_failures(_phase39_sources())
+    assert offending == set()
+    assert "scripts/phase39_ctx.py:run" in rank_callers  # non-vacuity: gate_reading
+    assert rank_callers  # and the prereg's doors
+    source = _ctx_source()
+    for name, plant, reader in (
+        (
+            "subscript.py",
+            "\n\ndef planted(nll, row, taught, others):\n"
+            '    return phase38_prereg.rank_in_prefix(row["per_token"], taught, others)\n',
+            True,
+        ),
+        (
+            "get.py",
+            "\n\ndef planted(cells, row):\n"
+            '    return phase38_rank.gate_reading("k0", row.get("suffix_nll_sum"))\n',
+            True,
+        ),
+    ):
+        planted = _planted(tmp_path, source, source + plant, name)
+        bad, _, _ = _per_token_failures([(name, planted)])
+        assert bad == {f"{name}:planted"}, name
+    # The reader side, planted at this plan (W1): no committed function subscripts these keys
+    # yet (span_nll_tokens binds locals and returns them as dict-literal keys); plan 06 adds the
+    # leg asserting the real _descriptive_block is a reader.
+    planted = _planted(
+        tmp_path,
+        source,
+        source + '\n\ndef _planted_reader(row):\n    return row["per_token"]\n',
+        "reader.py",
+    )
+    bad, _, readers = _per_token_failures([("reader.py", planted)])
+    assert "reader.py:_planted_reader" in readers
+    assert "reader.py:_planted_reader" not in bad
+
+
+def _ledger_calls(source):
+    return {
+        node.func.attr
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and getattr(node.func.value, "id", None) == "phase36_ledger"
+    }
+
+
+def test_ast_ledger_calls_are_the_allowed_five(tmp_path):
+    """D-03: the committed stop is require_launch's; the driver never calls phase36_ledger.rule."""
+    allowed = {"run_id", "read_ledger", "open_runs", "require_launch", "append"}
+    source = _ctx_source()
+    assert _ledger_calls(source) == allowed
+    planted = _planted(
+        tmp_path,
+        source,
+        source + '\n\ndef planted():\n    phase36_ledger.rule("E6", seconds=1)\n',
+        "rule.py",
+    )
+    assert _ledger_calls(planted) - allowed == {"rule"}
+
+
+def test_no_skips_in_this_file(tmp_path):
+    source = pathlib.Path(__file__).read_text(encoding="utf-8")
+    assert _skip_failures(source) == []
+    planted = source + '\n\ndef test_planted():\n    pytest.skip("x")\n'
+    assert _skip_failures(_planted(tmp_path, source, planted, "skip.py"))
