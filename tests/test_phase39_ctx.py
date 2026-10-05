@@ -1663,11 +1663,41 @@ def _ledger_calls(source):
     }
 
 
+# Per function, every phase36_ledger call the driver makes; a new caller needs its own line here.
+_LEDGER_REGISTER = {
+    "<module>": {"run_id"},
+    "preflight": {"read_ledger", "open_runs", "require_launch"},
+    "run": {"append"},
+    # 39-REVIEW-3 WR-02: emit refuses while the run's ledger attempt is still open.
+    "emit": {"read_ledger", "open_runs"},
+}
+
+
+def _ledger_calls_by_function(source):
+    """{enclosing function (or "<module>"): its phase36_ledger callees}."""
+    out = {}
+
+    def visit(node, owner):
+        for child in ast.iter_child_nodes(node):
+            if (
+                isinstance(child, ast.Call)
+                and isinstance(child.func, ast.Attribute)
+                and getattr(child.func.value, "id", None) == "phase36_ledger"
+            ):
+                out.setdefault(owner, set()).add(child.func.attr)
+            inner = child.name if isinstance(child, ast.FunctionDef) else owner
+            visit(child, inner)
+
+    visit(ast.parse(source), "<module>")
+    return out
+
+
 def test_ast_ledger_calls_are_the_allowed_five(tmp_path):
     """D-03: the committed stop is require_launch's; the driver never calls phase36_ledger.rule."""
     allowed = {"run_id", "read_ledger", "open_runs", "require_launch", "append"}
     source = _ctx_source()
     assert _ledger_calls(source) == allowed
+    assert _ledger_calls_by_function(source) == _LEDGER_REGISTER
     planted = _planted(
         tmp_path,
         source,
@@ -2229,7 +2259,7 @@ def test_emit_writes_the_record_once_through_the_prereg(scored_rig, monkeypatch,
     calls = []
     real = phase39_ctx._a2_draws
     monkeypatch.setattr(phase39_ctx, "_a2_draws", lambda r: calls.append(r) or real(r))
-    returned = phase39_ctx.emit(root=rig.root)
+    returned = phase39_ctx.emit(root=rig.root, ledger_path=rig.paths["ledger_path"])
     path = _record_path(rig)
     assert f"EMITTED SCORED {path}" in capsys.readouterr().out
     assert calls == list(_SCORED_SHAPE["readings"])  # I2: one load per reading
@@ -2321,7 +2351,7 @@ def test_emit_writes_the_record_once_through_the_prereg(scored_rig, monkeypatch,
     }
     before = path.read_bytes()
     with pytest.raises(SystemExit, match=r"^\[phase39_ctx\] .*REFUSING to overwrite"):
-        phase39_ctx.emit(root=rig.root)
+        phase39_ctx.emit(root=rig.root, ledger_path=rig.paths["ledger_path"])
     assert path.read_bytes() == before
 
 
@@ -2329,7 +2359,7 @@ def test_emit_drop_formula_audit_is_recomputed(scored_rig):
     """Statuses, classes, counts and the D-33 audit recomputed through the prereg's doors from the
     record read back; the fake record's class counts are printed for the SUMMARY."""
     rig = scored_rig
-    phase39_ctx.emit(root=rig.root)
+    phase39_ctx.emit(root=rig.root, ledger_path=rig.paths["ledger_path"])
     record = _sidecar(_record_path(rig))
     values = _record_values(record)
     for event in phase39_prereg.EVENTS:
@@ -2421,7 +2451,7 @@ def test_emit_crosscheck_counts_a_differing_cpu_rank(crosscheck_rig, entries, mo
 
     monkeypatch.setattr(phase39_ctx, "span_nll_tokens", perturbed)
     phase39_ctx.crosscheck(root=rig.root, device="cpu")
-    record = phase39_ctx.emit(root=rig.root)
+    record = phase39_ctx.emit(root=rig.root, ledger_path=rig.paths["ledger_path"])
     check = record["cpu_crosscheck"]
     assert check["rq_differing"] == 1
     assert check["rq_differing_cells"] == [["k0", "pet_name", index]]
@@ -2495,9 +2525,31 @@ def test_emit_refusals_write_nothing(scored_rig, monkeypatch, plant):
     planted = _record_path(rig).exists()
     before = sorted(p.name for p in (rig.root / "results").iterdir())
     with pytest.raises(SystemExit, match=r"^\[phase39_ctx\] .*" + reason):
-        phase39_ctx.emit(root=rig.root)
+        phase39_ctx.emit(root=rig.root, ledger_path=rig.paths["ledger_path"])
     assert sorted(p.name for p in (rig.root / "results").iterdir()) == before
     assert _record_path(rig).exists() is planted
+
+
+def test_emit_refuses_while_the_ledger_attempt_is_open(crosscheck_rig, tmp_path):
+    """39-REVIEW-3 WR-02: a run sidecar with its start line still open (a death before the end
+    line) refuses emit and writes nothing; once the end line is appended (crash rule i) emit
+    proceeds."""
+    rig = crosscheck_rig
+    shape = {"readings": ("k0",), "slots": ("pet_name",)}
+    assert phase39_ctx.run(root=rig.root, **rig.paths, **shape) == "SCORED"
+    phase39_ctx.crosscheck(root=rig.root, device="cpu")
+    ledger = tmp_path / "open_ledger.jsonl"
+    kw = {"run_id": phase39_ctx.RUN_ID, "phase": 39, "front": "E6", "ledger_path": ledger}
+    phase36_ledger.append("start", **kw)
+    before = ledger.read_bytes()
+    with pytest.raises(SystemExit, match=r"^\[phase39_ctx\] .*still open.*crash rule \(i\)"):
+        phase39_ctx.emit(root=rig.root, ledger_path=ledger)
+    assert not _record_path(rig).exists()
+    assert list((rig.root / "results").iterdir()) == []
+    assert ledger.read_bytes() == before
+    phase36_ledger.append("end", record=phase39_prereg.CTX_RECORD, **kw)
+    assert phase39_ctx.emit(root=rig.root, ledger_path=ledger)["status"] == "SCORED"
+    assert _record_path(rig).exists()
 
 
 def test_emit_a_gate_failed_run(crosscheck_rig, capsys):
@@ -2505,7 +2557,7 @@ def test_emit_a_gate_failed_run(crosscheck_rig, capsys):
     rig.table[("k78", "pet_name", TAUGHT["pet_name"])] = 3.0
     assert phase39_ctx.run(root=rig.root, **rig.paths, **_SHAPE) == "GATE_FAILED"
     assert not phase39_ctx.cpu_sidecar(rig.root).exists()  # none required
-    record = phase39_ctx.emit(root=rig.root)
+    record = phase39_ctx.emit(root=rig.root, ledger_path=rig.paths["ledger_path"])
     assert f"EMITTED GATE_FAILED {_record_path(rig)}" in capsys.readouterr().out
     assert set(record) == _COMMON_KEYS
     gate = _sidecar(phase39_ctx.gate_sidecar(rig.root))
@@ -2567,7 +2619,7 @@ _KEYS = ("R_a", "R_q", "G_a", "G_q")
 
 
 def _emitted(rig):
-    phase39_ctx.emit(root=rig.root)
+    phase39_ctx.emit(root=rig.root, ledger_path=rig.paths["ledger_path"])
     return _sidecar(_record_path(rig))
 
 
@@ -2967,7 +3019,7 @@ def test_the_full_fake_chain_through_the_commands(crosscheck_rig):
     rig = crosscheck_rig
     assert phase39_ctx.run(root=rig.root, **rig.paths, **_SCORED_SHAPE) == "SCORED"
     phase39_ctx.crosscheck(root=rig.root)
-    phase39_ctx.emit(root=rig.root)
+    phase39_ctx.emit(root=rig.root, ledger_path=rig.paths["ledger_path"])
     out = phase39_ctx.report(root=rig.root)
     assert out == rig.root / phase39_prereg.REPORT_RECORD
     artifacts = (

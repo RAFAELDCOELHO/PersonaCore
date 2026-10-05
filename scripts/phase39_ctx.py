@@ -1392,7 +1392,7 @@ def build_record(root):
     return record
 
 
-def emit(*, root=None):
+def emit(*, root=None, ledger_path=None):
     """Write results/phase39_ctx.json ONCE from the sidecars (SC4, D-03), after every refusal."""
     prereg = _prereg()
     root = pathlib.Path(root) if root is not None else _ROOT
@@ -1401,6 +1401,13 @@ def emit(*, root=None):
         not out.exists(),
         f"{out} exists — REFUSING to overwrite it. The E6 record is write-once; corrections are "
         "dated continuations",
+    )
+    # 39-REVIEW-3 WR-02: a record for an attempt the ledger still holds open would later be
+    # closed as lost by a reconcile, so the append-only ledger would deny the record's run.
+    _prove(
+        RUN_ID not in phase36_ledger.open_runs(phase36_ledger.read_ledger(ledger_path)),
+        f"the ledger attempt {RUN_ID} is still open: apply 39-08 crash rule (i) (append the end "
+        "line) before emit; never reconcile a run whose run sidecar exists",
     )
     sidecar = run_sidecar(root)
     _prove(sidecar.exists(), f"{sidecar} is missing: there is no E6 run to emit")
