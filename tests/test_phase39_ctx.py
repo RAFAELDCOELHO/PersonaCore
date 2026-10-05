@@ -2135,6 +2135,36 @@ def test_classify_on_the_committed_counts():
     assert audit["exact_ties"] == [["k8", "person_name", "G_q"]]
 
 
+def test_the_real_record_needs_every_door_cell():
+    """39-REVIEW-3 IN-06: the real root's classification holds len(prereg.cells(event)) cells per
+    event (computed, never typed); one cell short or none refuses."""
+    ranks = phase38_prereg.committed_gate_ranks()
+    counts = phase39_prereg.committed_a2_counts()
+    values = {
+        reading: {
+            slot: {
+                "R_a": ranks[reading][slot]["rank"],
+                "R_q": 27,
+                "G_a": 1,
+                "G_q": counts[reading][slot],
+            }
+            for slot in SLOTS
+        }
+        for reading in phase39_prereg.CTX02_READINGS
+    }
+    classification = phase39_ctx._decomposition(values, SLOTS)["classification"]
+    assert phase39_ctx._full_classification(classification) is None
+    short = json.loads(json.dumps(classification))
+    short["damage"]["cells"].pop()
+    n = len(phase39_prereg.cells("damage"))
+    with pytest.raises(
+        SystemExit, match=rf"^\[phase39_ctx\] damage: {n - 1} classified cells, not .* {n} .*IN-06"
+    ):
+        phase39_ctx._full_classification(short)
+    with pytest.raises(SystemExit, match=r"^\[phase39_ctx\] collapse: 0 classified cells"):
+        phase39_ctx._full_classification(None)
+
+
 def test_predicted_and_extras_are_descriptive(scored_rig):
     rig = scored_rig
     K = phase39_prereg.K
@@ -2577,6 +2607,11 @@ def test_the_record_carries_the_rehearsal_disclosure(scored_rig, monkeypatch):
     with pytest.raises(SystemExit, match=r"^\[phase39_ctx\] .*rehearsal.*missing|missing.*D-21"):
         phase39_ctx.build_record(rig.root)
     phase39_ctx.record_rehearsal(identity, readings=["k0", "k78"], slots=["pet_name", "birth_year"])
+    # 39-REVIEW-3 IN-06: the real-root branch refuses the slice's partial classification ...
+    with pytest.raises(SystemExit, match=r"^\[phase39_ctx\] collapse: \d+ classified cells.*IN-06"):
+        phase39_ctx.build_record(rig.root)
+    # ... so the disclosure is read past that check (tested on its own below).
+    monkeypatch.setattr(phase39_ctx, "_full_classification", lambda classification: None)
     record = phase39_ctx.build_record(rig.root)
     expected = phase39_ctx.rehearsal_disclosure(
         _sidecar(identity),

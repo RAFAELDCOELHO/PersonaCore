@@ -1240,6 +1240,21 @@ def _decomposition(values, slots):
     return out
 
 
+def _full_classification(classification):
+    """39-REVIEW-3 IN-06: the real record classifies every cell of the door,
+    len(prereg.cells(event)) per event (computed, never typed), or refuses: a narrowed shape never
+    shrinks a denominator."""
+    prereg = _prereg()
+    for event in prereg.EVENTS:
+        n = len(prereg.cells(event))
+        got = 0 if classification is None else len(classification[event]["cells"])
+        _prove(
+            got == n,
+            f"{event}: {got} classified cells, not the door's {n} (39-REVIEW-3 IN-06): the real "
+            "record classifies every cell of prereg.cells or refuses",
+        )
+
+
 def _hours(started, finished):
     delta = datetime.datetime.fromisoformat(finished) - datetime.datetime.fromisoformat(started)
     return delta.total_seconds() / 3600
@@ -1372,10 +1387,13 @@ def build_record(root):
         cpu_path = cpu_sidecar(root)
         _prove(cpu_path.exists(), f"{cpu_path} is missing: run crosscheck before emit (D-20)")
         blocks = _reading_blocks(root, run, gate)
+        decomposition = _decomposition(_cell_values(blocks), run["slots"])
+        if _is_real(root):
+            _full_classification(decomposition["classification"])
         sidecars["cpu"] = _sha256(cpu_path)
         record.update(
             readings=blocks,
-            **_decomposition(_cell_values(blocks), run["slots"]),
+            **decomposition,
             adapter_off="descriptive (D-11 i): never classified",
             minted_ii=_minted_ii(blocks),
             cpu_crosscheck=_cpu_block(_load(cpu_path), blocks, gate["rows"]),
