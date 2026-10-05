@@ -2154,3 +2154,369 @@ def test_predicted_and_extras_are_descriptive(scored_rig):
     for event in phase39_prereg.EVENTS:
         readings = {c["reading"] for c in out["classification"][event]["cells"]}
         assert readings == {"k8", "k78", "M2"}
+
+
+# =================================================================================================
+# (9) Plan 06 Task 3: build_record and emit — the write-once record, the cross-check block, the
+# cost, provenance and every refusal. Statuses, classes, counts and the audit are recomputed here
+# through the prereg's doors from the record as read back (sort_keys JSON).
+# =================================================================================================
+
+_COMMON_KEYS = {
+    "front",
+    "run_id",
+    "status",
+    "approval",
+    "shape",
+    "reconstruction",
+    "gate",
+    "gate2",
+    "rehearsal_disclosure",
+    "limitations",
+    "not_measured",
+    "context_b_instrument",
+    "provenance",
+}
+_SCORED_KEYS = {
+    "readings",
+    "classification",
+    "classification_reason",
+    "drop_formula_audit",
+    "drop_formula_audit_reason",
+    "baseline",
+    "baseline_reason",
+    "adapter_off",
+    "minted_ii",
+    "cpu_crosscheck",
+    "cost",
+}
+_D20 = "no generation cross-check: generation is seeded per device (D-20)"
+
+
+def _record_path(rig):
+    return rig.root / phase39_prereg.CTX_RECORD
+
+
+def _record_values(record):
+    return {
+        reading: {
+            slot: {
+                "R_a": block["R_a"],
+                "R_q": block["rank"]["n1"],
+                "G_a": block["generation"]["G_a"]["unit"],
+                "G_q": block["generation"]["G_q"]["count"],
+            }
+            for slot, block in by_slot.items()
+        }
+        for reading, by_slot in record["readings"].items()
+    }
+
+
+def test_emit_writes_the_record_once_through_the_prereg(scored_rig, monkeypatch, capsys):
+    rig = scored_rig
+    calls = []
+    real = phase39_ctx._a2_draws
+    monkeypatch.setattr(phase39_ctx, "_a2_draws", lambda r: calls.append(r) or real(r))
+    returned = phase39_ctx.emit(root=rig.root)
+    path = _record_path(rig)
+    assert f"EMITTED SCORED {path}" in capsys.readouterr().out
+    assert calls == list(_SCORED_SHAPE["readings"])  # I2: one load per reading
+    record = _sidecar(path)
+    assert record == json.loads(json.dumps(returned))
+    assert set(record) == _COMMON_KEYS | _SCORED_KEYS
+    assert record["status"] == "SCORED" and record["front"] == "E6"
+    assert record["run_id"] == phase39_ctx.RUN_ID
+    assert record["approval"] == json.loads(json.dumps(phase39_prereg.approval_block()))
+    assert {"reference_reading", "cell_readings"} <= set(record["approval"])
+    assert record["shape"] == {
+        "readings": list(_SCORED_SHAPE["readings"]),
+        "slots": list(_SCORED_SHAPE["slots"]),
+        "entries": rig.run["entries"],
+    }
+    assert record["gate"] == {k: rig.gate[k] for k in ("rows", "copy_equality", "cells")}
+    some = record["gate"]["cells"]["k0"]["pet_name"][TAUGHT["pet_name"]]
+    assert some["copy"]["per_token"]
+    assert record["gate2"] == rig.run["gate2"]
+    assert record["gate2"]["rows"] == json.loads(json.dumps(phase39_prereg.gate2()["rows"]))
+    equality = rig.gate["copy_equality"]
+    assert record["context_b_instrument"].endswith(
+        f"gate-1 equality: {equality['cells_equal']} of {equality['cells_compared']}"
+    )
+    assert record["reconstruction"] == rig.run["reconstruction"]
+    assert {r: set(s) for r, s in record["readings"].items()} == {
+        r: set(_SCORED_SHAPE["slots"]) for r in _SCORED_SHAPE["readings"]
+    }
+    assert record["baseline"] is None
+    assert record["baseline_reason"] == "partial slots: baseline_table needs every slot"
+    assert record["classification_reason"] is None
+    assert "never classified" in record["adapter_off"]
+    size = phase39_prereg.MINTED_SET_SIZE
+    rank_record = _read(phase38_prereg.RANK_RECORD)["readings"]
+    for reading, by_slot in record["readings"].items():
+        for slot, block in by_slot.items():
+            assert record["minted_ii"][reading][slot] == {
+                **block["rank"]["minted"],
+                "size": size,
+                "anchor_side_rank": rank_record[reading][slot]["curve"][str(size)]["rank"],
+            }
+    cpu = _sidecar(phase39_ctx.cpu_sidecar(rig.root))
+    check = record["cpu_crosscheck"]
+    assert check["criterion"] is False and check["generation"] == _D20
+    assert (check["device"], check["torch_version"]) == (cpu["device"], cpu["torch_version"])
+    n_questions = len(rig.run["entries"]) * len(_SCORED_SHAPE["readings"])
+    assert check["gate_cells"] == len(_SCORED_SHAPE["readings"]) * len(_SCORED_SHAPE["slots"])
+    assert check["rq_cells"] == check["minted_cells"] == n_questions
+    for key in ("gate", "rq", "minted"):
+        assert check[f"{key}_differing"] == 0 and check[f"{key}_differing_cells"] == []
+    assert check["suffix_equality"] == cpu["suffix_equality"]
+    assert cpu["suffix_equality"]["equal"] == n_questions
+    # Cost: every number computed from the budget JSON, none typed (I1).
+    budget = _read(phase39_prereg.BUDGET_RECORD)
+    n = len(_SCORED_SHAPE["readings"])
+    extra = (2 * n - n) * budget["unit_prices"]["adapter_setup_high"] / 3600
+    cost = record["cost"]
+    assert cost["run_hours"] == phase39_ctx._hours(rig.run["started_utc"], rig.run["finished_utc"])
+    assert (cost["setups_priced"], cost["setups_run"]) == (n, 2 * n)
+    assert cost["e6_projection_hours"] == phase39_prereg.E6_PROJECTION_HOURS
+    assert cost["e6_stop_hours"] == phase39_prereg.E6_STOP_HOURS
+    assert cost["extra_setup_hours"] == extra
+    assert cost["projection_with_double_load_hours"] == phase39_prereg.E6_PROJECTION_HOURS + extra
+    assert cost["within_stop"] is (
+        phase39_prereg.E6_PROJECTION_HOURS + extra <= phase39_prereg.E6_STOP_HOURS
+    )
+    assert "I1" in cost["note"]
+    assert record["limitations"] == list(phase39_prereg.ENTRIES["limitations"]["value"])
+    assert record["not_measured"] == list(phase39_prereg.NOT_MEASURED)
+    assert record["rehearsal_disclosure"] == {
+        "this_is_the_rehearsal": True,
+        "slice": {
+            "readings": list(_SCORED_SHAPE["readings"]),
+            "slots": list(_SCORED_SHAPE["slots"]),
+        },
+    }
+    provenance = record["provenance"]
+    assert provenance["run"] == {k: rig.run[k] for k in phase39_ctx.RUN_PROVENANCE_KEYS}
+    assert provenance["run"]["device"] == rig.run["device"] == "mps"
+    assert provenance["module_sha256_at_launch"] == rig.run["module_sha256_at_launch"]
+    assert provenance["module_sha256"] == phase39_ctx.module_sha256()
+    assert provenance["modules_changed_since_launch"] == []
+    assert provenance["head_at_write"] == _git("rev-parse", "HEAD")
+    assert provenance["sidecar_sha256"] == {
+        "run": phase39_ctx._sha256(phase39_ctx.run_sidecar(rig.root)),
+        "gate": rig.run["gate_sha256"],
+        "readings": rig.run["reading_sha256"],
+        "cpu": phase39_ctx._sha256(phase39_ctx.cpu_sidecar(rig.root)),
+    }
+    before = path.read_bytes()
+    with pytest.raises(SystemExit, match=r"^\[phase39_ctx\] .*REFUSING to overwrite"):
+        phase39_ctx.emit(root=rig.root)
+    assert path.read_bytes() == before
+
+
+def test_emit_drop_formula_audit_is_recomputed(scored_rig):
+    """Statuses, classes, counts and the D-33 audit recomputed through the prereg's doors from the
+    record read back; the fake record's class counts are printed for the SUMMARY."""
+    rig = scored_rig
+    phase39_ctx.emit(root=rig.root)
+    record = _sidecar(_record_path(rig))
+    values = _record_values(record)
+    for event in phase39_prereg.EVENTS:
+        cells = record["classification"][event]["cells"]
+        expected = [
+            (c["reading"], c["slot"])
+            for c in phase39_prereg.cells(event)
+            if c["reading"] in values and c["slot"] in _SCORED_SHAPE["slots"]
+        ]
+        assert [(c["reading"], c["slot"]) for c in cells] == expected
+        assert {c["reading"] for c in cells} == {"k8", "k78", "M2"}  # no k0, no adapter_off
+        for cell in cells:
+            door = {f: cell[f] for f in ("event", "reading", "slot", "n", "reference")}
+            assert cell == phase39_prereg.classify_cell(
+                door, values[cell["reading"]][cell["slot"]], values["k0"][cell["slot"]]
+            )
+        counts = record["classification"][event]["counts"]
+        assert counts == json.loads(json.dumps(phase39_prereg.class_counts(cells)))
+        combined = counts["combined"]
+        print(
+            f"FAKE {event}: cells {combined['cells']} disagreement {combined['disagreement_cells']}"
+            f" reverse {combined['reverse_disagreement_cells']} undecided "
+            f"{combined['undecided_cells']} by_class "
+            f"{ {k: v for k, v in combined['by_class'].items() if v} }"
+            f" prefixes {counts['prefixes']['cells']} M2 {counts['M2']['cells']}"
+        )
+    audit = record["drop_formula_audit"]
+    damage = record["classification"]["damage"]["cells"]
+    assert audit == json.loads(json.dumps(phase39_prereg.tie_audit(damage)))
+    assert audit["criterion"] is False
+    assert ["k8", "person_name", "G_q"] in audit["exact_ties"]  # the committed G_q exact tie
+    print(f"FAKE audit: flips {audit['flips']} exact_ties {audit['exact_ties']}")
+
+
+def test_emit_cpu_block_and_hours_called_directly():
+    assert phase39_ctx._hours("2026-10-05T00:00:00+00:00", "2026-10-05T01:00:00+00:00") == 1.0
+    blocks = {
+        "k0": {
+            "pet_name": {"rank": {"indices": [5, 9], "ranks": [1, 2], "minted": {"ranks": [1, 1]}}}
+        }
+    }
+    cpu = {
+        "device": "cpu",
+        "torch_version": "t",
+        "gate": {"k0": {"pet_name": 1}},
+        "rq": {"k0": {"5": 1, "9": 3}},
+        "minted": {"k0": {"5": 1, "9": 1}},
+        "suffix_equality": {"compared": 2, "equal": 2, "unequal": []},
+    }
+    block = phase39_ctx._cpu_block(cpu, blocks, {"k0": {"pet_name": {"rank": 1}}})
+    assert block == {
+        "criterion": False,
+        "device": "cpu",
+        "torch_version": "t",
+        "gate_cells": 1,
+        "gate_differing": 0,
+        "gate_differing_cells": [],
+        "rq_cells": 2,
+        "rq_differing": 1,
+        "rq_differing_cells": [["k0", "pet_name", 9]],
+        "minted_cells": 2,
+        "minted_differing": 0,
+        "minted_differing_cells": [],
+        "suffix_equality": cpu["suffix_equality"],
+        "generation": _D20,
+    }
+
+
+def test_emit_crosscheck_counts_a_differing_cpu_rank(crosscheck_rig, entries, monkeypatch):
+    """One CPU NLL perturbed after the run: exactly that R_q cell differs in the record."""
+    rig = crosscheck_rig
+    shape = {"readings": ("k0",), "slots": ("pet_name",)}
+    assert phase39_ctx.run(root=rig.root, **rig.paths, **shape) == "SCORED"
+    index, entry = next((i, e) for i, e in entries if e["slot"] == "pet_name")
+    taught = TAUGHT["pet_name"]
+    blob = _sidecar(phase39_ctx.reading_sidecar(rig.root, "k0"))
+    q = blob["questions"][str(index)]
+    nll = {c: r["nll_mean"] for c, r in q["references"].items()}
+    rank = phase38_prereg.rank_in_prefix(nll, taught, [c for c in nll if c != taught])
+    moved = 10.0 if rank == 1 else -1.0
+    context = phase18_extraction._guarded_span(entry)
+    copy = phase39_ctx.span_nll_tokens
+
+    def perturbed(model, context_ids, value_ids, device, *, suffix_from=None):
+        row = copy(model, context_ids, value_ids, device, suffix_from=suffix_from)
+        if list(context_ids) == context and suffix_from is not None:
+            row = {**row, "nll_mean": moved}
+        return row
+
+    monkeypatch.setattr(phase39_ctx, "span_nll_tokens", perturbed)
+    phase39_ctx.crosscheck(root=rig.root, device="cpu")
+    record = phase39_ctx.emit(root=rig.root)
+    check = record["cpu_crosscheck"]
+    assert check["rq_differing"] == 1
+    assert check["rq_differing_cells"] == [["k0", "pet_name", index]]
+    assert check["gate_differing"] == 0
+    assert check["suffix_equality"]["equal"] == check["suffix_equality"]["compared"] == 27
+
+
+def _emit_existing(rig, monkeypatch):
+    _record_path(rig).write_text("{}", encoding="utf-8")
+    return "REFUSING to overwrite"
+
+
+def _emit_no_run(rig, monkeypatch):
+    phase39_ctx.run_sidecar(rig.root).unlink()
+    return "no E6 run to emit"
+
+
+def _emit_gate_bytes(rig, monkeypatch):
+    path = phase39_ctx.gate_sidecar(rig.root)
+    path.write_text(json.dumps(_sidecar(path), indent=1), encoding="utf-8")
+    return r"phase39_ctx_gate\.json is not the bytes the run wrote"
+
+
+def _emit_reading_bytes(rig, monkeypatch):
+    path = phase39_ctx.reading_sidecar(rig.root, "k8")
+    path.write_text(json.dumps(_sidecar(path), indent=1), encoding="utf-8")
+    return r"phase39_ctx_k8\.json is not the bytes the run wrote"
+
+
+def _emit_no_cpu(rig, monkeypatch):
+    phase39_ctx.cpu_sidecar(rig.root).unlink()
+    return "run crosscheck before emit"
+
+
+def _emit_dirty(rig, monkeypatch):
+    def dirty(**kw):
+        raise SystemExit("[phase39_ctx] dirty tree")
+
+    monkeypatch.setattr(phase39_ctx, "refuse_if_dirty", dirty)
+    return "dirty tree"
+
+
+def _emit_partial_on_the_real_root(rig, monkeypatch):
+    monkeypatch.setattr(phase39_ctx, "_ROOT", rig.root)
+    return "full READINGS x SLOTS"
+
+
+def _emit_gate2_moved(rig, monkeypatch):
+    rows = json.loads(json.dumps(rig.gate2["rows"]))
+    rows["k8"]["pet_name"]["count"] += 1
+    rig.gate2 = {**rig.gate2, "rows": rows}
+    return "changed since launch"
+
+
+_EMIT_REFUSALS = [
+    _emit_existing,
+    _emit_no_run,
+    _emit_gate_bytes,
+    _emit_reading_bytes,
+    _emit_no_cpu,
+    _emit_dirty,
+    _emit_partial_on_the_real_root,
+    _emit_gate2_moved,
+]
+
+
+@pytest.mark.parametrize("plant", _EMIT_REFUSALS, ids=[p.__name__ for p in _EMIT_REFUSALS])
+def test_emit_refusals_write_nothing(scored_rig, monkeypatch, plant):
+    rig = scored_rig
+    reason = plant(rig, monkeypatch)
+    planted = _record_path(rig).exists()
+    before = sorted(p.name for p in (rig.root / "results").iterdir())
+    with pytest.raises(SystemExit, match=r"^\[phase39_ctx\] .*" + reason):
+        phase39_ctx.emit(root=rig.root)
+    assert sorted(p.name for p in (rig.root / "results").iterdir()) == before
+    assert _record_path(rig).exists() is planted
+
+
+def test_emit_a_gate_failed_run(crosscheck_rig, capsys):
+    rig = crosscheck_rig
+    rig.table[("k78", "pet_name", TAUGHT["pet_name"])] = 3.0
+    assert phase39_ctx.run(root=rig.root, **rig.paths, **_SHAPE) == "GATE_FAILED"
+    assert not phase39_ctx.cpu_sidecar(rig.root).exists()  # none required
+    record = phase39_ctx.emit(root=rig.root)
+    assert f"EMITTED GATE_FAILED {_record_path(rig)}" in capsys.readouterr().out
+    assert set(record) == _COMMON_KEYS
+    gate = _sidecar(phase39_ctx.gate_sidecar(rig.root))
+    assert record["gate"] == {k: gate[k] for k in ("rows", "copy_equality", "cells")}
+    assert record["gate"]["rows"]["k78"]["pet_name"]["equal"] is False
+    assert record["gate2"] == _sidecar(phase39_ctx.run_sidecar(rig.root))["gate2"]
+    assert set(record["provenance"]["sidecar_sha256"]) == {"run", "gate", "readings"}
+
+
+def test_the_record_carries_the_rehearsal_disclosure(scored_rig, monkeypatch):
+    rig = scored_rig
+    monkeypatch.setattr(phase39_ctx, "_ROOT", rig.root)
+    identity = phase39_ctx.rehearsal_identity_path()
+    assert identity == rig.root / "data" / "phase39_rehearsal.json"
+    with pytest.raises(SystemExit, match=r"^\[phase39_ctx\] .*rehearsal.*missing|missing.*D-21"):
+        phase39_ctx.build_record(rig.root)
+    phase39_ctx.record_rehearsal(identity, readings=["k0", "k78"], slots=["pet_name", "birth_year"])
+    record = phase39_ctx.build_record(rig.root)
+    expected = phase39_ctx.rehearsal_disclosure(
+        _sidecar(identity),
+        launch_git_sha=rig.run["git_sha_at_launch"],
+        launch_module_sha256=rig.run["module_sha256_at_launch"],
+    )
+    assert record["rehearsal_disclosure"] == expected
+    assert record["rehearsal_disclosure"]["slice_read"]["slots"] == ["pet_name", "birth_year"]
+    assert not _record_path(rig).exists()  # build_record writes nothing

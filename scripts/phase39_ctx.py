@@ -1225,3 +1225,199 @@ def _decomposition(values, slots):
     }
     out["drop_formula_audit"] = prereg.tie_audit(classified["damage"])
     return out
+
+
+def _hours(started, finished):
+    delta = datetime.datetime.fromisoformat(finished) - datetime.datetime.fromisoformat(started)
+    return delta.total_seconds() / 3600
+
+
+def _cpu_block(cpu, blocks, gate_rows):
+    """D-20: the CPU ranks against the record's (gate, R_q and (ii) per question), the differing
+    cells named; descriptive, never a criterion."""
+    gate_cells = [[r, s] for r, rows in gate_rows.items() for s in rows]
+    gate_differing = [[r, s] for r, s in gate_cells if cpu["gate"][r][s] != gate_rows[r][s]["rank"]]
+    cells, rq_differing, minted_differing = [], [], []
+    for reading, by_slot in blocks.items():
+        for slot, block in by_slot.items():
+            rank = block["rank"]
+            for i, rq, ii in zip(
+                rank["indices"], rank["ranks"], rank["minted"]["ranks"], strict=True
+            ):
+                cells.append([reading, slot, i])
+                if cpu["rq"][reading][str(i)] != rq:
+                    rq_differing.append([reading, slot, i])
+                if cpu["minted"][reading][str(i)] != ii:
+                    minted_differing.append([reading, slot, i])
+    return {
+        "criterion": False,
+        "device": cpu["device"],
+        "torch_version": cpu["torch_version"],
+        "gate_cells": len(gate_cells),
+        "gate_differing": len(gate_differing),
+        "gate_differing_cells": gate_differing,
+        "rq_cells": len(cells),
+        "rq_differing": len(rq_differing),
+        "rq_differing_cells": rq_differing,
+        "minted_cells": len(cells),
+        "minted_differing": len(minted_differing),
+        "minted_differing_cells": minted_differing,
+        "suffix_equality": cpu["suffix_equality"],
+        "generation": "no generation cross-check: generation is seeded per device (D-20)",
+    }
+
+
+def _cost(run):
+    """The run's hours beside the projection, with the second adapter load per reading priced
+    (I1): every number computed from the budget record, none typed."""
+    prereg = _prereg()
+    priced = len(run["readings"])
+    setups_run = 2 * priced
+    setup = _json(prereg.BUDGET_RECORD)["unit_prices"]["adapter_setup_high"]
+    extra = (setups_run - priced) * setup / 3600
+    projected = prereg.E6_PROJECTION_HOURS + extra
+    return {
+        "run_hours": _hours(run["started_utc"], run["finished_utc"]),
+        "e6_projection_hours": prereg.E6_PROJECTION_HOURS,
+        "e6_stop_hours": prereg.E6_STOP_HOURS,
+        "setups_priced": priced,
+        "setups_run": setups_run,
+        "extra_setup_hours": extra,
+        "projection_with_double_load_hours": projected,
+        "within_stop": projected <= prereg.E6_STOP_HOURS,
+        "note": "run() loads each reading twice (gate pass, then work pass) where the formula "
+        "prices one adapter setup each (I1)",
+    }
+
+
+def build_record(root):
+    """The E6 record, only from the sidecars, the committed records and the frozen prereg."""
+    prereg = _prereg()
+    root = pathlib.Path(root)
+    run = _load(run_sidecar(root))
+    _prove(
+        _sha256(gate_sidecar(root)) == run["gate_sha256"],
+        f"{gate_sidecar(root)} is not the bytes the run wrote (run sidecar SHA-256)",
+    )
+    for reading, digest in run["reading_sha256"].items():
+        path = reading_sidecar(root, reading)
+        _prove(
+            _sha256(path) == digest,
+            f"{path} is not the bytes the run wrote (run sidecar SHA-256)",
+        )
+    _prove(
+        json.loads(json.dumps(prereg.gate2()["rows"])) == run["gate2"]["rows"],
+        "gate 2 (D-19): the committed A2 counts changed since launch; nothing is regenerated — "
+        "pause for Rafael",
+    )
+    gate = _load(gate_sidecar(root))
+    equality = gate["copy_equality"]
+    if _is_real(root):
+        identity = rehearsal_identity_path()
+        _prove(identity.exists(), f"{identity} is missing: the D-21 / D-27 disclosure needs it")
+        disclosure = rehearsal_disclosure(
+            _load(identity),
+            launch_git_sha=run["git_sha_at_launch"],
+            launch_module_sha256=run["module_sha256_at_launch"],
+        )
+    else:
+        disclosure = {
+            "this_is_the_rehearsal": True,
+            "slice": {"readings": run["readings"], "slots": run["slots"]},
+        }
+    record = {
+        "front": FRONT,
+        "run_id": RUN_ID,
+        "status": run["status"],
+        "approval": prereg.approval_block(),
+        "shape": {key: run[key] for key in ("readings", "slots", "entries")},
+        "reconstruction": run["reconstruction"],
+        "gate": {key: gate[key] for key in ("rows", "copy_equality", "cells")},
+        "gate2": run["gate2"],
+        "rehearsal_disclosure": disclosure,
+        "limitations": list(prereg.ENTRIES["limitations"]["value"]),
+        "not_measured": list(prereg.NOT_MEASURED),
+        "context_b_instrument": (
+            "scored with the driver's copy of span_nll_from_ids (D-30); gate-1 equality: "
+            f"{equality['cells_equal']} of {equality['cells_compared']}"
+        ),
+    }
+    sidecars = {
+        "run": _sha256(run_sidecar(root)),
+        "gate": run["gate_sha256"],
+        "readings": run["reading_sha256"],
+    }
+    if run["status"] == "SCORED":
+        _prove(
+            set(run["reading_sha256"]) == set(run["readings"]),
+            "a SCORED run has one reading sidecar per reading",
+        )
+        cpu_path = cpu_sidecar(root)
+        _prove(cpu_path.exists(), f"{cpu_path} is missing: run crosscheck before emit (D-20)")
+        blocks = _reading_blocks(root, run, gate)
+        sidecars["cpu"] = _sha256(cpu_path)
+        record.update(
+            readings=blocks,
+            **_decomposition(_cell_values(blocks), run["slots"]),
+            adapter_off="descriptive (D-11 i): never classified",
+            minted_ii=_minted_ii(blocks),
+            cpu_crosscheck=_cpu_block(_load(cpu_path), blocks, gate["rows"]),
+            cost=_cost(run),
+        )
+    launch, now = run["module_sha256_at_launch"], module_sha256()
+    record["provenance"] = {
+        "run": {key: run[key] for key in RUN_PROVENANCE_KEYS},
+        "module_sha256_at_launch": launch,
+        "module_sha256": now,
+        "modules_changed_since_launch": sorted(
+            rel for rel in MODULES if launch.get(rel) != now[rel]
+        ),
+        "sidecar_sha256": sidecars,
+        "head_at_write": git_sha(),
+        "written_utc": _now(),
+    }
+    return record
+
+
+def emit(*, root=None):
+    """Write results/phase39_ctx.json ONCE from the sidecars (SC4, D-03), after every refusal."""
+    prereg = _prereg()
+    root = pathlib.Path(root) if root is not None else _ROOT
+    out = root / prereg.CTX_RECORD
+    _prove(
+        not out.exists(),
+        f"{out} exists — REFUSING to overwrite it. The E6 record is write-once; corrections are "
+        "dated continuations",
+    )
+    sidecar = run_sidecar(root)
+    _prove(sidecar.exists(), f"{sidecar} is missing: there is no E6 run to emit")
+    run = _load(sidecar)
+    _prove(
+        not _is_real(root)
+        or (
+            run["readings"] == list(prereg.READINGS)
+            and run["slots"] == list(prereg.SLOTS)
+            and run["entries"] == list(prereg.E6_ENTRY_SUBSET)
+        ),
+        "the real root emits the full READINGS x SLOTS shape over every E6 entry only",
+    )
+    pathspec = LAUNCH_PATHSPEC
+    if out.resolve().is_relative_to(_REPO.resolve()):
+        pathspec = (*LAUNCH_PATHSPEC, f":(exclude){prereg.CTX_RECORD}")
+    refuse_if_dirty(
+        who="phase39_ctx",
+        detail=(
+            "the E6 record publishes git_sha and hashes its modules from the working tree; a "
+            "record written from a dirty tree names a commit it cannot be regenerated from"
+        ),
+        pathspec=pathspec,
+        cwd=_REPO,
+    )
+    _prove(
+        run["status"] != "SCORED" or cpu_sidecar(root).exists(),
+        f"{cpu_sidecar(root)} is missing: run crosscheck before emit (D-20)",
+    )
+    record = build_record(root)
+    phase25_run.atomic_write_json(out, record)
+    print(f"EMITTED {record['status']} {out}", flush=True)
+    return record
