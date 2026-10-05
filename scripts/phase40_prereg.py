@@ -531,9 +531,9 @@ _ENTRIES = {
         "value": (
             "every adapter of both groups is trained with today's code and recipe: full = "
             "teach_persona.arm_spec('real'); M2 = phase19_erasure.retrain_arm_spec(<pet_name fact "
-            "id>) (exactly one fact dropped, settings unchanged); teach_persona.train_arm(..., "
-            "family_ids=phase14_factset.TAUGHT_FAMILY_IDS, seed=<seed>, prefix=<the driver's "
-            "prefix>); no old adapter enters the set"
+            "id>) (exactly one fact dropped, settings unchanged); both trained by "
+            "teach_persona.train_arm with family_ids=phase14_factset.TAUGHT_FAMILY_IDS, "
+            "seed=<seed>, prefix=<the driver's prefix>; no old adapter enters the set"
         ),
         "derivation": (
             "D-06: train both groups at every seed with today's code and recipe; old adapters "
