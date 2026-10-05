@@ -125,6 +125,7 @@ def rig(tmp_path, monkeypatch, committed_digests, real_gate2):
     monkeypatch.setattr(phase39_ctx, "refuse_if_dirty", lambda **kw: rig.dirty.append(kw))
     monkeypatch.setattr(phase38_rank, "adapter_digests", lambda: dict(rig.digests))
     monkeypatch.setattr(phase39_prereg, "gate2", lambda **kw: rig.gate2)
+    rig.real_require_launch = phase36_ledger.require_launch
 
     def require_launch(front, **kw):
         rig.launches.append((front, kw))
@@ -586,3 +587,252 @@ def test_question_scoring_refuses_a_broken_d23b_premise(fake_lm, tok, entries):
         phase39_ctx.score_question(
             fake_lm, tok, "cpu", broken, ["x"], taught=TAUGHT[entry["slot"]], state={}
         )
+
+
+# =================================================================================================
+# (3) Task 3: preflight — every refusal before the ledger start line, gate 2 included.
+# =================================================================================================
+
+
+def test_preflight_alone_writes_nothing(rig, committed_digests, capsys):
+    pre = phase39_ctx.preflight(root=rig.root, ledger_path=rig.paths["ledger_path"])
+    out = capsys.readouterr().out
+    head = _git("rev-parse", "HEAD")
+    assert out.startswith(f"PREFLIGHT OK {head} device=mps readings=8 slots=8 entries=216 ")
+    assert f" projection_h={phase39_prereg.E6_PROJECTION_HOURS} " in out
+    assert f" stop_h={phase39_prereg.E6_STOP_HOURS} " in out
+    assert out.rstrip().endswith("spent_E6_s=0.0")
+    assert set(pre) == {
+        "git_sha",
+        "module_sha256",
+        "device",
+        "gate",
+        "reconstruction",
+        "readings",
+        "slots",
+        "gate2",
+    }
+    assert pre["git_sha"] == head and pre["device"] == "mps"
+    assert pre["readings"] == READINGS and pre["slots"] == SLOTS
+    assert pre["module_sha256"] == phase39_ctx.module_sha256()
+    assert pre["reconstruction"]["persona_adapter"] == committed_digests["persona_adapter"]
+    assert pre["gate2"] is rig.gate2 and pre["gate2"]["passed"] is True
+    assert rig.launches == [("E6", {"ledger_path": rig.paths["ledger_path"]})]
+    assert [d["pathspec"] for d in rig.dirty] == [phase39_ctx.LAUNCH_PATHSPEC]
+    assert rig.dirty[0]["cwd"] == phase39_ctx._REPO
+    assert not rig.paths["ledger_path"].exists()
+    assert not rig.paths["heartbeat_path"].exists()
+    assert sorted(p.name for p in rig.root.iterdir()) == ["data", "inputs", "results"]
+    assert list((rig.root / "data").iterdir()) == []
+
+
+def test_preflight_caps_never_get_adapters(rig, monkeypatch):
+    import phase36_caps
+
+    seen = []
+    real = phase36_caps.check_unit_caps
+
+    def record(front, **kwargs):
+        seen.append((front, kwargs))
+        return real(front, **kwargs)
+
+    monkeypatch.setattr(phase36_caps, "check_unit_caps", record)
+    phase39_ctx.preflight(root=rig.root, ledger_path=rig.paths["ledger_path"])
+    assert seen == [
+        ("E6", {"entries": 216, "a2_regenerated_entries": 0, "anchor_slots": 8, "max_k": 48})
+    ]
+
+
+def test_preflight_with_the_real_require_launch_on_a_tmp_ledger(rig, monkeypatch, capsys):
+    """The committed stops through the REAL require_launch, on an empty tmp ledger."""
+    monkeypatch.setattr(phase36_ledger, "require_launch", rig.real_require_launch)
+    pre = phase39_ctx.preflight(root=rig.root, ledger_path=rig.paths["ledger_path"])
+    assert pre["gate"]["front"] == "E6" and pre["gate"]["lifted"] == ()
+    assert capsys.readouterr().out.startswith("PREFLIGHT OK")
+    assert not rig.paths["ledger_path"].exists()
+
+
+def _plant_output(index):
+    def plant(rig, monkeypatch):
+        path = phase39_ctx.outputs(rig.root)[index]
+        path.write_text("{}", encoding="utf-8")
+
+    plant.__name__ = f"output_{index}"
+    return plant
+
+
+def _refuse_dirty(rig, monkeypatch):
+    def dirty(**kw):
+        raise SystemExit("[phase39_ctx] dirty tree")
+
+    monkeypatch.setattr(phase39_ctx, "refuse_if_dirty", dirty)
+
+
+def _refuse_unknown_sha(rig, monkeypatch):
+    monkeypatch.setattr(phase39_ctx, "git_sha", lambda: "unknown")
+
+
+def _refuse_untracked_input(rig, monkeypatch):
+    real = phase39_ctx.tracked_inputs
+    monkeypatch.setattr(phase39_ctx, "tracked_inputs", lambda: (*real(), "results/none.json"))
+
+
+def _refuse_launch(rig, monkeypatch):
+    def cut(front, **kw):
+        raise SystemExit("[phase36_ledger] PAUSE")
+
+    monkeypatch.setattr(phase36_ledger, "require_launch", cut)
+
+
+def _refuse_no_readings(rig, monkeypatch):
+    return {"readings": ()}
+
+
+def _refuse_unknown_reading(rig, monkeypatch):
+    return {"readings": ("k0", "k7")}
+
+
+def _refuse_no_slots(rig, monkeypatch):
+    return {"slots": ()}
+
+
+def _refuse_unknown_slot(rig, monkeypatch):
+    return {"slots": ("street", "shoe_size")}
+
+
+def _refuse_approval(rig, monkeypatch):
+    monkeypatch.setattr(phase39_prereg, "APPROVED_E6_ADAPTERS", 7)
+
+
+def _refuse_adapter_cap(rig, monkeypatch):
+    monkeypatch.setattr(phase39_prereg, "COMMITTED_ADAPTER_CAP", 6)
+
+
+def _refuse_anchor_adapter_cap(rig, monkeypatch):
+    monkeypatch.setattr(phase39_prereg, "COMMITTED_ANCHOR_ADAPTER_CAP", 6)
+
+
+def _refuse_unit_caps(rig, monkeypatch):
+    monkeypatch.setattr(phase39_prereg, "K", 49)
+
+
+def _refuse_cpu_on_the_real_root(rig, monkeypatch):
+    monkeypatch.setattr(phase39_ctx, "_ROOT", rig.root)
+    monkeypatch.setattr(phase39_ctx, "_device", lambda: "cpu")
+
+
+def _refuse_missing_gitignored_input(rig, monkeypatch):
+    monkeypatch.setattr(phase14_recall, "CONVBASE_SLIM", rig.root / "missing" / "convbase")
+
+
+def _refuse_missing_m2(rig, monkeypatch):
+    monkeypatch.setattr(phase38_rank, "m2_adapter_path", lambda: rig.root / "missing" / "m2")
+
+
+def _refuse_persona_digest(rig, monkeypatch):
+    rig.digests["persona_adapter"] = "0" * 64
+
+
+def _refuse_m2_digest(rig, monkeypatch):
+    rig.digests["m2_adapter"] = "0" * 64
+
+
+def _refuse_components_digest(rig, monkeypatch):
+    monkeypatch.setattr(phase38_prereg, "components_sha256", lambda components: "0" * 64)
+
+
+def _refuse_a2_record(rig, monkeypatch):
+    pins = {r: dict(pin) for r, pin in phase39_prereg.A2_RECORDS.items()}
+    pins["k32"]["sha256"] = "0" * 64
+    monkeypatch.setattr(phase39_prereg, "A2_RECORDS", pins)
+
+
+def _refuse_gate2(rig, monkeypatch):
+    rows = json.loads(json.dumps(rig.gate2["rows"]))
+    rows["k16"]["street"].update(count=rows["k16"]["street"]["count"] + 1, equal=False)
+    rig.gate2 = {**rig.gate2, "passed": False, "rows": rows}
+
+
+_REFUSALS = [
+    *((_plant_output(i), r"exists: the E6 scoring has already run") for i in range(12)),
+    (_refuse_dirty, r"dirty tree"),
+    (_refuse_unknown_sha, r"could not read HEAD"),
+    (_refuse_untracked_input, r"results/none\.json is not tracked"),
+    (_refuse_launch, r"PAUSE"),
+    (_refuse_no_readings, r"no readings"),
+    (_refuse_unknown_reading, r"'k7' is not one of"),
+    (_refuse_no_slots, r"no slots"),
+    (_refuse_unknown_slot, r"'shoe_size' is not one of"),
+    (_refuse_approval, r"D-11 approval of 7"),
+    (_refuse_adapter_cap, r"committed E6 adapters cap is 7, not 6"),
+    (_refuse_anchor_adapter_cap, r"committed E6 anchor_adapters cap is 7, not 6"),
+    (_refuse_unit_caps, r"max_k = 49 exceeds the committed cap 48"),
+    (_refuse_cpu_on_the_real_root, r"\(D-21\)"),
+    (_refuse_missing_gitignored_input, r"convbase is missing"),
+    (_refuse_missing_m2, r"m2 is missing"),
+    (_refuse_persona_digest, r"persona adapter is not"),
+    (_refuse_m2_digest, r"M2 adapter is not"),
+    (_refuse_components_digest, r"components are not"),
+    (_refuse_a2_record, r"k32: .* is not the committed record"),
+    (_refuse_gate2, r"gate 2 \(D-19\): k16/street re-derived \d+, committed \d+"),
+]
+
+
+@pytest.mark.parametrize(("plant", "reason"), _REFUSALS, ids=[p.__name__ for p, _ in _REFUSALS])
+def test_preflight_refusals_write_no_ledger_line(rig, monkeypatch, plant, reason):
+    kwargs = plant(rig, monkeypatch) or {}
+    with pytest.raises(
+        SystemExit,
+        match=r"^\[(phase39_ctx|phase39_prereg|phase36_ledger|phase36_caps|phase38_rank)\] .*"
+        + reason,
+    ):
+        phase39_ctx.preflight(root=rig.root, ledger_path=rig.paths["ledger_path"], **kwargs)
+    assert not rig.paths["ledger_path"].exists()
+    assert not rig.paths["heartbeat_path"].exists()
+
+
+def test_the_refusals_cover_every_output(rig):
+    planted = [p for p, _ in _REFUSALS if p.__name__.startswith("output_")]
+    assert len(planted) == len(phase39_ctx.outputs(rig.root)) == 12
+
+
+def test_preflight_refuses_an_open_attempt_and_not_a_closed_one(rig):
+    ledger = rig.paths["ledger_path"]
+    rid, kw = phase39_ctx.RUN_ID, {"phase": 39, "front": "E6", "ledger_path": ledger}
+    phase36_ledger.append("start", run_id=rid, **kw)
+    before = ledger.read_bytes()
+    with pytest.raises(SystemExit, match=r"^\[phase39_ctx\] .*open attempt"):
+        phase39_ctx.preflight(root=rig.root, ledger_path=ledger)
+    assert ledger.read_bytes() == before
+    phase36_ledger.append("end", run_id=rid, record=phase39_prereg.CTX_RECORD, **kw)
+    closed = ledger.read_bytes()
+    assert phase39_ctx.preflight(root=rig.root, ledger_path=ledger)["device"] == "mps"
+    assert ledger.read_bytes() == closed
+
+
+def test_the_first_io_free_checks_refuse_on_the_real_root(tmp_path):
+    """The readings, slots and device checks come first: the real root is safe here whether or
+    not the real record exists."""
+    ledger = tmp_path / "ledger.jsonl"
+    with pytest.raises(SystemExit, match=r"^\[phase39_ctx\] .*no readings"):
+        phase39_ctx.preflight(ledger_path=ledger, device="mps", readings=())
+    with pytest.raises(SystemExit, match=r"^\[phase39_ctx\] .*no slots"):
+        phase39_ctx.preflight(ledger_path=ledger, device="mps", slots=())
+    with pytest.raises(SystemExit, match=r"^\[phase39_ctx\] .*D-21"):
+        phase39_ctx.preflight(ledger_path=ledger, device="cpu")
+    with pytest.raises(SystemExit, match=r"^\[phase39_ctx\] .*D-21"):
+        phase39_ctx.preflight(root=_REPO / "scratch_inside_repo", ledger_path=ledger, device="cpu")
+    assert not ledger.exists()
+
+
+def test_preflight_on_a_rehearsal_root_accepts_cpu_and_a_slice(rig, monkeypatch):
+    monkeypatch.setattr(phase39_ctx, "_device", lambda: "cpu")
+    pre = phase39_ctx.preflight(
+        root=rig.root,
+        ledger_path=rig.paths["ledger_path"],
+        readings=("k0", "k78"),
+        slots=("pet_name", "street"),
+    )
+    assert pre["device"] == "cpu"
+    assert pre["readings"] == ("k0", "k78") and pre["slots"] == ("pet_name", "street")
+    assert not rig.paths["ledger_path"].exists()

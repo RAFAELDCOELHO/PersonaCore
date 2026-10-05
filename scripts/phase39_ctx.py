@@ -38,6 +38,7 @@ import gc
 import hashlib
 import json
 import pathlib
+import subprocess
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
@@ -449,3 +450,114 @@ def score_question(model, tok, device, entry, candidates, *, taught, state):
                 suffix_from=realized if candidate == taught else None,
             )
     return rows
+
+
+def preflight(*, root=None, ledger_path=None, device=None, readings=None, slots=None):
+    """Every refusal before the ledger start line (D-02, D-03, D-11, D-19, D-20). Writes nothing."""
+    prereg = _prereg()
+    root = pathlib.Path(root) if root is not None else _ROOT
+    # The I/O-free checks first (D-11, 38-REVIEW DI-02, D-21).
+    readings = tuple(readings) if readings is not None else prereg.READINGS
+    _prove(readings, "no readings: an empty run measures nothing (38-REVIEW DI-02)")
+    for reading in readings:
+        _prove(reading in prereg.READINGS, f"{reading!r} is not one of {prereg.READINGS}")
+    _prove(
+        len(readings) <= prereg.APPROVED_E6_ADAPTERS,
+        f"{len(readings)} readings exceed the D-11 approval of {prereg.APPROVED_E6_ADAPTERS}",
+    )
+    slots = tuple(slots) if slots is not None else prereg.SLOTS
+    _prove(slots, "no slots: an empty run measures nothing (38-REVIEW DI-02)")
+    for slot in slots:
+        _prove(slot in prereg.SLOTS, f"{slot!r} is not one of {prereg.SLOTS}")
+    resolved = device or _device()
+    _prove(
+        resolved == "mps" or not _is_real(root),
+        f"E6 runs on MPS on the real root (D-21); resolved {resolved!r}. A CPU device is only for "
+        "a rehearsal root outside the repository",
+    )
+    for path in outputs(root):
+        _prove(not path.exists(), f"{path} exists: the E6 scoring has already run")
+    _prove(
+        RUN_ID not in phase36_ledger.open_runs(phase36_ledger.read_ledger(ledger_path)),
+        f"the ledger holds an open attempt for {RUN_ID}: end it, or reconcile it once the run is "
+        "dead, before a new attempt",
+    )
+    refuse_if_dirty(
+        who="phase39_ctx",
+        detail=(
+            "the E6 record publishes git_sha and hashes its modules from the working tree; a run "
+            "launched from a dirty tree names a commit it cannot be regenerated from"
+        ),
+        pathspec=LAUNCH_PATHSPEC,
+        cwd=_REPO,
+    )
+    launch_sha = git_sha()
+    _prove(launch_sha != "unknown", "git_sha() could not read HEAD (run from the repo root)")
+    for rel in tracked_inputs():
+        tracked = subprocess.run(
+            ("git", "ls-files", "--error-unmatch", rel), cwd=_REPO, capture_output=True, text=True
+        )
+        _prove(tracked.returncode == 0, f"{rel} is not tracked: it must be committed before E6")
+    launch_modules = module_sha256()
+    # D-03: the committed stop, no second rule.
+    gate = phase36_ledger.require_launch(FRONT, ledger_path=ledger_path)
+    committed = phase36_caps.committed_budget()["unit_caps"][FRONT]
+    for name, cap in (
+        ("adapters", prereg.COMMITTED_ADAPTER_CAP),
+        ("anchor_adapters", prereg.COMMITTED_ANCHOR_ADAPTER_CAP),
+    ):
+        _prove(
+            cap == committed[name],
+            f"the budget's committed E6 {name} cap is {committed[name]}, not {cap}: the D-11 "
+            "deviation must stay visible",
+        )
+    # D-11: never adapters= / anchor_adapters= — the approved 8 lives in the prereg.
+    phase36_caps.check_unit_caps(
+        FRONT,
+        entries=len(prereg.E6_ENTRY_SUBSET),
+        a2_regenerated_entries=prereg.A2_REGENERATED_ENTRIES,
+        anchor_slots=len(prereg.SLOTS),
+        max_k=prereg.K,
+    )
+    for path in run_inputs():
+        _prove(
+            pathlib.Path(path).exists(),
+            f"{path} is missing: the run reads it, so this refuses before the ledger start line",
+        )
+    reconstruction = phase38_rank.reconstruction_checks()  # D-20
+    prereg.verify_a2_records()  # D-02
+    g2 = prereg.gate2()  # D-19
+    unequal = [
+        (reading, slot, row)
+        for reading, by_slot in g2["rows"].items()
+        for slot, row in by_slot.items()
+        if not row["equal"]
+    ]
+    _prove(
+        g2["passed"] and not unequal,
+        "gate 2 (D-19): "
+        + (
+            "{}/{} re-derived {}, committed {}".format(
+                unequal[0][0], unequal[0][1], unequal[0][2]["count"], unequal[0][2]["committed"]
+            )
+            if unequal
+            else "not passed"
+        )
+        + "; nothing is regenerated — pause for Rafael",
+    )
+    print(
+        f"PREFLIGHT OK {launch_sha} device={resolved} readings={len(readings)} slots={len(slots)} "
+        f"entries={len(prereg.E6_ENTRY_SUBSET)} projection_h={prereg.E6_PROJECTION_HOURS} "
+        f"stop_h={prereg.E6_STOP_HOURS} spent_E6_s={gate['spent_seconds'][FRONT]}",
+        flush=True,
+    )
+    return {
+        "git_sha": launch_sha,
+        "module_sha256": launch_modules,
+        "device": resolved,
+        "gate": gate,
+        "reconstruction": reconstruction,
+        "readings": readings,
+        "slots": slots,
+        "gate2": g2,
+    }
