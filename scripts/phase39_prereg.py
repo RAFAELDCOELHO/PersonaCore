@@ -1290,8 +1290,8 @@ def cells(event):
 def _door(cell):
     """Refuse a cell that is not exactly the door's."""
     _prove(
-        isinstance(cell, collections.abc.Mapping) and tuple(cell) == _CELL_FIELDS,
-        f"a cell has exactly the fields {_CELL_FIELDS}, got {cell!r}",
+        isinstance(cell, collections.abc.Mapping) and set(cell) == set(_CELL_FIELDS),
+        f"a cell has exactly the fields {_CELL_FIELDS} (in any key order), got {cell!r}",
     )
     _prove(
         dict(cell) == cell_spec(cell["event"], cell["reading"], cell["slot"]),
@@ -1328,7 +1328,7 @@ def classify_cell(cell, values, k0):
     """WR-02: a door cell classified on all four readings: the cell, its values, its k0 values,
     the statuses and the class of the four-step precedence."""
     statuses = cell_statuses(cell, values, k0)
-    _prove(tuple(statuses) == _READING_KEYS, f"a cell is classified on all of {_READING_KEYS}")
+    _prove(set(statuses) == set(_READING_KEYS), f"a cell is classified on all of {_READING_KEYS}")
     return {
         **dict(cell),
         "values": dict(values),
@@ -1342,8 +1342,8 @@ def baseline_table(k0_by_slot):
     """Ruling f: the k0 statuses per slot, the baseline table. Each reading given at k0 with its
     status under each event against itself (ALREADY_AT_K0 / UNREACHABLE_AT_SIZE or INTACT)."""
     _prove(
-        isinstance(k0_by_slot, collections.abc.Mapping) and tuple(k0_by_slot) == SLOTS,
-        f"the baseline covers {list(k0_by_slot)}, not {SLOTS} in order",
+        isinstance(k0_by_slot, collections.abc.Mapping) and set(k0_by_slot) == set(SLOTS),
+        f"the baseline covers {sorted(k0_by_slot)}, not each of {SLOTS}",
     )
     return {
         slot: {
@@ -1353,7 +1353,7 @@ def baseline_table(k0_by_slot):
             }
             for key in _paired(values, values)
         }
-        for slot, values in k0_by_slot.items()
+        for slot, values in ((slot, k0_by_slot[slot]) for slot in SLOTS)
     }
 
 

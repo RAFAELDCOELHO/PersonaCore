@@ -1516,6 +1516,49 @@ def test_baseline_table_is_the_k0_statuses_per_slot():
         phase39_prereg.baseline_table({"person_name": k0["person_name"]})
 
 
+def _json_round_trip(blob):
+    """What a record written by atomic_write_json (sort_keys=True) reads back as."""
+    return json.loads(json.dumps(blob, sort_keys=True))
+
+
+def test_door_outputs_survive_a_sorted_keys_json_round_trip():
+    """Rafael 2026-10-05: no door check depends on key order, so cells, statuses and the baseline
+    read back from a sort_keys record give exactly the results they gave before the write."""
+    counts = phase39_prereg.committed_a2_counts()
+    ranks = phase38_prereg.committed_gate_ranks()
+
+    def four(reading, slot):
+        # R_a and G_q committed; R_q and G_a test-built from G_q (not measured until E6 runs).
+        g_q = counts[reading][slot]
+        return {"R_a": ranks[reading][slot]["rank"], "R_q": g_q, "G_a": int(g_q > 0), "G_q": g_q}
+
+    k0 = {slot: four(phase39_prereg.REFERENCE_READING, slot) for slot in _SLOT_ORDER}
+    for event in phase39_prereg.EVENTS:
+        classified = [
+            phase39_prereg.classify_cell(
+                cell, four(cell["reading"], cell["slot"]), k0[cell["slot"]]
+            )
+            for cell in phase39_prereg.cells(event)
+        ]
+        read_back = _json_round_trip(classified)
+        assert [list(c) for c in read_back] != [list(c) for c in classified]  # keys reordered
+        assert read_back == classified
+        assert phase39_prereg.class_counts(read_back) == phase39_prereg.class_counts(classified)
+        if event == phase39_prereg.EVENTS[1]:
+            assert phase39_prereg.tie_audit(read_back) == phase39_prereg.tie_audit(classified)
+        for cell, again in zip(phase39_prereg.cells(event), read_back):
+            door = _json_round_trip({field: again[field] for field in cell})
+            assert list(door) != list(cell)  # the door cell itself comes back reordered
+            assert phase39_prereg.classify_cell(
+                door, again["values"], again["k0"]
+            ) == phase39_prereg.classify_cell(cell, again["values"], again["k0"])
+    k0_back = _json_round_trip(k0)
+    assert tuple(k0_back) != _SLOT_ORDER  # sorted slot names, not the project order
+    table = phase39_prereg.baseline_table(k0_back)
+    assert table == phase39_prereg.baseline_table(k0)
+    assert tuple(table) == _SLOT_ORDER  # output keeps the project's order
+
+
 def test_drop_audit_names_the_rounding_decided_ties():
     """WR-03 / ruling j: status by both formulas; the four n = 27 flips and (26, 18)."""
     for count_k0 in (15, 17, 19, 21):
