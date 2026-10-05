@@ -92,6 +92,10 @@ MODULES = (
     "src/personacore/lora/config.py",
     "src/personacore/model/gpt.py",
 )
+# D-21 / D-27: the modules that decide what is scored and are NOT frozen by an earlier record (no
+# record precedes the E6 run, unlike Phase 38's minting record); the rehearsal identity pins them.
+DISCLOSED_MODULES = ("scripts/phase39_ctx.py", PREREG_FILE)
+_IDENTITY_KEYS = {"git_sha", "module_sha256", "readings", "slots", "started_utc"}
 RUN_PROVENANCE_KEYS = (
     "git_sha_at_launch",
     "git_sha_at_end",
@@ -127,6 +131,9 @@ def _load(path):
 def module_sha256():
     """``{rel: sha256}`` of MODULES as they are in the repository now."""
     return {rel: _sha256(_REPO / rel) for rel in MODULES}
+
+
+_prove(set(DISCLOSED_MODULES) <= set(MODULES), "DISCLOSED_MODULES must be a subset of MODULES")
 
 
 def _is_real(root):
@@ -182,6 +189,103 @@ def outputs(root):
         cpu_sidecar(root),
         *(reading_sidecar(root, reading) for reading in _prereg().READINGS),
     )
+
+
+def rehearsal_identity_path():
+    """D-21 / D-27: the gitignored rehearsal identity under the output root (read at call time)."""
+    return pathlib.Path(_ROOT) / "data" / "phase39_rehearsal.json"
+
+
+def _kept_identity(path, *, readings, slots):
+    """The identity already at ``path`` (None when absent), refused when it recorded a different
+    slice: a wider rehearsal would go undisclosed under it (38-REVIEW DR-02)."""
+    path = pathlib.Path(path)
+    if not path.exists():
+        return None
+    kept = _load(path)
+    _prove(
+        (kept["readings"], kept["slots"]) == (list(readings), list(slots)),
+        f"{path} recorded a different slice ({kept['readings']} x {kept['slots']}); a wider "
+        "rehearsal would go undisclosed (D-21, 38-REVIEW DR-02)",
+    )
+    return kept
+
+
+def record_rehearsal(path, *, readings, slots):
+    """D-21 / D-27: the FIRST attempt that passed preflight is THE rehearsal; its identity (prereg
+    digest included) is never overwritten, and a later attempt of another slice refuses."""
+    path = pathlib.Path(path)
+    kept = _kept_identity(path, readings=readings, slots=slots)
+    if kept is not None:
+        print(f"REHEARSAL KEPT {kept['git_sha']}", flush=True)
+        return {"status": "kept", **kept}
+    identity = {
+        "git_sha": git_sha(),
+        "module_sha256": {rel: _sha256(_REPO / rel) for rel in DISCLOSED_MODULES},
+        "readings": list(readings),
+        "slots": list(slots),
+        "started_utc": _now(),
+    }
+    phase25_run.atomic_write_json(path, identity)
+    print(f"REHEARSAL RECORDED {identity['git_sha']}", flush=True)
+    return {"status": "recorded", **identity}
+
+
+def rehearsal_disclosure(identity, *, launch_git_sha, launch_module_sha256):
+    """D-21 / D-27: every commit touching a DISCLOSED_MODULES file between the rehearsal and the
+    launch, its subject as the reason, and per-module changed flags (the prereg's on its own)."""
+    log = subprocess.run(
+        (
+            "git",
+            "log",
+            "--format=%H%x09%s",
+            f"{identity['git_sha']}..{launch_git_sha}",
+            "--",
+            *DISCLOSED_MODULES,
+        ),
+        cwd=_REPO,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    commits = []
+    for line in log.splitlines():
+        sha, reason = line.split("\t", 1)
+        touched = subprocess.run(
+            ("git", "show", "--name-only", "--format=", sha),
+            cwd=_REPO,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.split()
+        modules = [rel for rel in DISCLOSED_MODULES if rel in touched]
+        commits.append({"sha": sha, "reason": reason, "modules": modules})
+    changed = {
+        rel: launch_module_sha256[rel] != identity["module_sha256"][rel]
+        for rel in DISCLOSED_MODULES
+    }
+    driver_changed = any(changed.values())
+    _prove(
+        not driver_changed or commits,
+        "a disclosed module changed after the rehearsal without a commit (D-21, D-27)",
+    )
+    slice_read = {key: identity[key] for key in ("readings", "slots")}
+    return {
+        "statement": (
+            f"The CPU rehearsal (39-07) read {', '.join(slice_read['slots'])} under "
+            f"{len(slice_read['readings'])} readings, all their A2 entries, before the driver "
+            "review and the MPS run (D-21, D-27)."
+        ),
+        "slice_read": slice_read,
+        "rehearsal_git_sha": identity["git_sha"],
+        "rehearsal_module_sha256": identity["module_sha256"],
+        "launch_git_sha": launch_git_sha,
+        "launch_module_sha256": {rel: launch_module_sha256[rel] for rel in DISCLOSED_MODULES},
+        "changed": changed,
+        "prereg_changed": changed[PREREG_FILE],
+        "driver_changed": driver_changed,
+        "commits": commits,
+    }
 
 
 def tracked_inputs():
@@ -475,6 +579,22 @@ def preflight(*, root=None, ledger_path=None, device=None, readings=None, slots=
         f"E6 runs on MPS on the real root (D-21); resolved {resolved!r}. A CPU device is only for "
         "a rehearsal root outside the repository",
     )
+    identity = None
+    if _is_real(root):
+        _prove(
+            rehearsal_identity_path().exists(),
+            f"{rehearsal_identity_path()} is missing — D-21/D-27: run the 39-07 rehearsal first; "
+            "the real run launches only after the rehearsal identity is recorded",
+        )
+        identity = _load(rehearsal_identity_path())
+        _prove(
+            isinstance(identity, dict)
+            and set(identity) == _IDENTITY_KEYS
+            and isinstance(identity["module_sha256"], dict)
+            and set(identity["module_sha256"]) == set(DISCLOSED_MODULES),
+            f"{rehearsal_identity_path()} is malformed: the disclosure would fail at emit, after "
+            "the MPS hours (38-REVIEW DR-03)",
+        )
     for path in outputs(root):
         _prove(not path.exists(), f"{path} exists: the E6 scoring has already run")
     _prove(
@@ -499,6 +619,17 @@ def preflight(*, root=None, ledger_path=None, device=None, readings=None, slots=
         )
         _prove(tracked.returncode == 0, f"{rel} is not tracked: it must be committed before E6")
     launch_modules = module_sha256()
+    disclosure = None
+    if identity is not None:
+        _prove(
+            identity["module_sha256"][PREREG_FILE] == launch_modules[PREREG_FILE],
+            "D-27: scripts/phase39_prereg.py changed after the rehearsal; only Rafael's ruling "
+            "(with disclosure in the record) can lift this",
+        )
+        # 38-REVIEW DR-03: computed once here, so a foreign identity refuses before the hours.
+        disclosure = rehearsal_disclosure(
+            identity, launch_git_sha=launch_sha, launch_module_sha256=launch_modules
+        )
     # D-03: the committed stop, no second rule.
     gate = phase36_ledger.require_launch(FRONT, ledger_path=ledger_path)
     committed = phase36_caps.committed_budget()["unit_caps"][FRONT]
@@ -560,6 +691,7 @@ def preflight(*, root=None, ledger_path=None, device=None, readings=None, slots=
         "readings": readings,
         "slots": slots,
         "gate2": g2,
+        "rehearsal_disclosure": disclosure,
     }
 
 
@@ -608,10 +740,14 @@ def run(
     readings, slots, device = pre["readings"], pre["slots"], pre["device"]
     taught = _taught()
     entries = [(i, entry) for i, entry in prereg.e6_entries() if entry["slot"] in slots]
+    if rehearsal_identity is not None:  # DR-02 refuses BEFORE the ledger start line
+        _kept_identity(rehearsal_identity, readings=readings, slots=slots)
     phase36_ledger.append("start", run_id=RUN_ID, phase=39, front=FRONT, ledger_path=ledger_path)
     heartbeat_path = heartbeat_path or phase36_ledger.HEARTBEAT_PATH
     state = {"point": RUN_ID, "stage": "gate", "shape": None, "draw_index": None}
     phase25_run.beat(heartbeat_path, **state)  # the thread's first beat waits a full period
+    if rehearsal_identity is not None:  # D-21 / D-27: before the first value is scored
+        record_rehearsal(rehearsal_identity, readings=readings, slots=slots)
     stop, thread = phase25_run.start_heartbeat(heartbeat_path, state)
     started = _now()
     try:

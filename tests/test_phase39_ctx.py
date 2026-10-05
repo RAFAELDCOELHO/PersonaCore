@@ -612,7 +612,9 @@ def test_preflight_alone_writes_nothing(rig, committed_digests, capsys):
         "readings",
         "slots",
         "gate2",
+        "rehearsal_disclosure",
     }
+    assert pre["rehearsal_disclosure"] is None  # a rehearsal root: nothing to disclose yet
     assert pre["git_sha"] == head and pre["device"] == "mps"
     assert pre["readings"] == READINGS and pre["slots"] == SLOTS
     assert pre["module_sha256"] == phase39_ctx.module_sha256()
@@ -1181,3 +1183,189 @@ def test_a_refusal_inside_run_writes_no_ledger_line(run_rig, monkeypatch):
     assert not rig.paths["ledger_path"].exists()
     assert not rig.paths["heartbeat_path"].exists()
     assert rig.log == [] and rig.models == []
+
+
+# =================================================================================================
+# (5) Plan 05 Task 2: the rehearsal identity (D-21, D-27), written by run() before the first
+# score; the disclosure of every later commit to a disclosed module; the real-root preflight.
+# =================================================================================================
+
+_DISCLOSED = ("scripts/phase39_ctx.py", "scripts/phase39_prereg.py")
+
+
+def _identity(path, **shape):
+    shape = {"readings": list(READINGS), "slots": list(SLOTS), **shape}
+    return phase39_ctx.record_rehearsal(path, **shape)
+
+
+def test_disclosed_modules_and_the_identity_path(tmp_path, monkeypatch):
+    assert phase39_ctx.DISCLOSED_MODULES == _DISCLOSED
+    assert set(_DISCLOSED) <= set(phase39_ctx.MODULES)
+    assert phase39_ctx.rehearsal_identity_path() == _REAL_IDENTITY
+    monkeypatch.setattr(phase39_ctx, "_ROOT", tmp_path)
+    assert phase39_ctx.rehearsal_identity_path() == tmp_path / "data" / "phase39_rehearsal.json"
+
+
+def test_record_rehearsal_keeps_the_first_identity_of_the_same_slice(tmp_path, capsys):
+    import datetime
+
+    path = tmp_path / "id.json"
+    first = _identity(path, readings=["k0", "k78"], slots=["pet_name", "birth_year"])
+    assert f"REHEARSAL RECORDED {_git('rev-parse', 'HEAD')}" in capsys.readouterr().out
+    on = _sidecar(path)
+    assert first == {"status": "recorded", **on}
+    assert set(on) == {"git_sha", "module_sha256", "readings", "slots", "started_utc"}
+    assert on["git_sha"] == _git("rev-parse", "HEAD")
+    assert on["module_sha256"] == {
+        rel: hashlib.sha256((_REPO / rel).read_bytes()).hexdigest() for rel in _DISCLOSED
+    }
+    assert (on["readings"], on["slots"]) == (["k0", "k78"], ["pet_name", "birth_year"])
+    assert datetime.datetime.fromisoformat(on["started_utc"]).tzinfo is not None
+    before = path.read_bytes()
+    again = _identity(path, readings=("k0", "k78"), slots=("pet_name", "birth_year"))
+    assert again == {"status": "kept", **on}
+    assert f"REHEARSAL KEPT {on['git_sha']}" in capsys.readouterr().out
+    assert path.read_bytes() == before
+    # 38-REVIEW DR-02: a wider (or any other) slice would go undisclosed under the kept identity.
+    for shape in (
+        {"readings": ["k0", "k78"], "slots": list(SLOTS)},
+        {"readings": list(READINGS), "slots": ["pet_name", "birth_year"]},
+    ):
+        with pytest.raises(SystemExit, match=r"^\[phase39_ctx\] .*different slice.*DR-02"):
+            _identity(path, **shape)
+    assert path.read_bytes() == before
+
+
+def test_the_identity_is_written_before_the_first_score(run_rig, tmp_path, monkeypatch):
+    """A preflight refusal leaves no identity; a crash on the FIRST gate score leaves the identity
+    and no sidecar; a rerun of the same slice keeps it; another slice refuses before the start."""
+    rig = run_rig
+    identity = tmp_path / "id.json"
+    shape = {"readings": ("k0",), "slots": ("pet_name",)}
+
+    def dirty(**kw):
+        raise SystemExit("[phase39_ctx] dirty tree")
+
+    monkeypatch.setattr(phase39_ctx, "refuse_if_dirty", dirty)
+    with pytest.raises(SystemExit, match=r"dirty tree"):
+        phase39_ctx.run(root=rig.root, **rig.paths, **shape, rehearsal_identity=identity)
+    assert not identity.exists() and not rig.paths["ledger_path"].exists()
+    monkeypatch.setattr(phase39_ctx, "refuse_if_dirty", lambda **kw: None)
+    real = phase18_extraction.value_span_nll
+
+    def dies(*args, **kwargs):
+        rig.log.append(("died",))
+        raise RuntimeError("scorer died")
+
+    monkeypatch.setattr(phase18_extraction, "value_span_nll", dies)
+    with pytest.raises(RuntimeError, match="scorer died"):
+        phase39_ctx.run(root=rig.root, **rig.paths, **shape, rehearsal_identity=identity)
+    assert rig.log == [("died",)]  # the crash came on the very first score
+    assert identity.exists()
+    assert list((rig.root / "data").iterdir()) == []
+    assert [x["event"] for x in _lines(rig)] == ["start"]
+    first = identity.read_bytes()
+    monkeypatch.setattr(phase18_extraction, "value_span_nll", real)
+    for name, kw in (("second", shape), ("third", {**shape, "slots": ("pet_name", "street")})):
+        again = tmp_path / name
+        (again / "data").mkdir(parents=True)
+        paths = {"ledger_path": again / "ledger.jsonl", "heartbeat_path": again / "hb.jsonl"}
+        if name == "second":
+            assert phase39_ctx.run(root=again, **paths, **kw, rehearsal_identity=identity) == (
+                "SCORED"
+            )
+        else:  # DR-02, refused BEFORE the ledger start line
+            with pytest.raises(SystemExit, match=r"^\[phase39_ctx\] .*DR-02"):
+                phase39_ctx.run(root=again, **paths, **kw, rehearsal_identity=identity)
+            assert not paths["ledger_path"].exists() and not paths["heartbeat_path"].exists()
+        assert identity.read_bytes() == first
+
+
+def _git_lines(*args):
+    return [line for line in _git(*args).splitlines() if line]
+
+
+def test_rehearsal_disclosure_lists_every_commit_to_a_disclosed_module():
+    first = _git_lines("log", "--reverse", "--format=%H", "--", "tests/test_phase39_ctx.py")[0]
+    identity = {
+        "git_sha": first,
+        "module_sha256": {
+            rel: hashlib.sha256(_git("show", f"{first}:{rel}").encode() + b"\n").hexdigest()
+            for rel in _DISCLOSED
+        },
+        "readings": list(READINGS),
+        "slots": ["pet_name", "birth_year"],
+        "started_utc": "2026-10-05T00:00:00+00:00",
+    }
+    head = _git("rev-parse", "HEAD")
+    launch = phase39_ctx.module_sha256()
+    disclosure = phase39_ctx.rehearsal_disclosure(
+        identity, launch_git_sha=head, launch_module_sha256=launch
+    )
+    commits = disclosure["commits"]
+    assert commits and disclosure["driver_changed"] is True
+    assert disclosure["changed"] == {
+        "scripts/phase39_ctx.py": True,
+        "scripts/phase39_prereg.py": False,  # frozen at 9366134, before the first driver commit
+    }
+    assert disclosure["prereg_changed"] is False
+    for commit in commits:
+        touched = set(_git_lines("show", "--name-only", "--format=", commit["sha"]))
+        assert commit["modules"] == [rel for rel in _DISCLOSED if rel in touched]
+        assert commit["modules"], commit
+        assert commit["reason"] == _git("log", "-1", "--format=%s", commit["sha"])
+    assert _git_lines("log", "--format=%H", f"{first}..{head}", "--", *_DISCLOSED) == [
+        c["sha"] for c in commits
+    ]
+    assert disclosure["slice_read"] == {
+        "readings": list(READINGS),
+        "slots": ["pet_name", "birth_year"],
+    }
+    assert disclosure["statement"] == (
+        "The CPU rehearsal (39-07) read pet_name, birth_year under 8 readings, all their A2 "
+        "entries, before the driver review and the MPS run (D-21, D-27)."
+    )
+    assert disclosure["launch_module_sha256"] == {rel: launch[rel] for rel in _DISCLOSED}
+    assert (disclosure["rehearsal_git_sha"], disclosure["launch_git_sha"]) == (first, head)
+    same = {**identity, "git_sha": head, "module_sha256": {r: launch[r] for r in _DISCLOSED}}
+    equal = phase39_ctx.rehearsal_disclosure(same, launch_git_sha=head, launch_module_sha256=launch)
+    assert equal["commits"] == [] and equal["driver_changed"] is False
+    assert equal["changed"] == {rel: False for rel in _DISCLOSED}
+    assert equal["prereg_changed"] is False
+    drifted = {**same, "module_sha256": {**same["module_sha256"], _DISCLOSED[0]: "0" * 64}}
+    with pytest.raises(SystemExit, match=r"^\[phase39_ctx\] .*without a commit"):
+        phase39_ctx.rehearsal_disclosure(drifted, launch_git_sha=head, launch_module_sha256=launch)
+
+
+def test_preflight_on_the_real_root_requires_the_identity_and_no_prereg_drift(rig, monkeypatch):
+    monkeypatch.setattr(phase39_ctx, "_ROOT", rig.root)
+    path = phase39_ctx.rehearsal_identity_path()
+    assert path == rig.root / "data" / "phase39_rehearsal.json"
+    ledger = rig.paths["ledger_path"]
+    with pytest.raises(SystemExit, match=r"^\[phase39_ctx\] .*D-21/D-27: run the 39-07 rehearsal"):
+        phase39_ctx.preflight(ledger_path=ledger)
+    assert rig.launches == []
+    # D-27: the prereg changed after the rehearsal — only Rafael's ruling lifts it.
+    _identity(path, slots=["pet_name", "birth_year"])
+    kept = _sidecar(path)
+    path.unlink()
+    drifted = {**kept, "module_sha256": {**kept["module_sha256"], _DISCLOSED[1]: "0" * 64}}
+    path.write_text(json.dumps(drifted), encoding="utf-8")
+    with pytest.raises(SystemExit, match=r"^\[phase39_ctx\] D-27: .*Rafael's ruling"):
+        phase39_ctx.preflight(ledger_path=ledger)
+    # 38-REVIEW DR-03: a malformed identity refuses at preflight, not at emit.
+    for malformed in ({}, {**kept, "module_sha256": {}}, [kept]):
+        path.write_text(json.dumps(malformed), encoding="utf-8")
+        with pytest.raises(SystemExit, match=r"^\[phase39_ctx\] .*malformed.*DR-03"):
+            phase39_ctx.preflight(ledger_path=ledger)
+    assert not ledger.exists()
+    path.unlink()
+    _identity(path, slots=["pet_name", "birth_year"])
+    pre = phase39_ctx.preflight(ledger_path=ledger)
+    assert pre["device"] == "mps"
+    head = _git("rev-parse", "HEAD")
+    disclosure = pre["rehearsal_disclosure"]
+    assert (disclosure["rehearsal_git_sha"], disclosure["launch_git_sha"]) == (head, head)
+    assert disclosure["commits"] == [] and disclosure["driver_changed"] is False
+    assert disclosure["slice_read"]["slots"] == ["pet_name", "birth_year"]
+    assert not ledger.exists()
