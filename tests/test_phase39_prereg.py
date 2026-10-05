@@ -323,7 +323,9 @@ def test_fill_decomposition_rule_equals_the_entry():
     assert "adapter-off" in value["never_classified"]
     for d_id in ("D-13", "D-14", "D-15", "D-16", "D-24", "D-25", "D-33"):
         assert d_id in filled["derivation"], d_id
-    assert "plan-03 review" in filled["derivation"]
+    for item in "ef":
+        assert phase39_prereg.RULINGS[item] in filled["derivation"], item
+    assert "REVERSE_DISAGREEMENT" in value["reverse_disagreement"]
 
 
 def test_entries_are_the_twenty_names_with_honest_kinds():
@@ -1060,14 +1062,36 @@ def test_classify_cell_sufficiency_table():
         assert _cell(_INTACT, r_q, g_a, _LOST) == {"class": name, "disagreement": True}
 
 
-def test_classify_cell_no_disagreement():
-    for r_a, g_q in ((_LOST, _LOST), (_LOST, _INTACT), (_INTACT, _INTACT)):
+def test_classify_cell_no_disagreement_and_reverse_disagreement():
+    """Ruling e: NO_DISAGREEMENT only when R_a and G_q agree; R_a LOST with G_q INTACT is the named
+    REVERSE_DISAGREEMENT, outside every sufficiency class."""
+    expected = {
+        (_LOST, _LOST): "NO_DISAGREEMENT",
+        (_INTACT, _INTACT): "NO_DISAGREEMENT",
+        (_LOST, _INTACT): "REVERSE_DISAGREEMENT",
+    }
+    for (r_a, g_q), name in expected.items():
+        assert phase39_prereg.disagreement_of(r_a, g_q) == {"class": name, "disagreement": False}
         for r_q in phase39_prereg.STATUSES:
             for g_a in phase39_prereg.STATUSES:
-                assert _cell(r_a, r_q, g_a, g_q) == {
-                    "class": "NO_DISAGREEMENT",
-                    "disagreement": False,
-                }
+                assert _cell(r_a, r_q, g_a, g_q) == {"class": name, "disagreement": False}
+    assert phase39_prereg.disagreement_of(_INTACT, _LOST) == {"class": None, "disagreement": True}
+    assert phase39_prereg.disagreement_of(_LOST, _UNREACH) == {
+        "class": _UNREACH,
+        "disagreement": None,
+    }
+    assert phase39_prereg.disagreement_of(_ALREADY, _INTACT) == {
+        "class": _ALREADY,
+        "disagreement": None,
+    }
+    assert phase39_prereg.REVERSE_DISAGREEMENT not in phase39_prereg.CLASSES
+    assert phase39_prereg.OUTCOMES == phase39_prereg.CLASSES + (
+        "REVERSE_DISAGREEMENT",
+        _UNREACH,
+        _ALREADY,
+    )
+    with pytest.raises(SystemExit, match=r"^\[phase39_prereg\]"):
+        phase39_prereg.disagreement_of("planted", _LOST)
 
 
 def test_classify_cell_wr01_precedence():
@@ -1090,7 +1114,7 @@ def test_classify_cell_exhaustive():
     import itertools
 
     sufficiency = set(phase39_prereg.CLASSES[:4])
-    names = set(phase39_prereg.CLASSES + phase39_prereg.WR01_OUTCOMES)
+    names = set(phase39_prereg.OUTCOMES)
     seen = set()
     combos = list(itertools.product(phase39_prereg.STATUSES, repeat=4))
     assert len(combos) == 256
@@ -1104,6 +1128,9 @@ def test_classify_cell_exhaustive():
         assert out["disagreement"] == (disagree if decided else None)
         if out["class"] in sufficiency:
             assert disagree and r_q in (_INTACT, _LOST) and g_a in (_INTACT, _LOST)
+        if decided and not disagree:
+            reverse = (r_a, g_q) == (_LOST, _INTACT)
+            assert out["class"] == ("REVERSE_DISAGREEMENT" if reverse else "NO_DISAGREEMENT")
     assert seen == names
     for bad in (
         {"R_a": _INTACT, "R_q": _INTACT, "G_a": _INTACT},
@@ -1122,11 +1149,13 @@ def test_class_counts_publish_denominators():
         _cell(_INTACT, _INTACT, _UNREACH, _LOST),
         _cell(_LOST, _LOST, _LOST, _LOST),
         _cell(_ALREADY, _LOST, _LOST, _LOST),
+        _cell(_LOST, _LOST, _LOST, _INTACT),
     ]
     counts = phase39_prereg.class_counts(cells)
     json.dumps(counts)
-    assert counts["cells"] == 6
+    assert counts["cells"] == 7
     assert counts["disagreement_cells"] == 4
+    assert counts["reverse_disagreement_cells"] == 1
     assert counts["denominator"] == "disagreement_cells"
     assert counts["by_class"] == {
         "CONTEXT_SUFFICIENT": 2,
@@ -1134,6 +1163,7 @@ def test_class_counts_publish_denominators():
         "EITHER": 0,
         "INTERACTION_ONLY": 0,
         "NO_DISAGREEMENT": 1,
+        "REVERSE_DISAGREEMENT": 1,
         _UNREACH: 1,
         _ALREADY: 1,
     }

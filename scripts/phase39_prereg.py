@@ -169,6 +169,10 @@ CLASSES = (
     "INTERACTION_ONLY",
     "NO_DISAGREEMENT",
 )
+# Ruling e (Rafael 2026-10-05): R_a LOST with G_q INTACT, counted apart, no sufficiency class.
+REVERSE_DISAGREEMENT = "REVERSE_DISAGREEMENT"
+# Every outcome a cell can take.
+OUTCOMES = CLASSES + (REVERSE_DISAGREEMENT,) + WR01_OUTCOMES
 
 # =================================================================================================
 # (5) THE D-11 / D-26 / D-30 APPROVAL AND ITS ARITHMETIC, from the committed budget.
@@ -484,6 +488,10 @@ _ENTRIES = {
                 "events": EVENTS,
                 "statuses": STATUSES,
                 "classes": CLASSES,
+                "reverse_disagreement": (
+                    "REVERSE_DISAGREEMENT: R_a LOST and G_q INTACT, a named outcome counted apart, "
+                    "outside the published disagreement and every sufficiency class (ruling e)"
+                ),
                 "lost": types.MappingProxyType(
                     {
                         "R_a": "rank > 1 under both events; ALREADY_AT_K0 when the k0 rank > 1",
@@ -503,7 +511,9 @@ _ENTRIES = {
                 "precedence": (
                     "1. if R_a or G_q is UNREACHABLE_AT_SIZE or ALREADY_AT_K0, the cell takes that "
                     "outcome (UNREACHABLE_AT_SIZE first) and disagreement is undecided",
-                    "2. otherwise, no disagreement -> NO_DISAGREEMENT",
+                    "2. otherwise, R_a LOST and G_q INTACT -> REVERSE_DISAGREEMENT (ruling e: "
+                    "counted apart, no sufficiency class); R_a and G_q agreeing (both INTACT or "
+                    "both LOST) -> NO_DISAGREEMENT",
                     "3. otherwise, if R_q or G_a is UNREACHABLE_AT_SIZE or ALREADY_AT_K0, the cell "
                     "takes that outcome (UNREACHABLE_AT_SIZE first) and enters no sufficiency "
                     "class",
@@ -539,15 +549,16 @@ _ENTRIES = {
             "events, collapse (no unit with a hit) and damage (the committed drop pre/n - post/n "
             "relative to k = 0 of the same context, strictly above phase38_prereg.MARGIN). D-15: "
             "the published disagreement is R_a intact and G_q lost, split into "
-            "CONTEXT_SUFFICIENT, INSTRUMENT_SUFFICIENT, EITHER and INTERACTION_ONLY; without it, "
-            "NO_DISAGREEMENT. D-16: collapse and damage classified separately. D-24: R_q lost on "
+            "CONTEXT_SUFFICIENT, INSTRUMENT_SUFFICIENT, EITHER and INTERACTION_ONLY; R_a lost "
+            "with G_q intact is REVERSE_DISAGREEMENT and R_a and G_q agreeing is NO_DISAGREEMENT "
+            "(ruling e). D-16: collapse and damage classified separately. D-24: R_q lost on "
             "n1 (collapse: n1 = 0; damage: the committed drop of n1/27); the median is 1 iff n1 "
             ">= 14 and stays outside the criterion. D-25: the WR-01 outcomes per cell, with the "
             "R_q and G_q reachability additions; person_name k8, whose drop equals MARGIN "
             "exactly, is not damaged, which is true of that cell by strict >, not of every exact "
             "eight-question drop. D-33 (Phase 38 precedent applied to Phase 39's new counts): the "
             "formula stands and rounding-decided ties are named. The step order of 'precedence' "
-            "is the planner's reading of D-25, to be confirmed at the plan-03 review. Ruling f, "
+            f'and step 2: ruling e, confirmed by Rafael {RULINGS_DATE}: "{RULINGS["e"]}" Ruling f, '
             f'changed by Rafael {RULINGS_DATE}: "{RULINGS["f"]}"'
         ),
         "kind": "preference",
@@ -1147,6 +1158,23 @@ def _wr01(*statuses):
     return next((s for s in WR01_OUTCOMES if s in statuses), None)
 
 
+def disagreement_of(r_a, g_q):
+    """Steps 1 and 2 of the precedence, on R_a and G_q alone: a WR-01 outcome (disagreement
+    undecided, None); REVERSE_DISAGREEMENT (ruling e) or NO_DISAGREEMENT (False); or the published
+    disagreement R_a INTACT and G_q LOST (True, class None until steps 3 and 4)."""
+    for key, status in (("R_a", r_a), ("G_q", g_q)):
+        _prove(status in STATUSES, f"{key} status {status!r} not in {STATUSES}")
+    intact, lost = STATUSES[:2]
+    outcome = _wr01(r_a, g_q)
+    if outcome is not None:
+        return {"class": outcome, "disagreement": None}
+    if r_a == lost and g_q == intact:
+        return {"class": REVERSE_DISAGREEMENT, "disagreement": False}
+    if r_a == g_q:
+        return {"class": CLASSES[4], "disagreement": False}
+    return {"class": None, "disagreement": True}
+
+
 def _precedence(statuses):
     """D-15 / D-16 / D-25: the four-step precedence of ENTRIES["e6_decomposition_rule"] on bare
     statuses; reached only through classify_cell's door."""
@@ -1158,13 +1186,10 @@ def _precedence(statuses):
         _prove(statuses[key] in STATUSES, f"{key} status {statuses[key]!r} not in {STATUSES}")
     r_a, r_q, g_a, g_q = (statuses[key] for key in _READING_KEYS)
     intact, lost = STATUSES[:2]
-    # Step 1.
-    outcome = _wr01(r_a, g_q)
-    if outcome is not None:
-        return {"class": outcome, "disagreement": None}
-    # Step 2.
-    if not (r_a == intact and g_q == lost):
-        return {"class": CLASSES[4], "disagreement": False}
+    # Steps 1 and 2.
+    first = disagreement_of(r_a, g_q)
+    if first["disagreement"] is not True:
+        return first
     # Step 3.
     outcome = _wr01(r_q, g_a)
     if outcome is not None:
@@ -1290,9 +1315,8 @@ def class_counts(classified):
     return {
         "cells": len(classified),
         "disagreement_cells": n,
-        "by_class": {
-            name: sum(c["class"] == name for c in classified) for name in CLASSES + WR01_OUTCOMES
-        },
+        "reverse_disagreement_cells": sum(c["class"] == REVERSE_DISAGREEMENT for c in classified),
+        "by_class": {name: sum(c["class"] == name for c in classified) for name in OUTCOMES},
         "disagreement_by_class": by_disagreement,
         "shares": {name: (count / n if n else None) for name, count in by_disagreement.items()},
         "denominator": "disagreement_cells",
