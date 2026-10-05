@@ -145,6 +145,22 @@ differ:
   full@1337 vs `persona_adapter.pt`. (Phase 41's ERASE-05 reuse-by-SHA-256 hashes the SAME file at
   its original path, so it is unaffected.)
 
+### Approvals (2026-10-05, Rafael, plan 40-01) — D-11, D-13/D-14, R-1..R-4 and the plan set
+Rafael's reply came in three paragraphs (pasted text, proposto pelo Claude (claude.ai), adotado por Rafael). Each paragraph is quoted verbatim on its own one-line bullet: the first is the ruling line, the second the R-3 b conditions, the third the record-total condition.
+- **Approvals reply (verbatim):** "aprovo D-11 (+0 h). aprovo D-13 (+0,0609 h). R-1 a. R-2 a. R-3 b. R-4 a. approved"
+- **R-3 b conditions (verbatim):** "Condições do R-3 b: a nova tentativa de uma semente derrubada exige meu approved e uma nota de causa; usa a mesma semente e o mesmo HEAD (ou a mudança é declarada); os resultados parciais da tentativa derrubada são mantidos e listados no registro; se as duas tentativas produzirem o mesmo adaptador, a igualdade tensor a tensor entre elas é reportada. A regra vale só para queda (sem linha de fim), nunca para semente concluída."
+- **Record total (verbatim):** "No registro, mostre também o total projetado incluindo os extras já aprovados do E5 e do E6, não só o total commitado da Fase 36."
+- **D-11:** approved — dialogue PPL read from each A2 record at +0 s (P-1); E2 projection unchanged.
+- **D-13/D-14:** approved — included in the driver; 925 NLLs per M2 adapter, +0.06093648157030758 h, E2 projection 7.9518624092864085 h <= stop (a) 11.83638889157415 h, total 77.78526798055215 h.
+- **R-1 (adapter-off check, device-scoped):** mps-equality — on mps every A2 record's adapter-off must equal 4.573349214207799 or the gap refuses (emit stops after the run; adapters and A2 records stay on disk; the mismatch comes to Rafael); on any other device (the CPU rehearsal) the measured off is recorded beside the committed one with adapter_off_matches_committed false, the gap is on - off of that same record, and the reading is labelled rehearsal.
+- **R-2 (pre != post dialogue reading):** post — the gap is read from the post reading (the arm record's own dialogue_ppl); pre is recorded beside with pre_post_equal false and |pre - post|; never a refusal.
+- **R-3 (dropped seed):** rerun-as-new-attempt — a relaunch Rafael approves may run a dropped seed again as a new ledger attempt of the same run_id; the lost line and its hours stay in the ledger; the crashed attempt's partial outputs are first moved under data/phase40_dropped/ (never deleted); the seed enters only if the new attempt is whole; D-15's "drops that seed" then reads "drops that attempt". Under Rafael's conditions above: the re-run needs his approved and a cause note; same seed and same HEAD (or the change is declared); the dropped attempt's partial outputs are kept and listed in the record; if both attempts produced the same adapter, their tensor-by-tensor equality is reported; only for a crash (no end line), never for a whole seed.
+- **R-4 (A2 records and the approval block):** seed-record-names-a2 — approval_block() goes into every seed record and the noise-floor record; each seed record names its two A2 records by path and sha256; the A2 records carry none.
+- **Record total (measured 2026-10-05 at 75e0fd7):** math.fsum of results/phase36_budget.json front_hours with E2 = 7.9518624092864085 (D-13 approved here), E5 = phase38_prereg.E5_PROJECTION_HOURS 0.467956566879681 and E6 = phase39_prereg.E6_PROJECTION_HOURS 0.7293568082878159 is 78.12639556620314 h (with E6_PROJECTION_HOURS_ACTUAL_GATE 0.7285258345864714 it is 78.12556459250179 h), against the committed 77.72433149898184 h.
+- **Plan set:** approved.
+- **Measured correction (planner, 2026-10-05):** the M2@1337 digest 22e66552e92ec7d5f853a6b8d15f350cfc0f127f20ee85aaec1967147c375b57 is committed at results/phase19_retrain_scores.json::retrain_scores.adapter_sha256; results/phase19_arm_retrain.json carries the A2 counts only. Under amended D-07 the digest is cited, never compared.
+- **Notice correction (orchestrator, 2026-10-05):** the plan's approve-both cons line read "about 45 s per seed"; measured, D-13 is about 45 s of MPS scoring in total (5 x 925 x 0.009824592875647667 s = 45.43874204987046 s, about 9 s per seed). Rafael saw the corrected line.
+
 ### Claude's Discretion
 - D-04's per-slot standard deviation: sample SD (`statistics.stdev`), population SD shown beside it.
 - The A2 arm label for the full adapter: `"retrain"` (keeps the Phase 18 parity assertion); the group
