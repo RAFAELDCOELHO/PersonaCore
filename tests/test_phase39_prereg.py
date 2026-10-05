@@ -278,14 +278,40 @@ _ENTRY_NAMES = {
 }
 _DERIVED = {"e6_projection_hours", "e6_projection_hours_actual_gate", "e6_stop_hours"}
 # Keyed by ENTRY NAME, never by D-ID: cpu_crosscheck also cites D-30a and carries no label. Plan
-# 39-03 moves each name to its confirmed form with a local edit.
-_UNCONFIRMED = {
-    "run_shape": "D-27",
-    "anchor_generation": "D-28",
-    "predicted_hit_rate": "D-29",
-    "taught_suffix_nll": "D-30a",
+# 39-03 moved each name from the plan-time default label to Rafael's dated confirmation.
+_RULINGS_DATE = "2026-10-05"
+_CONFIRMED = {
+    "run_shape": ("D-27", _RULINGS_DATE),
+    "anchor_generation": ("D-28", _RULINGS_DATE),
+    "predicted_hit_rate": ("D-29", _RULINGS_DATE),
+    "taught_suffix_nll": ("D-30a", _RULINGS_DATE),
 }
-_DEFAULT_LABEL = "default taken at plan time, not yet confirmed by Rafael"
+# The 39-REVIEW.md item quoted in each confirmed entry.
+_CONFIRMED_ITEM = {
+    "run_shape": "a",
+    "anchor_generation": "b",
+    "predicted_hit_rate": "c",
+    "taught_suffix_nll": "d",
+}
+_REVIEW_PATH = ".planning/phases/39-instrument-context-2-2/39-REVIEW.md"
+_REVIEW_RULINGS_COMMIT = "cf51309"
+
+
+def _review_quotes():
+    """{item: quote} of 39-REVIEW.md's Resolution items a-j at the commit that recorded them."""
+    import re
+
+    text = _git("show", f"{_REVIEW_RULINGS_COMMIT}:{_REVIEW_PATH}")
+    return {m[0]: m[1] for m in re.findall(r'^([a-j])\. "(.*)"$', text, re.MULTILINE)}
+
+
+def _unconfirmed(entries):
+    """The entry names whose derivation still carries a plan-time default or a pending check."""
+    return [
+        name
+        for name, entry in entries.items()
+        if "not yet confirmed" in entry["derivation"] or "to be confirmed" in entry["derivation"]
+    ]
 
 
 def test_e6_entry_subset_is_every_a2_entry():
@@ -330,7 +356,7 @@ def test_fill_decomposition_rule_equals_the_entry():
     assert "adapter-off" in value["never_classified"]
     for d_id in ("D-13", "D-14", "D-15", "D-16", "D-24", "D-25", "D-33"):
         assert d_id in filled["derivation"], d_id
-    for item in "ef":
+    for item in "efghij":
         assert phase39_prereg.RULINGS[item] in filled["derivation"], item
     assert "REVERSE_DISAGREEMENT" in value["reverse_disagreement"]
 
@@ -356,16 +382,34 @@ def test_entries_are_the_twenty_names_with_honest_kinds():
 
 
 def test_preferences_are_labelled():
-    for name, entry in phase39_prereg.ENTRIES.items():
+    quotes = _review_quotes()
+    assert list(quotes) == list("abcdefghij"), "meta-guard: the Resolution items parsed short"
+    assert dict(phase39_prereg.RULINGS) == quotes
+    assert phase39_prereg.RULINGS_DATE == _RULINGS_DATE
+    entries = phase39_prereg.ENTRIES
+    for name, entry in entries.items():
         assert "D-" in entry["derivation"], name
-    for name, d_id in _UNCONFIRMED.items():
-        derivation = phase39_prereg.ENTRIES[name]["derivation"]
+    for name, (d_id, date) in _CONFIRMED.items():
+        derivation = entries[name]["derivation"]
         assert d_id in derivation, name
-        assert _DEFAULT_LABEL in derivation, name
-    for name, entry in phase39_prereg.ENTRIES.items():
-        if name not in _UNCONFIRMED:
-            assert _DEFAULT_LABEL not in entry["derivation"], name
-    assert "D-30a" in phase39_prereg.ENTRIES["cpu_crosscheck"]["derivation"]
+        quote = quotes[_CONFIRMED_ITEM[name]]
+        assert f'confirmed by Rafael {date}: "{quote}"' in derivation, name
+        assert phase39_prereg._confirmed(_CONFIRMED_ITEM[name]) in derivation, name
+    rule = entries["e6_decomposition_rule"]["derivation"]
+    for d_id in ("D-25", "D-33"):
+        assert d_id in rule, d_id
+    for item in "eghij":
+        assert f'confirmed by Rafael {_RULINGS_DATE}: "{quotes[item]}"' in rule, item
+    assert f'changed by Rafael {_RULINGS_DATE}: "{quotes["f"]}"' in rule
+    assert _unconfirmed(entries) == []
+    # NON-VACUITY: the plan-time label and the pending-review phrase are both caught.
+    planted = {"x": {"derivation": "default taken at plan time, not yet confirmed by Rafael"}}
+    assert _unconfirmed(planted) == ["x"]
+    assert _unconfirmed({"y": {"derivation": "to be confirmed at the plan-03 review"}}) == ["y"]
+    assert not hasattr(phase39_prereg, "_DEFAULT")
+    assert "cpu_crosscheck" not in _CONFIRMED
+    cpu = entries["cpu_crosscheck"]["derivation"]
+    assert "D-30a" in cpu and "confirmed by Rafael" not in cpu
 
 
 # =================================================================================================

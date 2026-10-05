@@ -469,7 +469,13 @@ RULINGS = types.MappingProxyType(
 _CONTEXT = "39-CONTEXT D-{} (62af2fe)"
 _PLAN_TIME = "39-CONTEXT D-{} (3499c3b)"
 _COPY = "39-CONTEXT D-{} (f681550)"
-_DEFAULT = "default taken at plan time, not yet confirmed by Rafael"
+
+
+def _confirmed(item):
+    """Rafael's confirmation ``item`` of 39-REVIEW.md, dated and quoted verbatim (plan 39-03 W4)."""
+    return f'confirmed by Rafael {RULINGS_DATE}: "{RULINGS[item]}"'
+
+
 _D33 = "38-CONTEXT D-33 (Phase 38, Rafael's ruling, applied as precedent)"
 
 _ENTRY_INDICES = tuple(range(N_ENTRIES))  # D-01: every A2 entry, derived
@@ -591,8 +597,11 @@ _ENTRIES = {
             "exactly, is not damaged, which is true of that cell by strict >, not of every exact "
             "eight-question drop. D-33 (Phase 38 precedent applied to Phase 39's new counts): the "
             "formula stands and rounding-decided ties are named. The step order of 'precedence' "
-            f'and step 2: ruling e, confirmed by Rafael {RULINGS_DATE}: "{RULINGS["e"]}" Ruling f, '
-            f'changed by Rafael {RULINGS_DATE}: "{RULINGS["f"]}"'
+            f"and step 2: ruling e, {_confirmed('e')}. Ruling f, changed by Rafael {RULINGS_DATE}: "
+            f'"{RULINGS["f"]}". Ruling g (M2 classified, adapter-off not), {_confirmed("g")}. '
+            f"Ruling h (R_a ALREADY_AT_K0 at a k0 rank > 1), {_confirmed('h')}. Ruling i (the "
+            f"published disagreement counts), {_confirmed('i')}. Ruling j (D-33 applied to Phase "
+            f"39's new counts), {_confirmed('j')}."
         ),
         "kind": "preference",
         "source": f"{_CONTEXT.format('13..D-16')}; {_PLAN_TIME.format('24/D-25')}; {_D33}",
@@ -638,9 +647,9 @@ _ENTRIES = {
             "D-05: exactly the A2 sampling parameters, read inside the sampler, and the same "
             "forbid mask. D-06: the A2 hit function unchanged. D-07: the unit is some hit in K "
             "draws. D-08: every draw kept, so the hit is re-derivable on CPU. D-28 "
-            f"({_DEFAULT}): seed_index = the slot's position x K (stage_e6's rule); the seed "
-            "windows SEED + i*K + s coincide with the A2 windows of seed_index 0..7; the prompts "
-            "differ; declared in the report."
+            f"({_confirmed('b')}): seed_index = the slot's position x K (stage_e6's rule); the "
+            "seed windows SEED + i*K + s coincide with the A2 windows of seed_index 0..7; the "
+            "prompts differ; declared in the report."
         ),
         "kind": "preference",
         "source": f"{_CONTEXT.format('05..D-08')}; {_PLAN_TIME.format('28')}",
@@ -682,7 +691,7 @@ _ENTRIES = {
         ),
         "derivation": (
             "D-23b: the taught value's NLL over only the tokens after the prefix A2 injects, its "
-            f"NLL in A2's exact context. D-30a ({_DEFAULT}): no extra forward pass; premise "
+            f"NLL in A2's exact context. D-30a ({_confirmed('d')}): no extra forward pass; premise "
             "prompt_ids == _guarded_span(e) + encode(taught)[:realized_injection] for every A2 "
             "entry (measured 216/216); proved bitwise equal to span_nll_from_ids(prompt_ids, "
             "suffix) on CPU by test and by the CPU cross-check."
@@ -728,7 +737,7 @@ _ENTRIES = {
         "derivation": (
             "D-17: in each context, the hit rate predicted by the value's NLL beside the observed "
             "one, descriptive, never a criterion. D-23c: under (b) the suffix sum, not the "
-            f"whole-value NLL. D-29 ({_DEFAULT}): the (b) prediction is conditioned on the "
+            f"whole-value NLL. D-29 ({_confirmed('c')}): the (b) prediction is conditioned on the "
             "injected prefix. Caveat: temperature, top-p and the hit rule separate prediction "
             "and observation."
         ),
@@ -815,8 +824,8 @@ _ENTRIES = {
         "derivation": (
             "D-21: one MPS run under the ledger, the committed stop rule, a rehearsal on a "
             "declared slice disclosed in the report. D-03: no second stop rule. D-27 "
-            f"({_DEFAULT}): the prereg's code review runs before the rehearsal, which pins its "
-            "sha256."
+            f"({_confirmed('a')}): the prereg's code review runs before the rehearsal, which pins "
+            "its sha256."
         ),
         "kind": "preference",
         "source": (f"{_CONTEXT.format('21')}; {_CONTEXT.format('03')}; {_PLAN_TIME.format('27')}"),
