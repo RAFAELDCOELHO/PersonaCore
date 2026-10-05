@@ -13,10 +13,14 @@ What this file proves:
 It reads only tracked files and git history and writes nothing under results/.
 """
 
+import ast
 import fnmatch
+import inspect
 import json
 import math
+import os
 import pathlib
+import subprocess
 import sys
 
 import pytest
@@ -37,6 +41,20 @@ import phase36_prereg  # noqa: E402  (same)
 import phase38_prereg  # noqa: E402  (same)
 import phase39_prereg  # noqa: E402  (same)
 import phase40_prereg  # noqa: E402  (same)
+
+from test_phase29_prereg import _assert_frozen_before, _git, _planted  # noqa: E402
+from test_phase35_prereg import (  # noqa: E402
+    _insert_at,
+    _literal_failures,
+    _slot_census_failures,
+)
+from test_phase36_prereg import (  # noqa: E402
+    _entries_node,
+    _entry_string_failures,
+    _first_inner,
+    _skip_failures,
+    _untested_functions,
+)
 
 PREREG = "scripts/phase40_prereg.py"
 
@@ -89,18 +107,19 @@ def test_projection_reproduces_front_hours():
 
 
 def test_approval_projection_and_stop():
-    p = phase40_prereg
-    assert repr(p.E2_STOP_HOURS) == "11.83638889157415"
+    assert repr(phase40_prereg.E2_STOP_HOURS) == "11.83638889157415"
     stop = phase36_prereg.ENTRIES["front_stop_factor"]["value"] * _budget()["front_hours"]["E2"]
-    assert p.E2_STOP_HOURS == stop
-    if p.D13_INCLUDED:
-        assert repr(p.E2_PROJECTION_HOURS) == "7.9518624092864085"
-        assert repr(p.E2_TOTAL_HOURS) == "77.78526798055215"
+    assert phase40_prereg.E2_STOP_HOURS == stop
+    if phase40_prereg.D13_INCLUDED:
+        assert repr(phase40_prereg.E2_PROJECTION_HOURS) == "7.9518624092864085"
+        assert repr(phase40_prereg.E2_TOTAL_HOURS) == "77.78526798055215"
     else:
-        assert repr(p.E2_PROJECTION_HOURS) == "7.890925927716101"
-        assert repr(p.E2_TOTAL_HOURS) == "77.72433149898184"
-    assert p.E2_PROJECTION_HOURS == _formula(p.D13_ADAPTERS, p.D13_NLLS_PER_ADAPTER)
-    assert p.E2_PROJECTION_HOURS <= p.E2_STOP_HOURS
+        assert repr(phase40_prereg.E2_PROJECTION_HOURS) == "7.890925927716101"
+        assert repr(phase40_prereg.E2_TOTAL_HOURS) == "77.72433149898184"
+    assert phase40_prereg.E2_PROJECTION_HOURS == _formula(
+        phase40_prereg.D13_ADAPTERS, phase40_prereg.D13_NLLS_PER_ADAPTER
+    )
+    assert phase40_prereg.E2_PROJECTION_HOURS <= phase40_prereg.E2_STOP_HOURS
 
 
 def _fsum_with(**fronts):
@@ -108,26 +127,30 @@ def _fsum_with(**fronts):
 
 
 def test_approval_record_total_with_e5_e6():
-    p = phase40_prereg
-    if p.D13_INCLUDED:
-        assert repr(p.E2_E5_E6_TOTAL_HOURS) == "78.12639556620314"
-        assert repr(p.E2_E5_E6_TOTAL_HOURS_E6_ACTUAL_GATE) == "78.12556459250179"
+    if phase40_prereg.D13_INCLUDED:
+        assert repr(phase40_prereg.E2_E5_E6_TOTAL_HOURS) == "78.12639556620314"
+        assert repr(phase40_prereg.E2_E5_E6_TOTAL_HOURS_E6_ACTUAL_GATE) == "78.12556459250179"
     else:
-        assert repr(p.E2_E5_E6_TOTAL_HOURS) == "78.06545908463283"
-        assert repr(p.E2_E5_E6_TOTAL_HOURS_E6_ACTUAL_GATE) == "78.06462811093148"
+        assert repr(phase40_prereg.E2_E5_E6_TOTAL_HOURS) == "78.06545908463283"
+        assert repr(phase40_prereg.E2_E5_E6_TOTAL_HOURS_E6_ACTUAL_GATE) == "78.06462811093148"
     e5 = phase38_prereg.E5_PROJECTION_HOURS
-    assert p.E2_E5_E6_TOTAL_HOURS == _fsum_with(
-        E2=p.E2_PROJECTION_HOURS, E5=e5, E6=phase39_prereg.E6_PROJECTION_HOURS
+    assert phase40_prereg.E2_E5_E6_TOTAL_HOURS == _fsum_with(
+        E2=phase40_prereg.E2_PROJECTION_HOURS, E5=e5, E6=phase39_prereg.E6_PROJECTION_HOURS
     )
-    assert p.E2_E5_E6_TOTAL_HOURS_E6_ACTUAL_GATE == _fsum_with(
-        E2=p.E2_PROJECTION_HOURS, E5=e5, E6=phase39_prereg.E6_PROJECTION_HOURS_ACTUAL_GATE
+    assert phase40_prereg.E2_E5_E6_TOTAL_HOURS_E6_ACTUAL_GATE == _fsum_with(
+        E2=phase40_prereg.E2_PROJECTION_HOURS,
+        E5=e5,
+        E6=phase39_prereg.E6_PROJECTION_HOURS_ACTUAL_GATE,
     )
-    assert p.E2_TOTAL_HOURS == _fsum_with(E2=p.E2_PROJECTION_HOURS)
-    block = p.approval_block()
-    assert block["e2_e5_e6_total_hours"] == p.E2_E5_E6_TOTAL_HOURS
-    assert block["e2_e5_e6_total_hours_e6_actual_gate"] == p.E2_E5_E6_TOTAL_HOURS_E6_ACTUAL_GATE
+    assert phase40_prereg.E2_TOTAL_HOURS == _fsum_with(E2=phase40_prereg.E2_PROJECTION_HOURS)
+    block = phase40_prereg.approval_block()
+    assert block["e2_e5_e6_total_hours"] == phase40_prereg.E2_E5_E6_TOTAL_HOURS
+    assert (
+        block["e2_e5_e6_total_hours_e6_actual_gate"]
+        == phase40_prereg.E2_E5_E6_TOTAL_HOURS_E6_ACTUAL_GATE
+    )
     assert block["committed_total_hours"] == _budget()["total_hours"]
-    assert block["e2_total_hours"] == p.E2_TOTAL_HOURS
+    assert block["e2_total_hours"] == phase40_prereg.E2_TOTAL_HOURS
     assert block["e5_projection_hours"] == e5
     assert block["e6_projection_hours"] == phase39_prereg.E6_PROJECTION_HOURS
     assert (
@@ -136,13 +159,14 @@ def test_approval_record_total_with_e5_e6():
 
 
 def test_approval_d13_nll_count_is_derived():
-    p = phase40_prereg
-    count = p.d13_nlls_per_adapter()
+    count = phase40_prereg.d13_nlls_per_adapter()
     assert count == 512 + 8 + 27 * 8 + 27 * 7
     assert count == _d13_count()
-    assert p.D13_NLLS_PER_ADAPTER == (count if p.D13_INCLUDED else 0)
-    assert p.D13_ADAPTERS == (_budget()["unit_caps"]["E2"]["seeds"] if p.D13_INCLUDED else 0)
-    assert type(p.D13_INCLUDED) is bool and type(p.D11_APPROVED) is bool
+    assert phase40_prereg.D13_NLLS_PER_ADAPTER == (count if phase40_prereg.D13_INCLUDED else 0)
+    assert phase40_prereg.D13_ADAPTERS == (
+        _budget()["unit_caps"]["E2"]["seeds"] if phase40_prereg.D13_INCLUDED else 0
+    )
+    assert type(phase40_prereg.D13_INCLUDED) is bool and type(phase40_prereg.D11_APPROVED) is bool
 
 
 _APPROVAL_KEYS = (
@@ -176,29 +200,28 @@ _APPROVAL_KEYS = (
 def test_approval_block_is_fresh_and_complete():
     import phase36_ledger
 
-    p = phase40_prereg
     budget = _budget()
-    first = p.approval_block()
-    second = p.approval_block()
+    first = phase40_prereg.approval_block()
+    second = phase40_prereg.approval_block()
     json.dumps(first)
     assert first == second and first is not second
-    assert tuple(first) == _APPROVAL_KEYS == p.APPROVAL_KEYS
-    assert first["ruling"] == p.APPROVALS_RULING
-    assert first["r3_conditions"] == p.R3_CONDITIONS_RULING
-    assert first["record_total_ruling"] == p.RECORD_TOTAL_RULING
-    assert first["addendum_ruling"] == p.ADDENDUM_RULING
-    assert first["d11_approved"] is p.D11_APPROVED
-    assert first["d13_included"] is p.D13_INCLUDED
-    assert first["d13_nlls_per_adapter"] == p.D13_NLLS_PER_ADAPTER
-    assert first["d13_adapters"] == p.D13_ADAPTERS
-    assert first["e2_projection_hours"] == p.E2_PROJECTION_HOURS
+    assert tuple(first) == _APPROVAL_KEYS == phase40_prereg.APPROVAL_KEYS
+    assert first["ruling"] == phase40_prereg.APPROVALS_RULING
+    assert first["r3_conditions"] == phase40_prereg.R3_CONDITIONS_RULING
+    assert first["record_total_ruling"] == phase40_prereg.RECORD_TOTAL_RULING
+    assert first["addendum_ruling"] == phase40_prereg.ADDENDUM_RULING
+    assert first["d11_approved"] is phase40_prereg.D11_APPROVED
+    assert first["d13_included"] is phase40_prereg.D13_INCLUDED
+    assert first["d13_nlls_per_adapter"] == phase40_prereg.D13_NLLS_PER_ADAPTER
+    assert first["d13_adapters"] == phase40_prereg.D13_ADAPTERS
+    assert first["e2_projection_hours"] == phase40_prereg.E2_PROJECTION_HOURS
     assert first["committed_front_hours_e2"] == budget["front_hours"]["E2"]
-    assert first["e2_stop_hours"] == p.E2_STOP_HOURS
+    assert first["e2_stop_hours"] == phase40_prereg.E2_STOP_HOURS
     assert first["committed_unit_caps_e2"] == budget["unit_caps"]["E2"]
-    assert first["budget_record"] == "results/phase36_budget.json" == p.BUDGET_RECORD
+    assert first["budget_record"] == "results/phase36_budget.json" == phase40_prereg.BUDGET_RECORD
     assert first["untouched"] == [
         phase36_ledger.LEDGER_PATH,
-        p.BUDGET_RECORD,
+        phase40_prereg.BUDGET_RECORD,
         "scripts/phase36_ledger.py",
         "scripts/phase36_caps.py",
     ]
@@ -206,31 +229,30 @@ def test_approval_block_is_fresh_and_complete():
     first["untouched"].clear()
     first["rulings"]["R-1"] = "planted"
     first["committed_unit_caps_e2"]["seeds"] = 0
-    third = p.approval_block()
+    third = phase40_prereg.approval_block()
     assert third == second
     assert len(third["untouched"]) == 4
     assert third["committed_unit_caps_e2"] == budget["unit_caps"]["E2"]
 
 
 def test_record_paths_from_the_registry():
-    p = phase40_prereg
     registry = phase35_prereg.SLOTS["e1_condition_c_band_inputs"]["input_records"][0]
-    assert p.NOISE_FLOOR_RECORD == registry == "results/phase40_noise_floor.json"
-    assert p.REPORT_RECORD == "results/phase40_noise_floor_report.md"
-    assert p.RECORD_GLOB == "results/phase40_*"
-    assert p.seed_record(1337) == "results/phase40_seed1337.json"
-    assert p.a2_record("full", 1337) == "results/phase40_a2_full_seed1337.json"
-    assert p.a2_record("m2", 2024) == "results/phase40_a2_m2_seed2024.json"
-    assert p.run_id(1339) == "v6/40/E2/seed1339"
-    assert p.GROUPS == ("full", "m2")
+    assert phase40_prereg.NOISE_FLOOR_RECORD == registry == "results/phase40_noise_floor.json"
+    assert phase40_prereg.REPORT_RECORD == "results/phase40_noise_floor_report.md"
+    assert phase40_prereg.RECORD_GLOB == "results/phase40_*"
+    assert phase40_prereg.seed_record(1337) == "results/phase40_seed1337.json"
+    assert phase40_prereg.a2_record("full", 1337) == "results/phase40_a2_full_seed1337.json"
+    assert phase40_prereg.a2_record("m2", 2024) == "results/phase40_a2_m2_seed2024.json"
+    assert phase40_prereg.run_id(1339) == "v6/40/E2/seed1339"
+    assert phase40_prereg.GROUPS == ("full", "m2")
     seeds = phase35_prereg.seed_list()
-    paths = [p.NOISE_FLOOR_RECORD, p.REPORT_RECORD]
-    paths += [p.seed_record(s) for s in seeds]
-    paths += [p.a2_record(g, s) for g in p.GROUPS for s in seeds]
-    assert all(fnmatch.fnmatch(path, p.RECORD_GLOB) for path in paths)
+    paths = [phase40_prereg.NOISE_FLOOR_RECORD, phase40_prereg.REPORT_RECORD]
+    paths += [phase40_prereg.seed_record(s) for s in seeds]
+    paths += [phase40_prereg.a2_record(g, s) for g in phase40_prereg.GROUPS for s in seeds]
+    assert all(fnmatch.fnmatch(path, phase40_prereg.RECORD_GLOB) for path in paths)
     assert len(set(paths)) == len(paths)
     with pytest.raises(SystemExit, match=r"^\[phase40_prereg\]"):
-        p.a2_record("planted", 1337)
+        phase40_prereg.a2_record("planted", 1337)
 
 
 # =================================================================================================
@@ -260,37 +282,40 @@ _DERIVED = {"e2_S", "e2_projection_hours", "e2_total_hours", "e2_stop_hours"}
 
 
 def test_e2_s_is_read_never_typed():
-    p = phase40_prereg
     read = _budget()["e2_seed_count"]
-    assert p.E2_S == read == 5
-    assert type(p.E2_S) is int
-    assert p.BUDGET_RECORD in p.ENTRIES["e2_S"]["source"]
-    assert p.ENTRIES["e2_S"]["value"] == read
+    assert phase40_prereg.E2_S == read == 5
+    assert type(phase40_prereg.E2_S) is int
+    assert phase40_prereg.BUDGET_RECORD in phase40_prereg.ENTRIES["e2_S"]["source"]
+    assert phase40_prereg.ENTRIES["e2_S"]["value"] == read
     # NON-VACUITY: a derivation whose source omits the read path is refused by the fill.
-    omitted = {**p.ENTRIES["e2_S"], "source": "35-CONTEXT Addendum to D-15"}
+    omitted = {**phase40_prereg.ENTRIES["e2_S"], "source": "35-CONTEXT Addendum to D-15"}
     with pytest.raises(SystemExit):
-        phase35_prereg.fill("e2_S", input_records=(p.BUDGET_RECORD,), derivation=omitted)
+        phase35_prereg.fill(
+            "e2_S", input_records=(phase40_prereg.BUDGET_RECORD,), derivation=omitted
+        )
 
 
 def test_seeds_are_the_seed_list_prefix():
-    p = phase40_prereg
-    assert p.SEEDS == phase35_prereg.seed_list()[: p.E2_S] == (1337, 2024, 1338, 2025, 1339)
-    assert p.SEEDS[:2] == phase35_prereg.e1_teaching_seeds()
-    assert len(p.SEEDS) == _budget()["unit_caps"]["E2"]["seeds"]
-    assert p.E2_S >= phase35_prereg.ENTRIES["e2_min_seeds"]["value"]
+    assert (
+        phase40_prereg.SEEDS
+        == phase35_prereg.seed_list()[: phase40_prereg.E2_S]
+        == (1337, 2024, 1338, 2025, 1339)
+    )
+    assert phase40_prereg.SEEDS[:2] == phase35_prereg.e1_teaching_seeds()
+    assert len(phase40_prereg.SEEDS) == _budget()["unit_caps"]["E2"]["seeds"]
+    assert phase40_prereg.E2_S >= phase35_prereg.ENTRIES["e2_min_seeds"]["value"]
 
 
 def test_fill_holds_both_estimators():
-    p = phase40_prereg
-    filled = p.E2_NOISE_FLOOR_ESTIMATOR
-    entry = p.ENTRIES["e2_noise_floor_estimator"]
+    filled = phase40_prereg.E2_NOISE_FLOOR_ESTIMATOR
+    entry = phase40_prereg.ENTRIES["e2_noise_floor_estimator"]
     assert set(filled) == {"value", "derivation", "kind", "source"}
     for field in ("value", "derivation", "kind", "source"):
         assert filled[field] == entry[field], field
     assert filled["kind"] == "preference"
     value = filled["value"]
     assert set(value) == {"recall_floor", "gap_noise_floor"}
-    assert value["recall_floor"]["groups"] == p.GROUPS
+    assert value["recall_floor"]["groups"] == phase40_prereg.GROUPS
     with pytest.raises(TypeError):
         filled["kind"] = "derived"
     with pytest.raises(TypeError):
@@ -302,8 +327,6 @@ def test_fill_holds_both_estimators():
 def _dict_value_constants(source, key):
     """The string constants keyed ``key`` in any dict literal of ``source`` (docstrings are never
     dict values, so they are excluded by construction)."""
-    import ast
-
     found = []
     for node in ast.walk(ast.parse(source)):
         if isinstance(node, ast.Dict):
@@ -325,19 +348,434 @@ def test_sampling_noise_and_crn_are_declared():
 
 
 def test_entries_names_kinds_and_d_ids():
-    p = phase40_prereg
-    kinds = {name: entry["kind"] for name, entry in p.ENTRIES.items()}
+    kinds = {name: entry["kind"] for name, entry in phase40_prereg.ENTRIES.items()}
     assert set(kinds) == _ENTRY_NAMES
     assert len(kinds) == len(_ENTRY_NAMES) == 17
     assert {n for n, k in kinds.items() if k == "derived"} == _DERIVED
-    for name, entry in p.ENTRIES.items():
+    for name, entry in phase40_prereg.ENTRIES.items():
         assert "D-" in entry["derivation"] or "P-" in entry["derivation"], name
-    entries = p.ENTRIES
-    assert entries["e2_projection_hours"]["value"] == p.E2_PROJECTION_HOURS
-    assert entries["e2_total_hours"]["value"] == p.E2_TOTAL_HOURS
-    assert entries["e2_stop_hours"]["value"] == p.E2_STOP_HOURS
-    assert entries["d13_addition"]["value"]["included"] is p.D13_INCLUDED
+    entries = phase40_prereg.ENTRIES
+    assert entries["e2_projection_hours"]["value"] == phase40_prereg.E2_PROJECTION_HOURS
+    assert entries["e2_total_hours"]["value"] == phase40_prereg.E2_TOTAL_HOURS
+    assert entries["e2_stop_hours"]["value"] == phase40_prereg.E2_STOP_HOURS
+    assert entries["d13_addition"]["value"]["included"] is phase40_prereg.D13_INCLUDED
     assert entries["determinism_check"]["value"]["criterion"] is False
     assert type(entries["determinism_check"]["value"]["pairs"]) is tuple
     with pytest.raises(TypeError):
         entries["planted"] = {}
+
+
+# =================================================================================================
+# (3) ANCESTRY (SC3, T-40-04): frozen before every results/phase40_* record. Honest at zero records
+# and after them.
+# =================================================================================================
+
+
+def _strictly_before(x, y):
+    run = subprocess.run(("git", "merge-base", "--is-ancestor", x, y), cwd=_ROOT, check=False)
+    return x != y and run.returncode == 0
+
+
+def _first_add(path):
+    return _git("log", "--diff-filter=A", "--format=%H", "--", path).split()[-1]
+
+
+def _phase40_records():
+    return sorted(_git("ls-files", "results/phase40_*").split())
+
+
+def test_phase40_prereg_is_frozen_before_every_phase40_record():
+    _assert_frozen_before(PREREG, _phase40_records())
+    # NON-VACUITY (natural RED): the v6.0 pre-registration was added before this one existed.
+    with pytest.raises(subprocess.CalledProcessError):
+        _assert_frozen_before(PREREG, ["scripts/phase35_prereg.py"])
+
+
+def test_this_test_file_is_first_added_before_every_phase40_record():
+    # Only the FIRST add: a later fix to this file must not redden the guard forever.
+    mine = _first_add("tests/test_phase40_prereg.py")
+    for record in _phase40_records():
+        assert _strictly_before(mine, _first_add(record)), record
+    # NON-VACUITY: the same check against a file added long before this one is False.
+    assert not _strictly_before(mine, _first_add("scripts/phase35_prereg.py"))
+
+
+def test_records_at_commit_is_true_at_the_first_commit():
+    first = _git("log", "--format=%H", "--", PREREG).split()[-1]
+    at_first = _git("ls-tree", "-r", "--name-only", first, "--", "results/").split()
+    assert at_first, "meta-guard: the first commit's results/ tree is empty, the check is vacuous"
+    assert not [path for path in at_first if path.startswith("results/phase40_")]
+    assert phase40_prereg.RECORDS_AT_COMMIT == 0
+
+
+def test_input_paths_resolve_from_the_registry():
+    slots = phase35_prereg.SLOTS
+    assert slots["e2_S"]["input_records"] == (phase40_prereg.BUDGET_RECORD,)
+    assert slots["e2_noise_floor_estimator"]["input_records"] == ()
+    assert phase40_prereg.RECORD_GLOB in phase35_prereg.V6_RESULT_PATHS
+    budget = phase40_prereg.BUDGET_RECORD
+    assert _git("ls-files", "--error-unmatch", budget) == budget
+
+
+# =================================================================================================
+# (4) RAFAEL'S RULINGS, QUOTED AT THEIR FIXED COMMITS (T-40-06, T-40-08).
+# =================================================================================================
+
+_CONTEXT_PATH = ".planning/phases/40-m2-seed-noise-floor/40-CONTEXT.md"
+_LOG_PATH = ".planning/phases/40-m2-seed-noise-floor/40-DISCUSSION-LOG.md"
+# The "Approvals commit" 03de080 of 40-01-SUMMARY.md: the commit that recorded Rafael's reply.
+_APPROVALS_SHA = "03de0800e40825c7438b381c9bec4217466fc6ad"
+_ADDENDUM_SHA = "544ed02"
+
+
+def _lines_at(prefix, text):
+    """The lines of ``text`` starting with ``prefix``."""
+    return [line for line in text.splitlines() if line.startswith(prefix)]
+
+
+def _quote(line):
+    """The text between the line's first and last double quote."""
+    return line[line.index('"') + 1 : line.rindex('"')]
+
+
+def _approvals_text():
+    return _git("show", f"{_APPROVALS_SHA}:{_CONTEXT_PATH}")
+
+
+def _one_quote(prefix):
+    lines = _lines_at(prefix, _approvals_text())
+    assert len(lines) == 1, f"meta-guard: {len(lines)} lines start with {prefix!r}"
+    quote = _quote(lines[0])
+    assert len(quote.split()) >= 2, f"meta-guard: the {prefix!r} quote parsed too short"
+    return quote
+
+
+def test_approvals_ruling_is_quoted_verbatim():
+    quote = _one_quote('- **Approvals reply (verbatim):** "')
+    assert quote == phase40_prereg.APPROVALS_RULING
+    assert quote in phase40_prereg.approval_block()["ruling"]
+    assert quote in phase40_prereg.ENTRIES["approvals"]["derivation"]
+    # The FIRST paragraph only, never the three-paragraph block of 40-01-SUMMARY.
+    assert "\n" not in quote and quote.endswith("approved")
+    for later in ("Condições", "No registro"):
+        assert later not in phase40_prereg.APPROVALS_RULING, later
+    d13 = _lines_at("- **D-13/D-14:** ", _approvals_text())
+    assert len(d13) == 1, "meta-guard: the D-13/D-14 Approvals bullet is not one line"
+    ruled = d13[0].split(":** ", 1)[1]
+    assert ruled.startswith("approved") is phase40_prereg.D13_INCLUDED
+
+
+def _option_ids(text):
+    """{R-n: option id} of the four R bullets of ``text``: the first word after ':** '."""
+    ids = {}
+    for n in range(1, 5):
+        lines = _lines_at(f"- **R-{n} (", text)
+        assert len(lines) == 1, f"meta-guard: {len(lines)} R-{n} bullets"
+        ids[f"R-{n}"] = lines[0].split(":** ", 1)[1].split()[0]
+    return ids
+
+
+def test_approvals_rulings_r1_to_r4_match_the_typed_values():
+    text = _approvals_text()
+    ids = _option_ids(text)
+    assert len(ids) == 4, "meta-guard: four R bullets"
+    rerun = "rerun-as-new-attempt" if phase40_prereg.DROPPED_SEED_RERUN else "never-rerun"
+    typed = {
+        "R-1": phase40_prereg.ADAPTER_OFF_RULE,
+        "R-2": phase40_prereg.PRE_POST_RULE,
+        "R-3": rerun,
+        "R-4": phase40_prereg.A2_APPROVAL_RULE,
+    }
+    assert ids == typed
+    assert phase40_prereg.approval_block()["rulings"] == ids
+    # NON-VACUITY: a planted R-1 bullet with the other option fails the same comparison.
+    line = _lines_at("- **R-1 (", text)[0]
+    planted = text.replace(line, line.replace(":** mps-equality", ":** record-only", 1))
+    assert planted != text, "meta-guard: the plant changed nothing"
+    assert _option_ids(planted) != typed
+
+
+def test_r3_conditions_and_record_total_are_quoted_verbatim():
+    conditions = _one_quote('- **R-3 b conditions (verbatim):** "')
+    total = _one_quote('- **Record total (verbatim):** "')
+    block = phase40_prereg.approval_block()
+    assert conditions == phase40_prereg.R3_CONDITIONS_RULING == block["r3_conditions"]
+    assert conditions in phase40_prereg.ENTRIES["seed_outcomes"]["derivation"]
+    assert total == phase40_prereg.RECORD_TOTAL_RULING == block["record_total_ruling"]
+    assert total in phase40_prereg.ENTRIES["approvals"]["derivation"]
+    # NON-VACUITY: one character changed fails the same equality.
+    for quote in (conditions, total):
+        changed = quote[:-1] + ("!" if quote[-1] != "!" else "?")
+        assert changed not in (
+            phase40_prereg.R3_CONDITIONS_RULING,
+            phase40_prereg.RECORD_TOTAL_RULING,
+        )
+
+
+def test_addendum_ruling_is_quoted_verbatim():
+    lines = _git("show", f"{_ADDENDUM_SHA}:{_LOG_PATH}").splitlines()
+    starts = [i for i, line in enumerate(lines) if line.startswith('**Rafael (verbatim):** "')]
+    assert len(starts) == 1, "meta-guard: the Addendum ruling line is not unique"
+    bullet = [lines[starts[0]].strip()]
+    for line in lines[starts[0] + 1 :]:
+        if not line.strip():
+            break
+        bullet.append(line.strip())
+    quote = _quote(" ".join(bullet))
+    assert len(quote.split()) > 5, "meta-guard: the Addendum ruling parsed too short"
+    assert quote == phase40_prereg.ADDENDUM_RULING
+    assert "torch.equal" in quote
+    assert phase40_prereg.approval_block()["addendum_ruling"] == quote
+
+
+# =================================================================================================
+# (5) NOTHING DERIVED IS TYPED (T-40-05).
+# =================================================================================================
+
+
+def test_no_derived_value_is_typed_in_the_prereg(tmp_path):
+    import phase19_erasure as pin
+    import phase19_floor
+
+    budget = _budget()
+    s = phase40_prereg.E2_S
+    seeds = {s, pin.N_TARGET_QUESTIONS, math.comb(s, 2), s * s, _d13_count(), 512}
+    adapter_off = _record("results/phase19_noise_floors.json")["dialogue_ppl_noise_floor"][
+        "seed_a"
+    ]["adapter_off"]
+    floats = {
+        phase40_prereg.E2_PROJECTION_HOURS,
+        phase40_prereg.E2_TOTAL_HOURS,
+        phase40_prereg.E2_STOP_HOURS,
+        budget["front_hours"]["E2"],
+        budget["total_hours"],
+        phase40_prereg.E2_E5_E6_TOTAL_HOURS,
+        phase40_prereg.E2_E5_E6_TOTAL_HOURS_E6_ACTUAL_GATE,
+        phase38_prereg.E5_PROJECTION_HOURS,
+        phase39_prereg.E6_PROJECTION_HOURS,
+        phase39_prereg.E6_PROJECTION_HOURS_ACTUAL_GATE,
+        phase19_floor.NONTARGET_NOISE_FLOOR,
+        phase35_prereg.e1_condition_b_margin(),
+        phase19_floor.DIALOGUE_PPL_NOISE_FLOOR,
+        adapter_off,
+    }
+    assert repr(adapter_off) == "4.573349214207799", "meta-guard: not the committed adapter-off"
+    assert all(type(f) is float for f in floats), "meta-guard: a census value is not a float"
+    assert all(type(i) is int for i in seeds), "meta-guard: a census value is not an int"
+    real = _ROOT / PREREG
+    before = real.read_bytes()
+    source = before.decode("utf-8")
+    assert _literal_failures(source, seeds, floats, set()) == []
+    plants = [
+        ("stop.py", f"\nX = {phase40_prereg.E2_STOP_HOURS!r}\n"),
+        ("s.py", f"\nS = {s!r}\n"),
+    ]
+    for name, line in plants:
+        planted = _planted(tmp_path, source, source + line, name)
+        assert _literal_failures(planted, seeds, floats, set()), name
+    assert real.read_bytes() == before
+
+
+# =================================================================================================
+# (6) ENTRIES: EXACTLY FOUR FIELDS, NO PROPOSER; THE PRIVATE HELPERS; THE PLAN-TIME LABELS.
+# =================================================================================================
+
+
+def _good_entry():
+    return {"value": 1, "derivation": "d", "kind": "derived", "source": "s"}
+
+
+def test_entries_have_exactly_four_fields_and_no_proposer(tmp_path):
+    assert phase40_prereg.ENTRY_FIELDS is phase35_prereg.ENTRY_FIELDS
+    assert phase40_prereg.KINDS is phase35_prereg.KINDS
+    for name, entry in phase40_prereg.ENTRIES.items():
+        assert set(entry) == {"value", "derivation", "kind", "source"}, name
+    assert phase40_prereg._prove_entries() is None
+
+    phase40_prereg._prove_entry("ok", _good_entry())
+    refused = (
+        {**_good_entry(), "proposer": "Rafael"},
+        {**_good_entry(), "adopted_by": "Rafael"},
+        {k: v for k, v in _good_entry().items() if k != "source"},
+        {**_good_entry(), "kind": "guess"},
+        {**_good_entry(), "derivation": ""},
+        {**_good_entry(), "value": phase40_prereg.FORBIDDEN_PHRASE},
+        [1],
+    )
+    for entry in refused:
+        with pytest.raises(SystemExit, match=r"^\[phase40_prereg\]"):
+            phase40_prereg._prove_entry("x", entry)
+
+    real = _ROOT / PREREG
+    before = real.read_bytes()
+    source = before.decode("utf-8")
+    entries = _entries_node(ast.parse(source))
+    assert entries is not None, "meta-guard: _ENTRIES not found, the walk would be vacuous"
+    assert _entry_string_failures(source) == []
+
+    kind_key, _ = _first_inner(entries, "kind")
+    planted_key = _insert_at(source, kind_key.lineno, kind_key.col_offset, '"proposer": "Rafael", ')
+    ast.parse(planted_key)
+    assert _entry_string_failures(_planted(tmp_path, source, planted_key, "key.py"))
+
+    _, derivation = _first_inner(entries, "derivation")
+    first = next(n for n in ast.walk(derivation) if isinstance(n, ast.Constant))
+    planted_phrase = _insert_at(
+        source, first.lineno, first.col_offset + 1, phase40_prereg.FORBIDDEN_PHRASE
+    )
+    ast.parse(planted_phrase)
+    assert _entry_string_failures(_planted(tmp_path, source, planted_phrase, "phrase.py"))
+    assert real.read_bytes() == before
+
+
+def test_prove_count_and_read():
+    with pytest.raises(SystemExit, match=r"^\[phase40_prereg\] x$"):
+        phase40_prereg._prove(False, "x")
+    assert phase40_prereg._prove(True, "x") is None
+    assert phase40_prereg._prove_count("n", 0) is None
+    for bad in (True, -1, 1.0):
+        with pytest.raises(SystemExit, match=r"^\[phase40_prereg\]"):
+            phase40_prereg._prove_count("n", bad)
+    read = phase40_prereg._read(phase40_prereg.BUDGET_RECORD)
+    assert isinstance(read, dict) and "unit_caps" in read
+
+
+_LABEL = "default taken at plan time, not yet confirmed by Rafael"
+# Keyed by ENTRY NAME: plan 04 moves each name to its confirmed form with a local edit.
+# seed_outcomes is not here: R-3 was ruled at 40-01, and its derivation cites "R-3".
+_UNCONFIRMED = {
+    "e2_noise_floor_estimator": "D-04",
+    "a2_pass": "NOISE-01",
+    "run_order": "D-15",
+    "record_layout": "D-15",
+}
+
+
+def test_preferences_are_labelled():
+    entries = phase40_prereg.ENTRIES
+    for name, d_id in _UNCONFIRMED.items():
+        derivation = entries[name]["derivation"]
+        assert d_id in derivation and _LABEL in derivation, name
+    labelled = {name for name, entry in entries.items() if _LABEL in entry["derivation"]}
+    assert labelled == set(_UNCONFIRMED)
+    assert "seed_outcomes" not in _UNCONFIRMED
+    assert "R-3" in entries["seed_outcomes"]["derivation"]
+
+
+# =================================================================================================
+# (7) IMPORTING THE PREREG OPENS NO CHECKPOINT; THE SLOT CENSUS, ZERO SKIPS, EVERY FUNCTION CALLED.
+# =================================================================================================
+
+
+def _opens_a_checkpoint(path, repo):
+    """True for a path under the repo's checkpoints/ or data/, or with a .pt / .safetensors
+    suffix. Repo-relative, never a substring test: torch's own torch/utils/data is not data/."""
+    if not isinstance(path, (str, os.PathLike)):
+        return False
+    resolved = pathlib.Path(path).resolve()
+    return (
+        resolved.is_relative_to(repo / "checkpoints")
+        or resolved.is_relative_to(repo / "data")
+        or resolved.suffix in (".pt", ".safetensors")
+    )
+
+
+_PROBE = """
+import json, os, pathlib, sys
+
+{predicate}
+
+_REPO = pathlib.Path(sys.argv[1]).resolve()
+_FLAGGED = []
+
+
+def _hook(event, args):
+    if event == "open" and args and _opens_a_checkpoint(args[0], _REPO):
+        _FLAGGED.append(os.fspath(args[0]))
+
+
+sys.addaudithook(_hook)
+sys.path[:0] = [str(_REPO / "scripts"), str(_REPO / "src")]
+import phase40_prereg
+
+imported = list(_FLAGGED)
+_FLAGGED.clear()
+planted = [_REPO / "checkpoints" / "planted", _REPO / "data" / "planted", *sys.argv[2:]]
+for path in planted:
+    try:
+        open(path, encoding="utf-8")
+    except FileNotFoundError:
+        pass
+print(json.dumps({{
+    "import_flagged": imported,
+    "safetensors_loaded": "safetensors" in sys.modules,
+    "e2_s": phase40_prereg.E2_S,
+    "seeds": list(phase40_prereg.SEEDS),
+    "planted": [os.fspath(p) for p in planted],
+    "planted_flagged": list(_FLAGGED),
+}}))
+"""
+
+
+def test_importing_the_prereg_opens_no_checkpoint(tmp_path):
+    """This file loads torch through seed_list() by design; an "open" audit hook watches the
+    import (now including the module-level phase38_prereg and phase39_prereg imports).
+
+    Blind spot: safetensors opens files in Rust without a Python "open" audit event, so a
+    safetensors read is invisible to the hook; the sys.modules leg covers it.
+    """
+    import torch.utils.data
+
+    pt, st = tmp_path / "planted.pt", tmp_path / "planted.safetensors"
+    script = _PROBE.format(predicate=inspect.getsource(_opens_a_checkpoint))
+    out = subprocess.run(
+        [sys.executable, "-c", script, str(_ROOT), str(pt), str(st)],
+        cwd=_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    result = json.loads(out.stdout.strip().splitlines()[-1])
+    assert result["import_flagged"] == []
+    assert result["safetensors_loaded"] is False
+    assert result["e2_s"] == 5
+    assert result["seeds"] == [1337, 2024, 1338, 2025, 1339]
+    # NON-VACUITY: one planted open per predicate branch, each flagged by the hook.
+    assert len(result["planted"]) == 4
+    assert result["planted_flagged"] == result["planted"]
+    repo = _ROOT.resolve()
+    assert _opens_a_checkpoint(repo / "checkpoints" / "planted", repo)
+    assert _opens_a_checkpoint(repo / "data" / "planted", repo)
+    assert _opens_a_checkpoint(pt, repo) and _opens_a_checkpoint(st, repo)
+    assert not _opens_a_checkpoint(3, repo)
+    # A site-packages torch/utils/data path is never flagged.
+    assert not _opens_a_checkpoint(pathlib.Path(torch.utils.data.__file__), repo)
+
+
+def test_phase40_scripts_pass_the_slot_census():
+    paths = sorted(_SCRIPTS.glob("phase40_*.py"))
+    assert paths, "meta-guard: no scripts/phase40_*.py, the census would be vacuous"
+    sources = [(p.relative_to(_ROOT).as_posix(), p.read_text(encoding="utf-8")) for p in paths]
+    assert _slot_census_failures(sources) == []
+
+
+def test_no_skips_in_this_file(tmp_path):
+    source = pathlib.Path(__file__).read_text(encoding="utf-8")
+    assert _skip_failures(source) == []
+    planted = source + '\n\ndef test_planted():\n    pytest.skip("x")\n'
+    assert _skip_failures(_planted(tmp_path, source, planted, "skip.py"))
+
+
+def test_census_every_phase40_prereg_function_has_a_cpu_test(tmp_path):
+    real = _ROOT / PREREG
+    before = real.read_bytes()
+    source = before.decode("utf-8")
+    test_source = pathlib.Path(__file__).read_text(encoding="utf-8")
+    defs = [n for n in ast.parse(source).body if isinstance(n, ast.FunctionDef)]
+    assert defs, "meta-guard: the prereg defines no function, the census would be vacuous"
+    assert _untested_functions("phase40_prereg", source, test_source) == []
+
+    planted = source + '\n\ndef planted_untested():\n    """Planted."""\n'
+    copied = _planted(tmp_path, source, planted, "untested.py")
+    assert _untested_functions("phase40_prereg", copied, test_source) == ["planted_untested"]
+    assert real.read_bytes() == before
