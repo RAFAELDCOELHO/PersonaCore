@@ -1603,6 +1603,12 @@ def test_ast_per_token_values_never_feed_a_rank_or_event(tmp_path):
     assert offending == set()
     assert "scripts/phase39_ctx.py:run" in rank_callers  # non-vacuity: gate_reading
     assert rank_callers  # and the prereg's doors
+    # Plan 06 (W1): the real readers, by name — never among the offenders.
+    for reader in ("_descriptive_block", "_suffix_check"):
+        assert f"scripts/phase39_ctx.py:{reader}" in readers, reader
+        assert f"scripts/phase39_ctx.py:{reader}" not in offending, reader
+    for caller in ("rank_rows", "_rank_block", "_classified"):
+        assert f"scripts/phase39_ctx.py:{caller}" in rank_callers, caller
     source = _ctx_source()
     for name, plant, reader in (
         (
@@ -1824,3 +1830,327 @@ def test_crosscheck_suffix_equality_on_a_cpu_model(tmp_path, fake_lm, tok, entri
     assert cpu["suffix_equality"] == {"compared": 27, "equal": 27, "unequal": []}
     assert set(cpu["rq"]["k0"]) == {str(i) for i in in_slot}
     assert set(cpu["gate"]["k0"]) == {"pet_name"}
+
+
+# =================================================================================================
+# (8) Plan 06 Task 2: the per-cell blocks (R_a, R_q, G_a, G_q), the classification through the
+# prereg's one cell door (39-06 amendment: cells / classify_cell / class_counts / tie_audit /
+# baseline_table), and the descriptive blocks. Every number recomputed here through the prereg.
+# =================================================================================================
+
+# k0 (the reference), two prefix cells, M2 and adapter-off; person_name holds the committed k8 G_q
+# exact margin tie.
+_SCORED_SHAPE = {
+    "readings": ("k0", "k8", "k78", "M2", "adapter_off"),
+    "slots": ("person_name", "pet_name"),
+}
+
+
+@pytest.fixture
+def scored_rig(crosscheck_rig):
+    """A SCORED fake run on _SCORED_SHAPE plus its CPU cross-check, on the tmp rig."""
+    rig = crosscheck_rig
+    assert phase39_ctx.run(root=rig.root, **rig.paths, **_SCORED_SHAPE) == "SCORED"
+    phase39_ctx.crosscheck(root=rig.root, device="cpu")
+    rig.run = _sidecar(phase39_ctx.run_sidecar(rig.root))
+    rig.gate = _sidecar(phase39_ctx.gate_sidecar(rig.root))
+    return rig
+
+
+def _slot_questions(blob, slot):
+    return sorted(
+        (q for q in blob["questions"].values() if q["slot"] == slot), key=lambda q: q["index"]
+    )
+
+
+def _fact_id(slot):
+    return next(f.id for f in phase14_factset.LOCKED_FACTS if f.slot == slot)
+
+
+def test_readings_block_recomputes_through_the_prereg(scored_rig):
+    rig = scored_rig
+    K = phase39_prereg.K
+    committed = phase38_prereg.committed_gate_ranks()
+    blocks = phase39_ctx._reading_blocks(rig.root, rig.run, rig.gate)
+    assert list(blocks) == list(_SCORED_SHAPE["readings"])
+    values = phase39_ctx._cell_values(blocks)
+    for reading in _SCORED_SHAPE["readings"]:
+        blob = _sidecar(phase39_ctx.reading_sidecar(rig.root, reading))
+        draws = phase39_ctx._a2_draws(reading)
+        assert list(blocks[reading]) == list(_SCORED_SHAPE["slots"])
+        for slot in _SCORED_SHAPE["slots"]:
+            block, taught, fact_id = blocks[reading][slot], TAUGHT[slot], _fact_id(slot)
+            assert (block["taught"], block["fact_id"]) == (taught, fact_id)
+            assert block["R_a"] == committed[reading][slot]["rank"]
+            assert block["R_a"] == rig.gate["rows"][reading][slot]["rank"]
+            questions = _slot_questions(blob, slot)
+            assert len(questions) == phase39_prereg.N_QUESTIONS
+            ranks = [
+                phase38_prereg.rank_in_prefix(
+                    {c: r["nll_mean"] for c, r in q["references"].items()},
+                    taught,
+                    [c for c in q["references"] if c != taught],
+                )
+                for q in questions
+            ]
+            rank = block["rank"]
+            assert rank["indices"] == [q["index"] for q in questions]
+            assert rank["ranks"] == ranks
+            assert rank["n1"] == phase39_prereg.n1(ranks)
+            assert rank["median"] == phase39_prereg.median_rank(ranks)
+            nll = {
+                c: [q["references"][c]["nll_mean"] for q in questions]
+                for c in questions[0]["references"]
+            }
+            assert rank["rank_of_mean_nll"] == phase39_prereg.rank_of_mean_nll(
+                nll, taught, [c for c in nll if c != taught]
+            )
+            # D-08: G_a re-derived from the anchor record the block carries.
+            anchor = blob["anchor"][slot]
+            assert block["anchor_record"] == anchor
+            hits = phase18_extraction.score_records([anchor], {fact_id: taught})[0]["hits"]
+            g_a = block["generation"]["G_a"]
+            assert g_a["hits"] == hits and g_a["h"] == sum(hits)
+            assert g_a["unit"] == phase39_prereg.unit_of(hits) == int(reading in _HIT_READINGS)
+            assert g_a["rate"] == phase39_prereg.draw_rate(sum(hits), K)
+            # G_q: the committed A2 draws, the count proved equal to gate 2.
+            per_question = phase39_ctx._a2_question_hits(draws, fact_id, taught)
+            assert len(per_question) == phase39_prereg.N_QUESTIONS
+            g_q = block["generation"]["G_q"]
+            assert g_q["per_question"] == per_question
+            assert g_q["count"] == rig.run["gate2"]["rows"][reading][slot]["count"]
+            assert g_q["count"] == sum(v > 0 for v in per_question.values())
+            assert g_q["total"] == sum(per_question.values())
+            assert g_q["rate"] == phase39_prereg.draw_rate(g_q["total"], len(per_question) * K)
+            assert values[reading][slot] == {
+                "R_a": block["R_a"],
+                "R_q": rank["n1"],
+                "G_a": g_a["unit"],
+                "G_q": g_q["count"],
+            }
+
+
+def test_readings_a2_draws_load_once_per_reading(scored_rig, monkeypatch):
+    rig = scored_rig
+    calls = []
+    real = phase39_ctx._a2_draws
+    monkeypatch.setattr(
+        phase39_ctx, "_a2_draws", lambda reading: calls.append(reading) or real(reading)
+    )
+    phase39_ctx._reading_blocks(rig.root, rig.run, rig.gate)
+    assert calls == list(_SCORED_SHAPE["readings"])  # I2: once per reading, never per slot
+    rows = real("k8")
+    assert len(rows) == phase39_prereg.N_ENTRIES and {r["family"] for r in rows} == {"A2"}
+
+
+def _row(nll, **extra):
+    return {"nll_mean": nll, "nll_sum": nll * 2, "per_token": [nll, nll], **extra}
+
+
+def test_readings_helpers_called_directly():
+    taught = "T"
+    questions = [
+        {
+            "index": i,
+            "references": {"T": _row(t), "a": _row(a), "b": _row(b)},
+            "minted": {"m": _row(m)},
+        }
+        for i, (t, a, b, m) in enumerate(
+            ((1.0, 2.0, 3.0, 0.5), (2.5, 2.0, 3.0, 4.0), (1.0, 0.5, 0.7, 9.0))
+        )
+    ]
+    block = phase39_ctx._rank_block(questions, taught)
+    ranks = [1, 2, 3]
+    assert block["indices"] == [0, 1, 2] and block["ranks"] == ranks
+    assert block["n1"] == phase39_prereg.n1(ranks) == 1
+    assert block["median"] == phase39_prereg.median_rank(ranks) == 2
+    nll = {"T": [1.0, 2.5, 1.0], "a": [2.0, 2.0, 0.5], "b": [3.0, 3.0, 0.7]}
+    assert block["rank_of_mean_nll"] == phase39_prereg.rank_of_mean_nll(nll, "T", ["a", "b"])
+    assert block["minted"] == {"ranks": [2, 1, 1], "n1": 2, "median": 1}
+    K = phase39_prereg.K
+    slot, fact_id = "pet_name", _fact_id("pet_name")
+    anchor = {
+        "family": "anchor",
+        "dose": None,
+        "fact_id": fact_id,
+        "slot": slot,
+        "tier": None,
+        "arm": "k8",
+        "seed_index": 1,
+        "prefix_text": None,
+        "completions": ["no"] * (K - 2) + [f"it is {TAUGHT[slot]}"] * 2,
+        "stopped": [True] * K,
+    }
+    a2_hits = {"core_taught/0": 3, "core_taught/1": 0, "core_held_out/0": 1}
+    generation = phase39_ctx._generation_block(anchor, a2_hits, TAUGHT[slot], fact_id, 2)
+    hits = [False] * (K - 2) + [True] * 2
+    assert generation["G_a"] == {
+        "hits": hits,
+        "unit": phase39_prereg.unit_of(hits),
+        "h": 2,
+        "rate": phase39_prereg.draw_rate(2, K),
+    }
+    assert generation["G_q"] == {
+        "count": 2,
+        "per_question": a2_hits,
+        "total": 4,
+        "rate": phase39_prereg.draw_rate(4, 3 * K),
+    }
+    with pytest.raises(SystemExit, match=r"^\[phase39_ctx\] .*gate 2"):
+        phase39_ctx._generation_block(anchor, a2_hits, TAUGHT[slot], fact_id, 3)
+
+
+def _values(**by_reading):
+    return {
+        reading: {"pet_name": dict(zip(("R_a", "R_q", "G_a", "G_q"), v))}
+        for reading, v in by_reading.items()
+    }
+
+
+def test_classify_helpers_called_directly():
+    values = _values(k0=(1, 20, 1, 21), k8=(1, 3, 0, 13))
+    out = phase39_ctx._decomposition(values, ("pet_name",))
+    assert out["classification_reason"] is None
+    for event in phase39_prereg.EVENTS:
+        cell = phase39_prereg.cell_spec(event, "k8", "pet_name")
+        expected = [
+            phase39_prereg.classify_cell(cell, values["k8"]["pet_name"], values["k0"]["pet_name"])
+        ]
+        assert out["classification"][event]["cells"] == expected
+        assert out["classification"][event]["counts"] == phase39_prereg.class_counts(expected)
+    damage = out["classification"]["damage"]["cells"]
+    assert out["drop_formula_audit"] == phase39_prereg.tie_audit(damage)
+    assert out["drop_formula_audit_reason"] is None
+    assert out["baseline"] is None
+    assert out["baseline_reason"] == "partial slots: baseline_table needs every slot"
+    # adapter-off is a reading but never a cell (D-11 i).
+    off = phase39_ctx._decomposition({**values, **_values(adapter_off=(5, 0, 0, 0))}, ("pet_name",))
+    assert off["classification"] == out["classification"]
+    full = {r: {slot: values[r]["pet_name"] for slot in SLOTS} for r in values}
+    whole = phase39_ctx._decomposition(full, SLOTS)
+    assert whole["baseline"] == phase39_prereg.baseline_table(full["k0"])
+    assert whole["baseline_reason"] is None
+    assert len(whole["classification"]["collapse"]["cells"]) == len(SLOTS)
+
+
+def test_classify_needs_k0():
+    out = phase39_ctx._decomposition(_values(k8=(1, 3, 0, 13), k78=(2, 0, 0, 0)), ("pet_name",))
+    for key in ("classification", "drop_formula_audit", "baseline"):
+        assert out[key] is None
+        assert out[f"{key}_reason"] == "k0 not scored"
+    alone = phase39_ctx._decomposition(_values(k0=(1, 20, 1, 21)), ("pet_name",))
+    assert alone["classification"] is None and alone["drop_formula_audit"] is None
+    assert alone["classification_reason"].startswith("no cell reading scored")
+
+
+def test_classify_on_the_committed_counts():
+    """Ruling i through the driver: committed R_a x committed G_q over all 48 cells per event (R_q
+    and G_a held at their k0 values so they decide nothing): the published disagreement counts
+    and the G_q tie audit reported to Rafael before 'reviewed'."""
+    ranks = phase38_prereg.committed_gate_ranks()
+    counts = phase39_prereg.committed_a2_counts()
+    n = phase39_prereg.N_QUESTIONS
+    values = {
+        reading: {
+            slot: {
+                "R_a": ranks[reading][slot]["rank"],
+                "R_q": n,
+                "G_a": 1,
+                "G_q": counts[reading][slot],
+            }
+            for slot in SLOTS
+        }
+        for reading in phase39_prereg.CTX02_READINGS
+    }
+    out = phase39_ctx._decomposition(values, SLOTS)
+    measured = {}
+    for event in phase39_prereg.EVENTS:
+        cells = out["classification"][event]["cells"]
+        assert [(c["reading"], c["slot"]) for c in cells] == [
+            (c["reading"], c["slot"]) for c in phase39_prereg.cells(event)
+        ]
+        assert len(cells) == 48
+        for cell in cells:
+            door = {f: cell[f] for f in ("event", "reading", "slot", "n", "reference")}
+            assert cell == phase39_prereg.classify_cell(
+                door, values[cell["reading"]][cell["slot"]], values["k0"][cell["slot"]]
+            )
+        counts_ = out["classification"][event]["counts"]
+        assert counts_ == phase39_prereg.class_counts(cells)
+        measured[event] = tuple(
+            counts_[part][key]
+            for part in ("combined", "prefixes", "M2")
+            for key in ("disagreement_cells", "reverse_disagreement_cells", "undecided_cells")
+        )
+    assert measured == {
+        "collapse": (9, 0, 0, 9, 0, 0, 0, 0, 0),
+        "damage": (24, 0, 0, 24, 0, 0, 0, 0, 0),
+    }
+    audit = out["drop_formula_audit"]
+    assert audit == phase39_prereg.tie_audit(out["classification"]["damage"]["cells"])
+    assert audit["criterion"] is False
+    assert audit["flips"] == []
+    assert audit["exact_ties"] == [["k8", "person_name", "G_q"]]
+
+
+def test_predicted_and_extras_are_descriptive(scored_rig):
+    rig = scored_rig
+    K = phase39_prereg.K
+    blocks = phase39_ctx._reading_blocks(rig.root, rig.run, rig.gate)
+    rank_record = _read(phase38_prereg.RANK_RECORD)["readings"]
+    minted_ii = phase39_ctx._minted_ii(blocks)
+    for reading in _SCORED_SHAPE["readings"]:
+        blob = _sidecar(phase39_ctx.reading_sidecar(rig.root, reading))
+        for slot in _SCORED_SHAPE["slots"]:
+            block, taught = blocks[reading][slot], TAUGHT[slot]
+            cells = rig.gate["cells"][reading][slot]
+            questions = _slot_questions(blob, slot)
+            per_question = block["generation"]["G_q"]["per_question"]
+            d = block["descriptive"]
+            predicted = d["predicted"]
+            assert predicted["a"] == phase39_prereg.predicted_hit_rate(
+                cells[taught]["pinned"]["nll_sum"]
+            )
+            assert predicted["a_observed"] == block["generation"]["G_a"]["h"] / K
+            b = [
+                {
+                    "index": q["index"],
+                    "predicted": phase39_prereg.predicted_hit_rate(
+                        q["references"][taught]["suffix_nll_sum"]
+                    ),
+                    "observed": per_question[f"{q['tier']}/{q['seed_index']}"] / K,
+                }
+                for q in questions
+            ]
+            assert predicted["b_per_question"] == b
+            assert predicted["b_mean_predicted"] == math.fsum(x["predicted"] for x in b) / len(b)
+            assert predicted["b_observed"] == sum(per_question.values()) / (len(per_question) * K)
+            assert "D-17" in predicted["caveat"] and "temperature, top-p" in predicted["caveat"]
+            assert (
+                "D-29" in predicted["conditioning"]
+                and "prefix_text + completion" in predicted["conditioning"]
+            )
+            # D-23a: per-token values of every candidate in both contexts.
+            assert d["per_token"]["anchor"] == {
+                c: cell["copy"]["per_token"] for c, cell in cells.items()
+            }
+            assert set(d["per_token"]["anchor"]) == set(phase18_extraction.reference_set_for(slot))
+            assert d["per_token"]["question"] == {
+                str(q["index"]): {
+                    c: row["per_token"] for c, row in {**q["references"], **q["minted"]}.items()
+                }
+                for q in questions
+            }
+            # D-11 (ii): the minted ranks beside the committed anchor-side rank at |R| = 8.
+            size = phase39_prereg.MINTED_SET_SIZE
+            assert minted_ii[reading][slot] == {
+                **block["rank"]["minted"],
+                "size": size,
+                "anchor_side_rank": rank_record[reading][slot]["curve"][str(size)]["rank"],
+            }
+    # D-11 (i): adapter-off carries the four readings and enters no cell.
+    assert set(blocks["adapter_off"]["pet_name"]) >= {"R_a", "rank", "generation"}
+    out = phase39_ctx._decomposition(phase39_ctx._cell_values(blocks), _SCORED_SHAPE["slots"])
+    for event in phase39_prereg.EVENTS:
+        readings = {c["reading"] for c in out["classification"][event]["cells"]}
+        assert readings == {"k8", "k78", "M2"}

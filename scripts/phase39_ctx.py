@@ -37,6 +37,7 @@ import datetime
 import gc
 import hashlib
 import json
+import math
 import pathlib
 import subprocess
 import sys
@@ -976,4 +977,251 @@ def crosscheck(*, root=None, device="cpu"):
         },
     )
     print(f"CROSSCHECK DONE {out}", flush=True)
+    return out
+
+
+# D-17 / D-29: the caveats every predicted hit rate carries (descriptive, never a criterion).
+_D17_CAVEAT = (
+    "D-17: descriptive, never a criterion; temperature, top-p and the hit rule separate the "
+    "predicted hit rate from the observed one"
+)
+_D29_CONDITIONING = (
+    "D-29 / D-23c: the (b) prediction uses the taught suffix sum after the injected prefix, so it "
+    "is conditioned on that prefix exactly as G_q's hit is scored on prefix_text + completion"
+)
+
+
+def _a2_draws(reading):
+    """The committed A2 draw rows of ``reading`` (preflight's verify_a2_records proved the bytes);
+    loaded once per reading and shared by its slots (I2)."""
+    rows = _json(_prereg().A2_RECORDS[reading]["path"])["draws"]
+    return [row for row in rows if row["family"] == "A2"]
+
+
+def _a2_question_hits(draws, fact_id, taught):
+    """{"tier/seed_index": hits} of ``fact_id``'s committed A2 questions through score_records
+    (A2 on prefix_text + completion). No file I/O."""
+    import phase18_extraction
+
+    K = _prereg().K
+    rows = [row for row in draws if row["fact_id"] == fact_id]
+    out = {}
+    for row in phase18_extraction.score_records(rows, {fact_id: taught}):
+        key = f"{row['tier']}/{row['seed_index']}"
+        _prove(len(row["hits"]) == K, f"A2 {fact_id} {key}: {len(row['hits'])} draws, not K = {K}")
+        _prove(key not in out, f"A2 {fact_id}: two rows for {key}")
+        out[key] = sum(row["hits"])
+    return out
+
+
+def _rank_block(questions, taught):
+    """R_q (D-10 / D-24) and the (ii) ranks (D-11 ii) over one slot's questions in entry order;
+    nll_mean only (D-30 condition 2)."""
+    prereg = _prereg()
+    ranks = [rank_rows(q["references"], taught) for q in questions]
+    minted = [
+        rank_rows({taught: q["references"][taught], **q["minted"]}, taught) for q in questions
+    ]
+    candidates = list(questions[0]["references"])
+    nll = {c: [q["references"][c]["nll_mean"] for q in questions] for c in candidates}
+    return {
+        "indices": [q["index"] for q in questions],
+        "ranks": ranks,
+        "n1": prereg.n1(ranks),
+        "median": prereg.median_rank(ranks),
+        "rank_of_mean_nll": prereg.rank_of_mean_nll(
+            nll, taught, [c for c in candidates if c != taught]
+        ),
+        "minted": {"ranks": minted, "n1": prereg.n1(minted), "median": prereg.median_rank(minted)},
+    }
+
+
+def _generation_block(anchor_record, a2_hits, taught, fact_id, g2_count):
+    """G_a from the anchor record (D-06 / D-08: re-derivable from the record) and G_q from the
+    committed A2 draws, its count proved equal to gate 2's (D-07 rates, descriptive)."""
+    import phase18_extraction
+
+    prereg = _prereg()
+    hits = phase18_extraction.score_records([anchor_record], {fact_id: taught})[0]["hits"]
+    answered = sum(v > 0 for v in a2_hits.values())
+    _prove(
+        g2_count == answered,
+        f"{fact_id}: gate 2 counts {g2_count} answered, the A2 draws {answered} (D-19)",
+    )
+    total = sum(a2_hits.values())
+    return {
+        "G_a": {
+            "hits": hits,
+            "unit": prereg.unit_of(hits),
+            "h": sum(hits),
+            "rate": prereg.draw_rate(sum(hits), prereg.K),
+        },
+        "G_q": {
+            "count": g2_count,
+            "per_question": dict(a2_hits),
+            "total": total,
+            "rate": prereg.draw_rate(total, len(a2_hits) * prereg.K),
+        },
+    }
+
+
+def _descriptive_block(gate_cells_slot, questions, a2_hits, taught, h):
+    """D-17 / D-23a / D-23c / D-29: the predicted vs observed hit rates and the per-token values of
+    every candidate in both contexts. Descriptive: calls no rank, status or class function."""
+    prereg = _prereg()
+    K = prereg.K
+    b = [
+        {
+            "index": q["index"],
+            "predicted": prereg.predicted_hit_rate(q["references"][taught]["suffix_nll_sum"]),
+            "observed": a2_hits[f"{q['tier']}/{q['seed_index']}"] / K,
+        }
+        for q in questions
+    ]
+    return {
+        "predicted": {
+            "a": prereg.predicted_hit_rate(gate_cells_slot[taught]["pinned"]["nll_sum"]),
+            "a_observed": h / K,
+            "b_per_question": b,
+            "b_mean_predicted": math.fsum(x["predicted"] for x in b) / len(b),
+            "b_observed": sum(a2_hits.values()) / (len(a2_hits) * K),
+            "caveat": _D17_CAVEAT,
+            "conditioning": _D29_CONDITIONING,
+        },
+        "per_token": {
+            "anchor": {c: cell["copy"]["per_token"] for c, cell in gate_cells_slot.items()},
+            "question": {
+                str(q["index"]): {
+                    c: row["per_token"] for c, row in {**q["references"], **q["minted"]}.items()
+                }
+                for q in questions
+            },
+        },
+    }
+
+
+def _reading_blocks(root, run, gate):
+    """{reading: {slot: block}} from the reading sidecars, the committed A2 draws (one load per
+    reading) and gate 2's counts. The sidecar digests are build_record's to verify."""
+    prereg = _prereg()
+    taught = _taught()
+    blocks = {}
+    for reading in run["readings"]:
+        blob = _load(reading_sidecar(root, reading))
+        draws = _a2_draws(reading)
+        blocks[reading] = {}
+        for slot in run["slots"]:
+            questions = sorted(
+                (q for q in blob["questions"].values() if q["slot"] == slot),
+                key=lambda q: q["index"],
+            )
+            anchor = blob["anchor"][slot]
+            hits = _a2_question_hits(draws, anchor["fact_id"], taught[slot])
+            g2 = run["gate2"]["rows"][reading][slot]
+            _prove(
+                len(questions) == len(hits) == g2["n_questions"] == prereg.N_QUESTIONS
+                and {f"{q['tier']}/{q['seed_index']}" for q in questions} == set(hits),
+                f"{reading}/{slot}: the scored questions are not the committed A2 questions",
+            )
+            generation = _generation_block(
+                anchor, hits, taught[slot], anchor["fact_id"], g2["count"]
+            )
+            blocks[reading][slot] = {
+                "taught": taught[slot],
+                "fact_id": anchor["fact_id"],
+                "R_a": gate["rows"][reading][slot]["rank"],
+                "rank": _rank_block(questions, taught[slot]),
+                "generation": generation,
+                "descriptive": _descriptive_block(
+                    gate["cells"][reading][slot],
+                    questions,
+                    hits,
+                    taught[slot],
+                    generation["G_a"]["h"],
+                ),
+                "anchor_record": anchor,
+            }
+    return blocks
+
+
+def _cell_values(blocks):
+    """{reading: {slot: {R_a, R_q, G_a, G_q}}}: the rank, n1, the unit and the answered count."""
+    return {
+        reading: {
+            slot: {
+                "R_a": block["R_a"],
+                "R_q": block["rank"]["n1"],
+                "G_a": block["generation"]["G_a"]["unit"],
+                "G_q": block["generation"]["G_q"]["count"],
+            }
+            for slot, block in by_slot.items()
+        }
+        for reading, by_slot in blocks.items()
+    }
+
+
+def _minted_ii(blocks):
+    """D-11 (ii) / D-26: the minted ranks under the question beside the committed anchor-side rank
+    at |R| = MINTED_SET_SIZE (results/phase38_rank.json). Descriptive."""
+    prereg = _prereg()
+    size = prereg.MINTED_SET_SIZE
+    committed = _json(phase38_prereg.RANK_RECORD)["readings"]
+    return {
+        reading: {
+            slot: {
+                **block["rank"]["minted"],
+                "size": size,
+                "anchor_side_rank": committed[reading][slot]["curve"][str(size)]["rank"],
+            }
+            for slot, block in by_slot.items()
+        }
+        for reading, by_slot in blocks.items()
+    }
+
+
+def _classified(values, event):
+    """Ruling f / WR-02: the door's cells of ``event`` (CELL_READINGS x SLOTS, filtered to the
+    scored readings and slots), each classified against the k0 values of its slot."""
+    prereg = _prereg()
+    k0 = values[prereg.REFERENCE_READING]
+    return [
+        prereg.classify_cell(cell, values[cell["reading"]][cell["slot"]], k0[cell["slot"]])
+        for cell in prereg.cells(event)
+        if cell["reading"] in values and cell["slot"] in values[cell["reading"]]
+    ]
+
+
+def _decomposition(values, slots):
+    """D-15 / D-16 / rulings f, g, j: the classification per event with class_counts, the D-33
+    tie audit (tie_audit over the damage cells) and the k0 baseline table, each None with its
+    reason when it cannot be computed (k0 not scored, no cell reading, a partial slot set)."""
+    prereg = _prereg()
+    out = dict.fromkeys(
+        (
+            "classification",
+            "classification_reason",
+            "drop_formula_audit",
+            "drop_formula_audit_reason",
+            "baseline",
+            "baseline_reason",
+        )
+    )
+    if prereg.REFERENCE_READING not in values:
+        for key in ("classification", "drop_formula_audit", "baseline"):
+            out[f"{key}_reason"] = "k0 not scored"
+        return out
+    if set(slots) == set(prereg.SLOTS):
+        out["baseline"] = prereg.baseline_table(values[prereg.REFERENCE_READING])
+    else:
+        out["baseline_reason"] = "partial slots: baseline_table needs every slot"
+    classified = {event: _classified(values, event) for event in prereg.EVENTS}
+    if not classified[prereg.EVENTS[0]]:
+        reason = f"no cell reading scored: the cells are {list(prereg.CELL_READINGS)}"
+        out["classification_reason"] = out["drop_formula_audit_reason"] = reason
+        return out
+    out["classification"] = {
+        event: {"cells": cells, "counts": prereg.class_counts(cells)}
+        for event, cells in classified.items()
+    }
+    out["drop_formula_audit"] = prereg.tie_audit(classified["damage"])
     return out
