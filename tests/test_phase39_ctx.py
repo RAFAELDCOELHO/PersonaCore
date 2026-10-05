@@ -761,7 +761,9 @@ def _refuse_gate2(rig, monkeypatch):
 
 
 _REFUSALS = [
-    *((_plant_output(i), r"exists: the E6 scoring has already run") for i in range(12)),
+    *((_plant_output(i), r"exists: the E6 scoring has already run") for i in range(2)),
+    # WR-01 (39-REVIEW-3): sidecars with no run sidecar and no record are a crashed attempt's.
+    *((_plant_output(i), r"partial sidecars from a crashed attempt") for i in range(2, 12)),
     (_refuse_dirty, r"dirty tree"),
     (_refuse_unknown_sha, r"could not read HEAD"),
     (_refuse_untracked_input, r"results/none\.json is not tracked"),
@@ -1174,8 +1176,16 @@ def test_a_crash_mid_scoring_leaves_an_open_start_that_reconcile_closes(run_rig)
     for reading, path in landed.items():  # intact after the crash and the reconcile
         assert phase39_ctx._sha256(path) == digests[reading]
         assert len(_sidecar(path)["questions"]) == 216
-    with pytest.raises(SystemExit, match=r"phase39_ctx_gate\.json exists"):
+    # WR-01 (39-REVIEW-3): the refusal names every partial sidecar as kept evidence and points at
+    # crash rule (ii); it never says the scoring has run.
+    with pytest.raises(SystemExit, match=r"^\[phase39_ctx\] partial sidecars") as refused:
         phase39_ctx.preflight(root=rig.root, ledger_path=rig.paths["ledger_path"])
+    message = str(refused.value)
+    assert "already run" not in message
+    for path in (phase39_ctx.gate_sidecar(rig.root), *landed.values()):
+        assert path.name in message
+    for words in ("root-cause evidence", "never reused", "crash rule (ii)", "approved"):
+        assert words in message, words
     assert _lines(rig) == reconciled
 
 

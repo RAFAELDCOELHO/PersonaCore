@@ -597,8 +597,19 @@ def preflight(*, root=None, ledger_path=None, device=None, readings=None, slots=
             f"{rehearsal_identity_path()} is malformed: the disclosure would fail at emit, after "
             "the MPS hours (38-REVIEW DR-03)",
         )
-    for path in outputs(root):
-        _prove(not path.exists(), f"{path} exists: the E6 scoring has already run")
+    present = [path for path in outputs(root) if path.exists()]
+    # 39-REVIEW-3 WR-01: sidecars with no run sidecar and no record are a crashed attempt's.
+    _prove(
+        not present or run_sidecar(root).exists() or (root / prereg.CTX_RECORD).exists(),
+        "partial sidecars from a crashed attempt, with no run sidecar: "
+        f"{[path.name for path in present]} in {root / 'data'}. They are root-cause evidence: "
+        "keep them; they are never reused "
+        "(nothing resumes from them). 39-08 crash rule (ii): reconcile the ledger, move them out "
+        "of data/ into a kept evidence directory, write the root-cause note; a new attempt needs "
+        "Rafael's approved",
+    )
+    for path in present:
+        _prove(False, f"{path} exists: the E6 scoring has already run")
     _prove(
         RUN_ID not in phase36_ledger.open_runs(phase36_ledger.read_ledger(ledger_path)),
         f"the ledger holds an open attempt for {RUN_ID}: end it, or reconcile it once the run is "
@@ -837,7 +848,8 @@ def run(
                             ),
                         }
                     del model, tok, forbid  # 38-REVIEW DI-04
-                # Write-once BEFORE the next reading: a crash keeps every reading already scored.
+                # Write-once BEFORE the next reading: a crash keeps every reading already scored
+                # as evidence (nothing resumes from it; 39-REVIEW-3 WR-01).
                 _write_once(
                     reading_sidecar(root, reading),
                     {
