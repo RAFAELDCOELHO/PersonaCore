@@ -456,7 +456,10 @@ def test_anchor_draws_dispatch_the_anchor_ids_at_the_d28_index(anchor_rig, tok):
     K = phase39_prereg.K
     for slot in ("house_number", "person_name"):  # one slot alone keeps its LOCKED_FACTS index
         anchor_rig.slot = slot
-        record = phase39_ctx.anchor_draws("model", tok, "cpu", "forbid", slot, "k8")
+        state = {"shape": None, "draw_index": 7}
+        record = phase39_ctx.anchor_draws("model", tok, "cpu", "forbid", slot, "k8", state=state)
+        # 39-REVIEW-3 IN-01: the heartbeat names the slot being drawn, with no stale draw index.
+        assert state == {"shape": slot, "draw_index": None}
         ids = phase39_ctx.anchor_ids(tok, slot)
         prompt_ids, index, kwargs = anchor_rig.draws[-1]
         assert prompt_ids == ids
@@ -495,7 +498,7 @@ def test_anchor_draws_guard_runs_before_any_draw(anchor_rig, tok, monkeypatch):
 
     monkeypatch.setattr(phase14_recall, "assert_no_value_in_prompt", leak)
     with pytest.raises(SystemExit, match="leak"):
-        phase39_ctx.anchor_draws("model", tok, "cpu", "forbid", "street", "k0")
+        phase39_ctx.anchor_draws("model", tok, "cpu", "forbid", "street", "k0", state={})
     assert anchor_rig.draws == []
 
 
@@ -503,7 +506,7 @@ def test_anchor_draws_refuse_a_wrong_forbid_mask(anchor_rig, tok):
     anchor_rig.slot = "street"
     anchor_rig.digest = "0" * 64
     with pytest.raises(SystemExit, match=r"^\[phase39_ctx\] .*forbid"):
-        phase39_ctx.anchor_draws("model", tok, "cpu", "forbid", "street", "k0")
+        phase39_ctx.anchor_draws("model", tok, "cpu", "forbid", "street", "k0", state={})
     assert anchor_rig.draws == [] and anchor_rig.guards == []
 
 
@@ -516,6 +519,7 @@ def test_gate_cells_mark_bitwise_equality(fake_lm, tok, monkeypatch, capsys):
         references = list(phase18_extraction.reference_set_for(slot))
         assert list(cells) == references
         assert state["draw_index"] == len(references) - 1
+        assert state["shape"] == slot  # 39-REVIEW-3 IN-01
         for value, cell in cells.items():
             assert cell["equal"] is True, (slot, value)
             assert set(cell["pinned"]) == {"n_scored", "nll_sum", "nll_mean"}
@@ -562,6 +566,8 @@ def test_question_scoring_uses_the_guarded_span(fake_lm, tok, entries, monkeypat
         )
         context = phase18_extraction._guarded_span(entry)
         assert list(rows) == references and len(calls) == len(references)
+        # 39-REVIEW-3 IN-01: the heartbeat names the question being scored.
+        assert state["shape"] == f"{slot}/{entry['tier']}/{entry['seed_index']}"
         for (ctx, value_ids, suffix_from), candidate in zip(calls, references, strict=True):
             assert ctx == context
             assert value_ids == list(tok.encode(candidate))
@@ -2756,9 +2762,10 @@ def test_render_report_renders_the_scored_record(scored_rig):
             str(row["equal"]),
         ]
     equality = record["gate"]["copy_equality"]
+    # 39-REVIEW-3 IN-03: candidate cells, never confused with the (reading, slot) gate rows.
     assert (
-        f"cells compared {equality['cells_compared']}, cells equal {equality['cells_equal']}"
-        in gate1
+        f"gate candidate cells compared {equality['cells_compared']}, equal "
+        f"{equality['cells_equal']}" in gate1
     )
     assert record["context_b_instrument"] in gate1
     # Gate 2: every committed row, the WR-01 independent flag on the target row.
@@ -2880,6 +2887,8 @@ def test_render_report_renders_the_scored_record(scored_rig):
     # Rates, prediction, adapter-off, (ii), CPU cross-check.
     rates = _section(text, _SECTIONS[12])
     assert "1-vs-27" in rates and "clustering ignored" in rates
+    unit = record["readings"]["k0"]["pet_name"]["generation"]["G_a"]["rate"]["unit"]
+    assert f"Per-draw rate unit: {unit};" in rates and "Unit: " not in rates  # IN-03
     (rate_rows,) = _tables(rates)
     for r in rate_rows:
         rate = record["readings"][r[0]][r[1]]["generation"]["G_q"]["rate"]
@@ -2905,6 +2914,7 @@ def test_render_report_renders_the_scored_record(scored_rig):
     cpu = _section(text, _SECTIONS[16])
     check = record["cpu_crosscheck"]
     assert f"{check['rq_differing']} of {check['rq_cells']}" in cpu
+    assert f"{check['gate_differing']} of {check['gate_cells']} gate rows (reading x slot)" in cpu
     suffix = check["suffix_equality"]
     assert f"{suffix['equal']} of {suffix['compared']}" in cpu and _D20 in cpu
     assert f"- crosscheck git sha: `{check['git_sha']}`" in cpu  # IN-05

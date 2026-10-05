@@ -470,6 +470,7 @@ def gate_cells(model, tok, device, slot, state):
     frame = phase18_extraction.ADMISSIBLE_NLL_FRAME
     context = anchor_ids(tok, slot)
     cells = {}
+    state["shape"] = slot  # 39-REVIEW-3 IN-01: the heartbeat names the slot (stage the reading)
     with phase36_probe.silenced():
         for i, candidate in enumerate(phase18_extraction.reference_set_for(slot)):
             state["draw_index"] = i
@@ -487,7 +488,7 @@ def gate_cells(model, tok, device, slot, state):
     return cells
 
 
-def anchor_draws(model, tok, device, forbid, slot, reading):
+def anchor_draws(model, tok, device, forbid, slot, reading, *, state):
     """G_a (D-05 / D-06 / D-08 / D-28): K draws from the anchor ids, every draw kept.
 
     Undecorated and asserting in place: tests/test_phase14_scoring.py's draw_all census."""
@@ -497,6 +498,7 @@ def anchor_draws(model, tok, device, forbid, slot, reading):
     import phase19_erasure
 
     prereg = _prereg()
+    state.update(shape=slot, draw_index=None)  # 39-REVIEW-3 IN-01
     _prove(
         phase16_persistence.forbid_digest(forbid) == phase19_erasure.FORBID_IDS_SHA256,
         f"{reading}: the forbid mask is not the committed one (FORBID_IDS_SHA256)",
@@ -536,6 +538,8 @@ def score_question(model, tok, device, entry, candidates, *, taught, state):
 
     context = phase18_extraction._guarded_span(entry)
     realized = entry["realized_injection"]
+    # 39-REVIEW-3 IN-01: the heartbeat names the question being scored.
+    state["shape"] = f"{entry['slot']}/{entry['tier']}/{entry['seed_index']}"
     _prove(
         list(entry["prompt_ids"]) == context + list(tok.encode(taught))[:realized],
         f"D-23b premise broken for {entry['fact_id']!r}/{entry['seed_index']}: prompt_ids are not "
@@ -815,7 +819,7 @@ def run(
                 state.update(stage=f"work_{reading}")
                 with reading_model(reading, device) as (model, tok, forbid):
                     anchor = {
-                        slot: anchor_draws(model, tok, device, forbid, slot, reading)
+                        slot: anchor_draws(model, tok, device, forbid, slot, reading, state=state)
                         for slot in slots
                     }
                     questions = {}
@@ -1815,7 +1819,7 @@ def _scored_sections(record):
         "",
         "The common unit (some hit in K draws) beside the draw-unit rates. The anchor gives one "
         f"unit per slot and A2 one per question ({n_questions} per slot): the 1-vs-{n_questions} "
-        f"unit asymmetry (D-07). Unit: {first['generation']['G_a']['rate']['unit']}; "
+        f"unit asymmetry (D-07). Per-draw rate unit: {first['generation']['G_a']['rate']['unit']}; "
         f"{first['generation']['G_a']['rate']['note']}.",
         "",
         *_table(
@@ -1925,7 +1929,8 @@ def _scored_sections(record):
         "",
         f"Criterion: {cpu['criterion']} (descriptive only). On {cpu['device']} (torch "
         f"{cpu['torch_version']}) the rank differs from the run's in {cpu['gate_differing']} of "
-        f"{cpu['gate_cells']} gate cells, in {cpu['rq_differing']} of {cpu['rq_cells']} R_q "
+        f"{cpu['gate_cells']} gate rows (reading x slot), in {cpu['rq_differing']} of "
+        f"{cpu['rq_cells']} R_q "
         f"questions and in {cpu['minted_differing']} of {cpu['minted_cells']} (ii) questions; the "
         f"taught suffix sum is bitwise the pinned call's in {suffix['equal']} of "
         f"{suffix['compared']} (D-30a). {cpu['generation']}.",
@@ -2021,8 +2026,9 @@ def render_report(record):
                 for row in [gate["rows"][r][s]]
             ],
         ),
-        f"Copy equality (D-30 condition 1, nll_sum and nll_mean bitwise): cells compared "
-        f"{equality['cells_compared']}, cells equal {equality['cells_equal']}.",
+        "Copy equality (D-30 condition 1, nll_sum and nll_mean bitwise): gate candidate cells "
+        f"compared {equality['cells_compared']}, equal {equality['cells_equal']} (each candidate "
+        "of each gate row; 39-REVIEW-3 IN-03).",
         "",
         f"Context (b) was scored with the copy: {record['context_b_instrument']}.",
         "",
