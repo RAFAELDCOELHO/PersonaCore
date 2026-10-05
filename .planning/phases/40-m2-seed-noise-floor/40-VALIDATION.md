@@ -81,8 +81,8 @@ No framework install needed.
 | Behavior | Requirement | Why Manual | Test Instructions |
 |----------|-------------|------------|-------------------|
 | Rafael's "approved" on D-11 (+0 h) and D-13 (+0.0609 h) prices before training, and before each record/ledger commit | SC3 / D-11 / D-14 | human gate | checkpoint presents the price/artifact; commit only after the word |
-| Full-shape CPU rehearsal (MPS hidden, rehearsal arm names, scratch root, tmp ledger) | D-15 / consumer feed | long detached run | `tail -1 <scratch>/rehearsal40.log` is `REHEARSAL_EXIT=0` and `git status --porcelain -- scripts src results tests ledger` is empty |
-| R-3 b leg on CPU (plan 08 Task 3: planted crash of seed 2024, reconcile, declined branch, drop_attempt, re-run preflight, re-run with real training, emit) | R-3 b | real training, long detached run | `tail -1 <scratch>/rehearsal40_rerun.log` is `RERUN_EXIT=0` with six STEP lines; real tree clean |
+| Full-shape CPU rehearsal (MPS hidden, rehearsal arm names, scratch root, tmp ledger) | D-15 / consumer feed | long detached run | `tail -1 <scratch>/rehearsal40<sfx>.log` is `REHEARSAL_EXIT=0` and `git status --porcelain -- scripts src results tests ledger` is empty |
+| R-3 b leg on CPU (plan 08 Task 3: planted crash of seed 2024, reconcile, declined branch, drop_attempt, re-run preflight, re-run with real training, emit) | R-3 b | real training, long detached run | `tail -1 <scratch>/rehearsal40_rerun<sfx>.log` is `RERUN_EXIT=0` with six STEP lines; real tree clean |
 | The MPS run | NOISE-01 | device + ledger | detached `caffeinate -dims` launch; stop (a) checked by `require_launch("E2")` per seed |
 
 ---
