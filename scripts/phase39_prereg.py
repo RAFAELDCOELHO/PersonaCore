@@ -295,6 +295,13 @@ _prove(
 ADAPTER_OFF_SHA256 = "08fe96fbd9753f8b44a5eb67a69d1a2a0b062a666b5a2d5430c2a7476bb15535"
 _PARSED["adapter_off"] = (phase38_prereg.ADAPTER_OFF_RECORD, ADAPTER_OFF_SHA256)
 
+# WR-01 (39-REVIEW, Rafael 2026-10-05): the committed figure that checks the erasure target's k0
+# count independently of phase19_run._pooled_rows, the Phase 18 report's A2 adapter-on totals at
+# rung K, one per tier, parsed at call time. The one typed digest beside ADAPTER_OFF_SHA256, proved
+# by tests/test_phase39_prereg.py against the tracked bytes.
+PHASE18_REPORT = "results/phase18_extraction_report.md"
+PHASE18_REPORT_SHA256 = "f24795f3f94c6330699261d908552ccd0dd10a9da8734438efd90dd3667f0cc1"
+
 A2_RECORDS = types.MappingProxyType(
     {
         reading: types.MappingProxyType(
@@ -637,15 +644,22 @@ _ENTRIES = {
         "value": (
             "each A2 record's sha256 == A2_RECORDS; phase19_run._pooled_rows re-derives every "
             "committed count (k0..k78 from phase38_prereg.a2_counts, M2 from "
-            "phase19_retrain_scores.json, adapter-off 0)"
+            "phase19_retrain_scores.json, adapter-off 0); the erasure target's k0 count against "
+            "PHASE18_REPORT's A2 adapter-on rung-K totals minus the seven non-target counts "
+            "(WR-01), its row marked independent, or independent False with the reason"
         ),
         "derivation": (
             "D-19: gate 2 re-derives on CPU the committed A2 counts from the committed draws, "
             "SHA-256 checked, before using them. D-02: nothing is regenerated; anything needing "
-            "regeneration pauses for Rafael."
+            "regeneration pauses for Rafael. WR-01 (39-REVIEW, ruled by Rafael 2026-10-05): the "
+            "erasure target's k0 count is checked against a committed total read from a "
+            "SHA-pinned file, never typed; the seven non-target k0 counts are already checked "
+            "against pre_answerable, so the total fixes the target."
         ),
         "kind": "preference",
-        "source": f"{_CONTEXT.format('19')}; {_CONTEXT.format('02')}; {BUDGET_RECORD}",
+        "source": (
+            f"{_CONTEXT.format('19')}; {_CONTEXT.format('02')}; {BUDGET_RECORD}; {PHASE18_REPORT}"
+        ),
     },
     "cpu_crosscheck": {
         "value": (
@@ -857,11 +871,82 @@ def committed_a2_counts():
     return out
 
 
+def report_k0_totals(*, root=None):
+    """WR-01: {tier: (answered, questions)} from the SHA-pinned Phase 18 report, the A2 adapter-on
+    row at rung K of each tier's ladder section, parsed from the text; a tier without exactly one
+    such row is absent. A digest mismatch is a SystemExit."""
+    import phase18_extraction  # torch at import: lazy
+
+    root = _REPO_ROOT if root is None else pathlib.Path(root)
+    data = (root / PHASE18_REPORT).read_bytes()
+    _prove(
+        hashlib.sha256(data).hexdigest() == PHASE18_REPORT_SHA256,
+        f"{PHASE18_REPORT} is not the committed report (WR-01)",
+    )
+    sections = re.split(r"^## ", data.decode("utf-8"), flags=re.MULTILINE)
+    row = re.compile(rf"^\| `A2` \| `adapter-on` \| {K} \| [^|\n]* \| (\d+)/(\d+) questions", re.M)
+    totals = {}
+    for tier in phase18_extraction.CORPUS_TIERS:
+        found = [
+            hit
+            for section in sections
+            if section.startswith(f"The ASR Ladder — `{tier}`")
+            for hit in row.findall(section)
+        ]
+        if len(found) == 1:
+            totals[tier] = (int(found[0][0]), int(found[0][1]))
+    return totals
+
+
+def _target_k0_check(committed_k0, *, root=None):
+    """WR-01: the erasure target's k0 count fixed by the report total minus the seven non-target
+    committed counts (each proved against pre_answerable by phase38_prereg.a2_counts)."""
+    import phase18_extraction  # torch at import: lazy
+    import phase19_erasure  # same
+
+    target = phase19_erasure.TARGET_SLOT
+    _prove(target in SLOTS, f"the erasure target {target!r} is not one of {SLOTS}")
+    totals = report_k0_totals(root=root)
+    if set(totals) != set(phase18_extraction.CORPUS_TIERS):
+        return (
+            target,
+            None,
+            {
+                "independent": False,
+                "source": (
+                    f"{PHASE18_REPORT} holds no single A2 adapter-on rung-{K} row for "
+                    f"{sorted(set(phase18_extraction.CORPUS_TIERS) - set(totals))}: the k0 target "
+                    "count is the same scorer over the same file (SHA-pinned only)"
+                ),
+            },
+        )
+    _prove(
+        sum(n for _, n in totals.values()) == len(E6_ENTRY_SUBSET),
+        f"the report's A2 denominators {totals} do not sum to the {len(E6_ENTRY_SUBSET)} entries",
+    )
+    total = sum(answered for answered, _ in totals.values())
+    others = sum(count for slot, count in committed_k0.items() if slot != target)
+    parsed = ", ".join(f"{tier} {a}/{n}" for tier, (a, n) in totals.items())
+    return (
+        target,
+        total - others,
+        {
+            "independent": True,
+            "source": (
+                f"{PHASE18_REPORT} sha256 {PHASE18_REPORT_SHA256}: the A2 adapter-on "
+                f"rung-{K} totals ({parsed}) minus the seven non-target committed k0 counts"
+            ),
+        },
+    )
+
+
 def gate2(*, root=None):
     """D-19: re-derive every committed A2 count from the SHA-verified draws.
 
     A digest mismatch is a SystemExit; a count mismatch is returned (passed False, the row's equal
-    False) so the driver refuses and the record shows the whole table.
+    False) so the driver refuses and the record shows the whole table. WR-01: the erasure target's
+    k0 row is compared with the independent report figure (``_target_k0_check``), not with a second
+    run of the same scorer; its row says which.
     """
     import phase18_extraction  # torch at import: lazy
     import phase19_run  # same
@@ -869,6 +954,9 @@ def gate2(*, root=None):
     root = _REPO_ROOT if root is None else pathlib.Path(root)
     digests = verify_a2_records(root=root)
     committed = committed_a2_counts()
+    target, target_k0, target_note = _target_k0_check(committed[REFERENCE_READING], root=root)
+    if target_k0 is not None:
+        committed[REFERENCE_READING][target] = target_k0
     values = _values()
     rows = {}
     for reading in READINGS:
@@ -887,6 +975,7 @@ def gate2(*, root=None):
             }
         _prove(set(by_slot) == set(SLOTS), f"{reading}: rows cover {sorted(by_slot)}, not {SLOTS}")
         rows[reading] = {slot: by_slot[slot] for slot in SLOTS}
+    rows[REFERENCE_READING][target].update(target_note)
     passed = all(row["equal"] for by_slot in rows.values() for row in by_slot.values())
     return {"passed": passed, "rows": rows, "sha256": digests}
 

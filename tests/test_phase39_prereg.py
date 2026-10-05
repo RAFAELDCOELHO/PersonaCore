@@ -760,6 +760,76 @@ def test_gate2_reports_a_count_mismatch(monkeypatch):
     assert gate["rows"]["k8"]["person_name"]["committed"] == 19
 
 
+def test_gate2_target_k0_row_is_independent():
+    """WR-01: the erasure target's k0 row is checked against the Phase 18 report's totals."""
+    import phase19_erasure
+
+    assert _head_sha256(phase39_prereg.PHASE18_REPORT) == phase39_prereg.PHASE18_REPORT_SHA256
+    totals = phase39_prereg.report_k0_totals()
+    assert set(totals) == {"core_taught", "core_held_out"}
+    k0 = phase39_prereg.committed_a2_counts()["k0"]
+    assert sum(n for _, n in totals.values()) == len(phase39_prereg.E6_ENTRY_SUBSET)
+    assert sum(a for a, _ in totals.values()) == sum(k0.values())
+    target = phase19_erasure.TARGET_SLOT
+    assert target == "pet_name"
+    gate = phase39_prereg.gate2()
+    row = gate["rows"]["k0"][target]
+    assert row["independent"] is True and phase39_prereg.PHASE18_REPORT in row["source"]
+    assert row["count"] == row["committed"] == k0[target]
+    flagged = [
+        (r, s) for r, rows in gate["rows"].items() for s, x in rows.items() if "independent" in x
+    ]
+    assert flagged == [("k0", target)]
+
+
+def test_gate2_refuses_a_shifted_target_k0(monkeypatch):
+    """WR-01's confirmed probe: a -5 shift in the target's re-derived k0 count now fails gate 2."""
+    import phase19_erasure
+    import phase19_run
+
+    on = _record(phase39_prereg.A2_RECORDS["k0"]["path"])["draws"]
+    real = phase19_run._pooled_rows
+
+    def shifted(draws, *args):
+        rows = real(draws, *args)
+        if draws == on:
+            for row in rows.values():
+                if row["slot"] == phase19_erasure.TARGET_SLOT:
+                    row["n_answerable"] -= 5
+        return rows
+
+    monkeypatch.setattr(phase19_run, "_pooled_rows", shifted)
+    gate = phase39_prereg.gate2()
+    assert gate["passed"] is False
+    unequal = [
+        (r, s) for r, rows in gate["rows"].items() for s, x in rows.items() if not x["equal"]
+    ]
+    assert unequal == [("k0", "pet_name")]
+    # NON-VACUITY: the same shift slipped through before WR-01 (same scorer on both sides).
+    assert (
+        phase38_prereg.a2_counts()["pet_name"]["counts"][0]
+        == gate["rows"]["k0"]["pet_name"]["count"]
+    )
+
+
+def test_gate2_target_k0_without_a_report_row_is_not_independent(monkeypatch):
+    monkeypatch.setattr(phase39_prereg, "report_k0_totals", lambda **_: {})
+    target, count, note = phase39_prereg._target_k0_check({"pet_name": 27})
+    assert (target, count, note["independent"]) == ("pet_name", None, False)
+    assert "SHA-pinned only" in note["source"]
+    gate = phase39_prereg.gate2()
+    assert gate["passed"] is True
+    assert gate["rows"]["k0"]["pet_name"]["independent"] is False
+
+
+def test_report_k0_totals_refuses_a_tampered_report(tmp_path):
+    target = tmp_path / phase39_prereg.PHASE18_REPORT
+    target.parent.mkdir(parents=True)
+    target.write_bytes((_ROOT / phase39_prereg.PHASE18_REPORT).read_bytes() + b"\n")
+    with pytest.raises(SystemExit, match=r"^\[phase39_prereg\] .*WR-01"):
+        phase39_prereg.report_k0_totals(root=tmp_path)
+
+
 def test_a2_sha_verify_records():
     digests = phase39_prereg.verify_a2_records()
     assert digests == {r: pin["sha256"] for r, pin in phase39_prereg.A2_RECORDS.items()}
