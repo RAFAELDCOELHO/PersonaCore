@@ -218,6 +218,9 @@ def test_readings_split_into_reference_cells_and_descriptive():
     assert phase39_prereg.CTX02_READINGS == ("k0", "k8", "k16", "k32", "k64", "k78", "M2")
     assert phase39_prereg.CELL_READINGS == ("k8", "k16", "k32", "k64", "k78", "M2")
     assert phase39_prereg.N_QUESTIONS == 27
+    assert phase39_prereg.CELL_PREFIX_READINGS == ("k8", "k16", "k32", "k64", "k78")
+    assert phase39_prereg.RETRAIN_READING == "M2"
+    assert phase39_prereg.M2_LABEL in phase39_prereg.ENTRIES["e6_decomposition_rule"]["value"]["m2"]
     assert phase39_prereg.EVENTS == ("collapse", "damage")
     assert phase39_prereg.CLASSES == (
         "CONTEXT_SUFFICIENT",
@@ -1141,52 +1144,88 @@ def test_classify_cell_exhaustive():
             phase39_prereg._precedence(bad)
 
 
+def _door_cell(event, reading, slot, statuses):
+    return {**phase39_prereg.cell_spec(event, reading, slot), **_cell(*statuses)}
+
+
 def test_class_counts_publish_denominators():
-    cells = [
-        _cell(_INTACT, _LOST, _INTACT, _LOST),
-        _cell(_INTACT, _LOST, _INTACT, _LOST),
-        _cell(_INTACT, _INTACT, _LOST, _LOST),
-        _cell(_INTACT, _INTACT, _UNREACH, _LOST),
-        _cell(_LOST, _LOST, _LOST, _LOST),
-        _cell(_ALREADY, _LOST, _LOST, _LOST),
-        _cell(_LOST, _LOST, _LOST, _INTACT),
+    rows = [
+        ("k8", "person_name", (_INTACT, _LOST, _INTACT, _LOST)),
+        ("k8", "pet_name", (_INTACT, _LOST, _INTACT, _LOST)),
+        ("k16", "person_name", (_INTACT, _INTACT, _LOST, _LOST)),
+        ("k16", "pet_name", (_INTACT, _INTACT, _UNREACH, _LOST)),
+        ("k32", "person_name", (_LOST, _LOST, _LOST, _LOST)),
+        ("k32", "pet_name", (_ALREADY, _LOST, _LOST, _LOST)),
+        ("M2", "person_name", (_LOST, _LOST, _LOST, _INTACT)),
+        ("M2", "pet_name", (_INTACT, _INTACT, _INTACT, _UNREACH)),
+        ("M2", "cat_name", (_INTACT, _LOST, _LOST, _LOST)),
     ]
+    cells = [_door_cell("damage", reading, slot, st) for reading, slot, st in rows]
     counts = phase39_prereg.class_counts(cells)
     json.dumps(counts)
-    assert counts["cells"] == 7
-    assert counts["disagreement_cells"] == 4
-    assert counts["reverse_disagreement_cells"] == 1
-    assert counts["denominator"] == "disagreement_cells"
-    assert counts["by_class"] == {
+    assert set(counts) == {"event", "combined", "prefixes", "M2", "m2_label"}
+    assert counts["event"] == "damage"
+    assert "another training" in counts["m2_label"] and "k0" in counts["m2_label"]
+    combined = counts["combined"]
+    assert combined["cells"] == 9
+    assert combined["disagreement_cells"] == 5
+    assert combined["reverse_disagreement_cells"] == 1
+    assert combined["denominator"] == "disagreement_cells"
+    # IN-01: the step-1 cells (disagreement None) apart from the step-3 WR-01 outcome.
+    assert combined["undecided_cells"] == 2
+    assert combined["undecided_by_class"] == {_UNREACH: 1, _ALREADY: 1}
+    assert combined["by_class"] == {
         "CONTEXT_SUFFICIENT": 2,
         "INSTRUMENT_SUFFICIENT": 1,
-        "EITHER": 0,
+        "EITHER": 1,
         "INTERACTION_ONLY": 0,
         "NO_DISAGREEMENT": 1,
         "REVERSE_DISAGREEMENT": 1,
-        _UNREACH: 1,
+        _UNREACH: 2,
         _ALREADY: 1,
     }
-    assert counts["disagreement_by_class"] == {
+    assert combined["disagreement_by_class"] == {
         "CONTEXT_SUFFICIENT": 2,
         "INSTRUMENT_SUFFICIENT": 1,
-        "EITHER": 0,
+        "EITHER": 1,
         "INTERACTION_ONLY": 0,
         _UNREACH: 1,
         _ALREADY: 0,
     }
-    assert counts["shares"] == {
-        "CONTEXT_SUFFICIENT": 2 / 4,
-        "INSTRUMENT_SUFFICIENT": 1 / 4,
-        "EITHER": 0.0,
+    assert combined["shares"] == {
+        "CONTEXT_SUFFICIENT": 2 / 5,
+        "INSTRUMENT_SUFFICIENT": 1 / 5,
+        "EITHER": 1 / 5,
         "INTERACTION_ONLY": 0.0,
-        _UNREACH: 1 / 4,
+        _UNREACH: 1 / 5,
         _ALREADY: 0.0,
     }
-    none = phase39_prereg.class_counts([_cell(_LOST, _LOST, _LOST, _LOST)])
+    # Ruling g: M2 apart from the prefix readings; the two partition the combined.
+    prefixes, m2 = counts["prefixes"], counts["M2"]
+    assert (prefixes["cells"], m2["cells"]) == (6, 3)
+    assert (prefixes["disagreement_cells"], m2["disagreement_cells"]) == (4, 1)
+    assert m2["reverse_disagreement_cells"] == 1 and m2["undecided_by_class"][_UNREACH] == 1
+    assert m2["by_class"]["EITHER"] == 1 and prefixes["by_class"]["EITHER"] == 0
+    for key in ("by_class", "undecided_by_class", "disagreement_by_class"):
+        for name, count in combined[key].items():
+            assert prefixes[key][name] + m2[key][name] == count, (key, name)
+    assert phase39_prereg._tally([])["cells"] == 0
+    none = phase39_prereg._tally([_door_cell("damage", "k8", "person_name", (_LOST,) * 4)])
     assert none["disagreement_cells"] == 0
     assert set(none["shares"].values()) == {None}
-    assert phase39_prereg.class_counts([])["cells"] == 0
+
+
+def test_class_counts_refuses_mixed_events_and_cells_outside_the_door():
+    good = _door_cell("damage", "k8", "person_name", (_INTACT, _LOST, _INTACT, _LOST))
+    for bad in (
+        [],
+        [good, _door_cell("collapse", "k8", "pet_name", (_INTACT, _LOST, _INTACT, _LOST))],
+        [good, good],
+        [{**good, "reading": "k0"}],
+        [{**good, "class": "planted"}],
+    ):
+        with pytest.raises(SystemExit, match=r"^\[phase39_prereg\]"):
+            phase39_prereg.class_counts(bad)
 
 
 # Measured at plan time (39-02-PLAN interfaces): the published disagreement, R_a INTACT and G_q

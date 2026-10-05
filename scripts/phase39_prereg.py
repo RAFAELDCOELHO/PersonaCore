@@ -149,6 +149,18 @@ _prove(
 CTX02_READINGS = tuple(r for r in READINGS if r not in DESCRIPTIVE_READINGS)
 # Rulings f and g: the cells' readings in both events, k8..k78 and M2; never k0, never adapter-off.
 CELL_READINGS = tuple(r for r in CTX02_READINGS if r != REFERENCE_READING)
+# Ruling g: M2 is another training whose damage reference is the taught adapter's k0; its counts are
+# given apart from the prefix readings'.
+CELL_PREFIX_READINGS = tuple(f"k{k}" for k in PREFIXES[1:])
+RETRAIN_READING = next(r for r in CELL_READINGS if r not in CELL_PREFIX_READINGS)
+_prove(
+    CELL_READINGS == CELL_PREFIX_READINGS + (RETRAIN_READING,),
+    f"the cell readings {CELL_READINGS} are not {CELL_PREFIX_READINGS} plus one retrain",
+)
+M2_LABEL = (
+    f"{RETRAIN_READING} is another training (the retrain without the target), whose damage "
+    "reference is the taught adapter's k0 (ruling g)"
+)
 
 EVENTS = ("collapse", "damage")  # D-16: classified for each separately
 STATUSES = ("INTACT", "LOST", "UNREACHABLE_AT_SIZE", "ALREADY_AT_K0")
@@ -537,9 +549,13 @@ _ENTRIES = {
                     "drop exactly equal to MARGIN is an exact tie decided by strict >"
                 ),
                 "shares": (
-                    "class counts over the disagreement cells, every count with its denominator; "
-                    "collapse and damage given separately (D-16)"
+                    "class counts over the published disagreement cells, every count with its "
+                    "denominator; collapse and damage given separately (D-16); the prefix "
+                    "readings, M2 and the combined given separately (ruling g); "
+                    "REVERSE_DISAGREEMENT counted apart (ruling e); the undecided cells (step 1, "
+                    "disagreement None) published apart from the step-3 WR-01 outcomes (IN-01)"
                 ),
+                "m2": M2_LABEL,
                 "never_classified": "adapter-off (D-11 i) and the minted |R| = 8 sets (D-11 ii)",
             }
         ),
@@ -1305,10 +1321,12 @@ def baseline_table(k0_by_slot):
     }
 
 
-def class_counts(classified):
-    """D-16 / T-39-10: every class counted (zeros included) with both denominators, and each
-    class's share of the disagreement cells (None when there are none)."""
+def _tally(classified):
+    """Every outcome counted (zeros included) with both denominators; each class's share of the
+    published disagreement cells (None when there are none); the undecided cells (step 1,
+    disagreement None) apart from the step-3 WR-01 outcomes (IN-01)."""
     disagreeing = [cell for cell in classified if cell["disagreement"] is True]
+    undecided = [cell for cell in classified if cell["disagreement"] is None]
     names = CLASSES[:4] + WR01_OUTCOMES
     by_disagreement = {name: sum(c["class"] == name for c in disagreeing) for name in names}
     n = len(disagreeing)
@@ -1316,10 +1334,34 @@ def class_counts(classified):
         "cells": len(classified),
         "disagreement_cells": n,
         "reverse_disagreement_cells": sum(c["class"] == REVERSE_DISAGREEMENT for c in classified),
+        "undecided_cells": len(undecided),
+        "undecided_by_class": {
+            name: sum(c["class"] == name for c in undecided) for name in WR01_OUTCOMES
+        },
         "by_class": {name: sum(c["class"] == name for c in classified) for name in OUTCOMES},
         "disagreement_by_class": by_disagreement,
         "shares": {name: (count / n if n else None) for name, count in by_disagreement.items()},
         "denominator": "disagreement_cells",
+    }
+
+
+def class_counts(classified):
+    """D-16 / T-39-10 / ruling g: one event's door cells counted for the prefix readings, for M2
+    and combined, each with _tally's denominators."""
+    _prove(classified, "no cells to count")
+    for cell in classified:
+        _door({field: cell[field] for field in _CELL_FIELDS})
+        _prove(cell["class"] in OUTCOMES, f"class {cell['class']!r} is not one of {OUTCOMES}")
+    events = {cell["event"] for cell in classified}
+    _prove(len(events) == 1, f"cells of events {sorted(events)}: count each event apart (D-16)")
+    keys = [(cell["reading"], cell["slot"]) for cell in classified]
+    _prove(len(set(keys)) == len(keys), "a cell is counted twice")
+    return {
+        "event": events.pop(),
+        "combined": _tally(classified),
+        "prefixes": _tally([c for c in classified if c["reading"] in CELL_PREFIX_READINGS]),
+        RETRAIN_READING: _tally([c for c in classified if c["reading"] == RETRAIN_READING]),
+        "m2_label": M2_LABEL,
     }
 
 
