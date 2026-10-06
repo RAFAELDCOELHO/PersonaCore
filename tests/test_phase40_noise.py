@@ -10,6 +10,7 @@ a tmp file, so the file runs on CPU CI where checkpoints/ and data/ are empty.
 import ast
 import inspect
 import json
+import math
 import pathlib
 import plistlib
 import re
@@ -33,14 +34,18 @@ _TESTS = str(_ROOT / "tests")
 if _TESTS not in sys.path:
     sys.path.insert(0, _TESTS)
 
-import phase14_factset  # noqa: E402  (scripts/ is not a package)
+import mitigation_gate  # noqa: E402  (scripts/ is not a package)
+import phase14_factset  # noqa: E402  (same)
 import phase14_recall  # noqa: E402  (same)
 import phase18_extraction  # noqa: E402  (same)
 import phase19_erasure  # noqa: E402  (same; never aliased)
+import phase19_floor  # noqa: E402  (same)
+import phase19_run  # noqa: E402  (same)
 import phase25_run  # noqa: E402  (same)
 import phase35_prereg  # noqa: E402  (same)
 import phase36_caps  # noqa: E402  (same)
 import phase36_ledger  # noqa: E402  (same)
+import phase37_prereg  # noqa: E402  (same)
 import phase38_prereg  # noqa: E402  (same)
 import phase38_rank  # noqa: E402  (same)
 import phase39_ctx  # noqa: E402  (same)
@@ -1791,3 +1796,680 @@ def test_ast_ledger_calls_are_the_allowed_set():
         + "\n\ndef planted():\n    phase36_ledger.reconcile()\n    phase36_ledger.rule('E2')\n"
     )
     assert _ledger_uses(planted)[0] - allowed == {"reconcile", "rule"}
+
+
+# =================================================================================================
+# (11) Plan 07 Task 1: build_record and emit, fed REAL committed run_erasure_arm records, end to
+# end into the Phase 41 consumer.
+# =================================================================================================
+
+# B1: the CPU adapter-off measured with MPS hidden (the committed records carry the MPS value).
+_CPU_OFF = 4.573348505014267
+# The two committed no-component records (pre_erasure.dialogue_ppl == dialogue_ppl).
+_RETRAIN = phase19_erasure.arm_record_path("retrain")
+_REPLICATE = phase19_erasure.arm_record_path("replicate")
+# (full, m2) A2 fixture per seed: the replicate relabelled to A2_LABEL, the retrain byte for byte.
+_A2_KINDS = {
+    1337: ("relabel", "retrain"),
+    2024: ("retrain", "relabel"),
+    1338: ("relabel", "retrain"),
+}
+
+
+def _a2_payload(kind, transform=None):
+    """The A2 record a seed gets: bytes (a byte copy) or a dict (written by atomic_write_json).
+    ``relabel``: the interfaces' relabel rule, config.arm the ONLY edit."""
+    source = _REPLICATE if kind in ("replicate", "relabel") else _RETRAIN
+    if kind != "relabel" and transform is None:
+        return source.read_bytes()
+    record = json.loads(source.read_text(encoding="utf-8"))
+    if kind == "relabel":
+        record["config"]["arm"] = phase40_prereg.A2_LABEL
+    return record if transform is None else transform(record)
+
+
+def _on_device(device, *, off=None, pre_off=None):
+    """config.device and config.preflight.device set as run_erasure_arm writes them; the pre and
+    post adapter-off set to ``off`` and the pre alone to ``pre_off`` when given."""
+
+    def transform(record):
+        record["config"]["device"] = device
+        record["config"]["preflight"]["device"] = device
+        if off is not None:
+            record["dialogue_ppl"]["adapter_off"] = off
+            record["pre_erasure"]["dialogue_ppl"]["adapter_off"] = off
+        if pre_off is not None:
+            record["pre_erasure"]["dialogue_ppl"]["adapter_off"] = pre_off
+        return record
+
+    return transform
+
+
+def _write(path, payload):
+    path = pathlib.Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if isinstance(payload, bytes):
+        path.write_bytes(payload)
+    else:
+        phase25_run.atomic_write_json(path, payload)
+    return path
+
+
+def _build_rig(monkeypatch, tmp_path, *, real=False):
+    """`_repo_rig` (or plan 06's `_real_root_rig` when ``real``) plus tiny tmp comparator adapters
+    and adapter_identity wrapped in a recorder (the real tensor-wise comparison on tiny files: no
+    gitignored file is read)."""
+    if real:
+        rig = _real_root_rig(monkeypatch, tmp_path)
+        rig.build = {}
+    else:
+        root = _repo_rig(monkeypatch, tmp_path)
+        monkeypatch.setattr(phase40_noise, "git_sha", lambda: "h1")
+        ledger = tmp_path / "ledger.jsonl"
+        rig = types.SimpleNamespace(root=root, ledger=ledger, build={"ledger_path": ledger})
+    comparators = {}
+    for key in ("m2_seed1337", "full_seed1337", "full_seed2024", "dialogue_floor_seed1337"):
+        comparators[key] = tmp_path / "comparators" / f"{key}.pt"
+        comparators[key].parent.mkdir(exist_ok=True)
+        torch.save(_artifact(), comparators[key])
+    monkeypatch.setattr(phase40_noise, "comparators", lambda: dict(comparators))
+    rig.comparators = comparators
+    rig.identity_calls = []
+    real_identity = phase40_noise.adapter_identity
+
+    def recorder(new_path, committed_path):
+        rig.identity_calls.append((pathlib.Path(new_path), pathlib.Path(committed_path)))
+        return real_identity(new_path, committed_path)
+
+    monkeypatch.setattr(phase40_noise, "adapter_identity", recorder)
+    return rig
+
+
+def _new_adapter(group, seed):
+    return phase40_noise.arm_paths(group, seed, rehearsal=True)["adapter"]
+
+
+def _seed(rig, seed, *, kinds=None, transform=None, device="mps", d13="measured", attempts=()):
+    """One whole seed's outputs under the rig: a tiny adapter per group at its original path, the
+    A2 records, and the seed record naming their sha256 (as run() writes it)."""
+    root = rig.root
+    groups = {}
+    for group, kind in zip(phase40_prereg.GROUPS, kinds or _A2_KINDS[seed], strict=True):
+        adapter = _new_adapter(group, seed)
+        adapter.parent.mkdir(parents=True, exist_ok=True)
+        torch.save(_artifact(), adapter)
+        rel = phase40_prereg.a2_record(group, seed)
+        _write(root / rel, _a2_payload(kind, transform))
+        groups[group] = {
+            "group": group,
+            "seed": seed,
+            "adapter": adapter.relative_to(teach_persona._REPO_ROOT).as_posix(),
+            "adapter_sha256": phase40_noise._sha256(adapter),
+            "train": {"final_train_loss": 0.5, "ppl_adapter_on": 3.0},
+            "a2": {
+                "group": group,
+                "seed": seed,
+                "record": rel,
+                "record_sha256": phase40_noise._sha256(root / rel),
+            },
+        }
+    blob = {
+        "front": "E2",
+        "phase": 40,
+        "seed": seed,
+        "rehearsal": device != "mps",
+        "groups": groups,
+        "d13": _measured() if d13 == "measured" else d13,
+        "approval": phase40_prereg.approval_block(),
+        "rehearsal_disclosure": {"this_is_the_rehearsal": True, "seed": seed},
+        "dropped_attempts": list(attempts),
+        "provenance": {
+            "run": {"device": device, "git_sha_at_launch": "h1", "seed": seed},
+            "module_sha256_at_launch": phase40_noise.module_sha256(),
+        },
+    }
+    path = root / phase40_prereg.seed_record(seed)
+    if path.exists():
+        path.unlink()
+    _write(path, blob)
+    return blob
+
+
+def _whole(rig, *seeds, **kw):
+    for seed in seeds:
+        _ledger(rig.ledger, ("start", seed), ("end", seed))
+        _seed(rig, seed, **kw)
+
+
+def _build(rig):
+    return phase40_noise.build_record(rig.root, **rig.build)
+
+
+def _a2(rig, group, seed):
+    return json.loads((rig.root / phase40_prereg.a2_record(group, seed)).read_text("utf-8"))
+
+
+def _rows(record):
+    return phase40_prereg.a2_rows(record, *phase40_prereg.a2_scope(record))
+
+
+def _gap(record):
+    return record["dialogue_ppl"]["adapter_on"] - record["dialogue_ppl"]["adapter_off"]
+
+
+def _consumer_fill(tmp_path, monkeypatch, record):
+    """Phase 41's rule on the record: written under a tmp root, one synthetic band-input record
+    per e1 teaching seed (ordering "greedy"), phase35_prereg._REPO_ROOT pointed at the tmp root."""
+    consumer = tmp_path / "consumer"
+    _write(consumer / phase40_prereg.NOISE_FLOOR_RECORD, record)
+    teaching = phase35_prereg.e1_teaching_seeds()
+    gaps = dict(zip(teaching, (1.25, 1.75), strict=True))
+    paths = [phase40_prereg.NOISE_FLOOR_RECORD]
+    for i, seed in enumerate(teaching):
+        rel = f"results/phase41_band_inputs_{i}.json"
+        _write(consumer / rel, {"seed": seed, "ordering": "greedy", "control_gap": gaps[seed]})
+        paths.append(rel)
+    keys = tuple((seed, "greedy") for seed in teaching)
+    with monkeypatch.context() as mp:  # restored on exit: later builds read the real records
+        mp.setattr(phase35_prereg, "_REPO_ROOT", consumer)
+        bands = phase35_prereg.fill(
+            "e1_condition_c_band_inputs",
+            band_inputs=dict.fromkeys(keys),
+            input_records=tuple(paths),
+            derivation={
+                "value": keys,
+                "derivation": "the Phase 41 contract, fed a real build",
+                "kind": "preference",
+                "source": " ".join(paths),
+            },
+        )
+    return bands, gaps
+
+
+def test_build_record_from_real_committed_records(monkeypatch, tmp_path):
+    rig = _build_rig(monkeypatch, tmp_path)
+    _whole(rig, 1337, 2024)
+    record = _build(rig)
+    whole = [1337, 2024]
+    rows = {g: {s: _rows(_a2(rig, g, s)) for s in whole} for g in phase40_prereg.GROUPS}
+    for seed in whole:
+        for group in phase40_prereg.GROUPS:
+            reading = record["per_seed"][seed][group]
+            assert reading["slots"] == phase40_prereg.slot_rows(rows[group][seed])
+            gap = reading["dialogue_gap"]
+            assert gap["adapter_off_matches_committed"] is True and gap["rehearsal"] is False
+            assert gap["pre"]["adapter_off_matches_committed"] is True
+            assert gap["gap"] == _gap(_a2(rig, group, seed))
+    assert record["recall_floor"] == phase40_prereg.recall_floor(rows["full"], rows["m2"])
+    replicate = json.loads(_REPLICATE.read_text(encoding="utf-8"))
+    retrain = json.loads(_RETRAIN.read_text(encoding="utf-8"))
+    full_gaps = {s: record["per_seed"][s]["full"]["dialogue_gap"]["gap"] for s in whole}
+    expected = phase40_prereg.gap_noise_floor(full_gaps)["value"]
+    assert record["gap_noise_floor"] == abs(_gap(replicate) - _gap(retrain)) == expected
+    assert record["status"] == "MEASURED" and record["device"] == "mps"
+    assert "run" not in record["provenance"]
+    assert set(record["provenance"]["seeds"]) == set(whole)
+    assert record["rehearsal_disclosure"] == {
+        s: {"this_is_the_rehearsal": True, "seed": s} for s in whole
+    }
+    # Ruling e: how many whole seeds and pairs entered, as the prereg returns them.
+    for block in (
+        record["recall_floor"]["full"],
+        record["recall_floor"]["m2"],
+        record["recall_floor"]["published"],
+        record["gap_noise_floor_detail"],
+    ):
+        assert (block["n_seeds"], block["n_pairs"]) == (2, math.comb(2, 2))
+    assert record["a2_label"] == {
+        "label": phase40_prereg.A2_LABEL,
+        "explanation": phase40_prereg.ENTRIES["a2_pass"]["value"],
+    }
+    v3 = json.loads(phase19_run.NOISE_FLOORS_PATH.read_text(encoding="utf-8"))
+    assert record["crn_addendum"]["confirmation_g"] == phase40_prereg.CONFIRMATIONS["g"]
+    assert record["crn_addendum"]["v3_sampling_floor"] == v3["nontarget_noise_floor"]["value"]
+    assert record["phase41_adapters"] == {
+        s: {
+            g: {
+                "path": _new_adapter(g, s).relative_to(teach_persona._REPO_ROOT).as_posix(),
+                "sha256": phase40_noise._sha256(_new_adapter(g, s)),
+            }
+            for g in phase40_prereg.GROUPS
+        }
+        for s in whole
+    }
+    json.dumps(record, sort_keys=True)  # atomic_write_json's options
+
+    # A third whole seed: n_seeds 3, C(3, 2) pairs.
+    _whole(rig, 1338)
+    third = _build(rig)
+    for block in (
+        third["recall_floor"]["full"],
+        third["recall_floor"]["m2"],
+        third["recall_floor"]["published"],
+        third["gap_noise_floor_detail"],
+    ):
+        assert (block["n_seeds"], block["n_pairs"]) == (3, math.comb(3, 2))
+
+    # Natural RED (ruling b): the unmodified replicate (config.arm "replicate") as full@1337, its
+    # seed record naming that file's sha256.
+    _seed(rig, 1337, kinds=("replicate", "retrain"))
+    with pytest.raises(SystemExit, match=r"config\.arm 'replicate'"):
+        _build(rig)
+
+
+def test_consumer_fill_accepts_the_real_record(monkeypatch, tmp_path, capsys):
+    rig = _build_rig(monkeypatch, tmp_path)
+    _whole(rig, 1337, 2024)
+    record = _build(rig)
+    bands, gaps = _consumer_fill(tmp_path, monkeypatch, record)
+    assert set(bands) == {(s, "greedy") for s in gaps}
+    for seed, gap in gaps.items():
+        assert bands[(seed, "greedy")] == mitigation_gate.dialogue_gap_band(
+            control_gap=gap, gap_noise_floor=record["gap_noise_floor"]
+        )
+    with capsys.disabled():
+        print(f"\nCONSUMER gap_noise_floor={record['gap_noise_floor']!r}")
+        for key, band in bands.items():
+            print(f"CONSUMER band {key} = {band!r}")
+
+
+def test_consumer_accepts_a_cpu_rehearsal_build(monkeypatch, tmp_path):
+    rig = _build_rig(monkeypatch, tmp_path)
+    _whole(rig, 1337, 2024, transform=_on_device("cpu", off=_CPU_OFF), device="cpu")
+    record = _build(rig)
+    assert record["status"] == "MEASURED" and record["device"] == "cpu"
+    for seed in (1337, 2024):
+        for group in phase40_prereg.GROUPS:
+            gap = record["per_seed"][seed][group]["dialogue_gap"]
+            assert gap["adapter_off_matches_committed"] is False and gap["rehearsal"] is True
+            assert gap["gap"] == _a2(rig, group, seed)["dialogue_ppl"]["adapter_on"] - _CPU_OFF
+    bands, gaps = _consumer_fill(tmp_path, monkeypatch, record)
+    for seed, gap in gaps.items():
+        assert bands[(seed, "greedy")] == mitigation_gate.dialogue_gap_band(
+            control_gap=gap, gap_noise_floor=record["gap_noise_floor"]
+        )
+    # Under the frozen R-1 mps-equality, the CPU-valued readings relabelled mps refuse ...
+    assert phase40_prereg.ADAPTER_OFF_RULE == "mps-equality"
+    mps_cpu = {"transform": _on_device("mps", off=_CPU_OFF), "device": "mps"}
+    for seed in (1337, 2024):
+        _seed(rig, seed, **mps_cpu)
+    with pytest.raises(SystemExit, match="R-1 mps-equality"):
+        _build(rig)
+    # ... and so does an mps reading whose PRE adapter-off alone is the CPU value (IN-02 a).
+    for seed in (1337, 2024):
+        _seed(rig, seed, transform=_on_device("mps", pre_off=_CPU_OFF))
+    with pytest.raises(SystemExit, match="R-1 mps-equality"):
+        _build(rig)
+    # record-only: the mps-relabelled CPU readings build, the match flag False.
+    monkeypatch.setattr(phase40_prereg, "ADAPTER_OFF_RULE", "record-only")
+    for seed in (1337, 2024):
+        _seed(rig, seed, **mps_cpu)
+    relabelled = _build(rig)
+    assert relabelled["status"] == "MEASURED"
+    assert all(
+        relabelled["per_seed"][s][g]["dialogue_gap"]["adapter_off_matches_committed"] is False
+        for s in (1337, 2024)
+        for g in phase40_prereg.GROUPS
+    )
+    monkeypatch.undo()
+    rig = _build_rig(monkeypatch, tmp_path / "wr03")
+    # WR-03: a seed record "mps" over A2 records measured on cpu: build_record's own refusal.
+    _whole(rig, 1337, 2024, transform=_on_device("cpu", off=_CPU_OFF), device="mps")
+    with pytest.raises(SystemExit, match="WR-03"):
+        _build(rig)
+    # One device across the whole seeds.
+    _seed(rig, 1337, transform=_on_device("cpu", off=_CPU_OFF), device="cpu")
+    _seed(rig, 2024)
+    with pytest.raises(SystemExit, match="one device"):
+        _build(rig)
+
+
+def _kept_attempt(rig, seed, *, lost_utc):
+    """A dropped attempt of ``seed``: a kept tiny full adapter (its ``from`` the seed's full
+    adapter path) and a kept full A2 record, with the manifest those make."""
+    rel_dir = phase40_prereg.dropped_attempt_dir(seed, lost_utc)
+    kept = []
+    for rel, payload in (
+        (_new_adapter("full", seed).relative_to(teach_persona._REPO_ROOT).as_posix(), None),
+        (phase40_prereg.a2_record("full", seed), _RETRAIN.read_bytes()),
+    ):
+        path = rig.root / rel_dir / rel
+        if payload is None:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            torch.save(_artifact(), path)
+        else:
+            _write(path, payload)
+        kept.append(
+            {"from": rel, "path": f"{rel_dir}/{rel}", "sha256": phase40_noise._sha256(path)}
+        )
+    manifest = {
+        "seed": seed,
+        "run_id": phase40_prereg.run_id(seed),
+        "lost_utc": lost_utc,
+        "cause_note": "a planted crash",
+        "approved": "approved",
+        "head_at_dropped_attempt": "h1",
+        "relaunch_git_sha": "h1",
+        "head_change_declared": None,
+        "kept": kept,
+    }
+    assert phase40_prereg.dropped_manifest_failures(manifest, seed=seed, lost_utc=lost_utc) == []
+    _write(rig.root / rel_dir / phase40_prereg.DROPPED_MANIFEST, manifest)
+    return rel_dir
+
+
+def _rerun_rig(monkeypatch, tmp_path):
+    """1337 whole; 2024 start + lost (utc U), then its whole re-run listing that attempt."""
+    rig = _build_rig(monkeypatch, tmp_path)
+    _whole(rig, 1337)
+    _ledger(rig.ledger, ("start", 2024), ("lost", 2024))
+    rig.lost = _lost_utc(rig, 2024)
+    rig.rel_dir = _kept_attempt(rig, 2024, lost_utc=rig.lost)
+    _ledger(rig.ledger, ("start", 2024), ("end", 2024))
+    rig.entry = _attempt_entry(rig.root, rig.rel_dir)
+    _seed(rig, 2024, attempts=[rig.entry])
+    return rig
+
+
+def test_build_record_lists_dropped_attempts_and_attempt_identity(monkeypatch, tmp_path):
+    rig = _rerun_rig(monkeypatch, tmp_path)
+    record = _build(rig)
+    new_full = _new_adapter("full", 2024)
+    kept_full = rig.root / rig.entry["kept"][0]["path"]
+    assert rig.entry["kept"][0]["from"] == _record(rig, 2024)["groups"]["full"]["adapter"]
+    expected_identity = phase40_noise.adapter_identity(new_full, kept_full)
+    assert record["seeds"]["dropped_attempts"] == {
+        2024: [
+            {
+                **rig.entry,
+                "kept_verified": True,
+                "adapter_identity": {
+                    "full": expected_identity,
+                    "m2": "not produced by the dropped attempt",
+                },
+            }
+        ]
+    }
+    assert (new_full, kept_full) in rig.identity_calls
+    assert record["seeds"]["dropped_seed_outputs"] == {}
+
+    # The seed record lists no attempt while the ledger holds the lost line.
+    _seed(rig, 2024, attempts=[])
+    with pytest.raises(SystemExit, match=r"R-3 b \(c\): every lost attempt of a whole seed"):
+        _build(rig)
+    # An entry whose lost_utc the ledger lacks.
+    _seed(rig, 2024, attempts=[rig.entry, {**rig.entry, "lost_utc": "2000-01-01T00:00:00+00:00"}])
+    with pytest.raises(SystemExit, match="a lost attempt the ledger lacks"):
+        _build(rig)
+    # A kept file whose bytes changed.
+    _seed(rig, 2024, attempts=[rig.entry])
+    _build(rig)
+    with kept_full.open("ab") as f:
+        f.write(b"\0")
+    with pytest.raises(SystemExit, match="kept file .* sha256 changed"):
+        _build(rig)
+
+    # No lost line and every dropped_attempts []: {}.
+    clean = _build_rig(monkeypatch, tmp_path / "clean")
+    _whole(clean, 1337, 2024)
+    assert _build(clean)["seeds"]["dropped_attempts"] == {}
+
+
+def test_build_record_lists_dropped_attempts_of_a_seed_left_dropped(monkeypatch, tmp_path):
+    rig = _build_rig(monkeypatch, tmp_path)
+    _whole(rig, 1337)
+    _ledger(rig.ledger, ("start", 2024), ("lost", 2024))
+    _plant(_new_adapter("full", 2024), b"crashed full adapter")
+    _plant(rig.root / phase40_prereg.a2_record("full", 2024), b"crashed full A2 record")
+    record = _build(rig)
+    in_place = phase40_noise.partial_outputs(2024, root=rig.root)
+    assert len(in_place) == 2
+    assert record["seeds"]["dropped_seed_outputs"] == {
+        2024: {
+            "manifests": [],
+            "in_place": [{"from": rel, "sha256": phase40_noise._sha256(p)} for rel, p in in_place],
+        }
+    }
+    manifest = _drop(rig)
+    rel_dir = phase40_prereg.dropped_attempt_dir(2024, _lost_utc(rig, 2024))
+    rel = f"{rel_dir}/{phase40_prereg.DROPPED_MANIFEST}"
+    after = _build(rig)
+    assert after["seeds"]["dropped_seed_outputs"] == {
+        2024: {
+            "manifests": [
+                {
+                    **manifest,
+                    "manifest": rel,
+                    "manifest_sha256": phase40_noise._sha256(rig.root / rel),
+                    "kept_verified": True,
+                }
+            ],
+            "in_place": [],
+        }
+    }
+
+    # The re-run case: one byte appended to the kept attempt's manifest refuses.
+    rerun = _rerun_rig(monkeypatch, tmp_path / "rerun")
+    _build(rerun)
+    with (rerun.root / rerun.entry["manifest"]).open("ab") as f:
+        f.write(b" ")
+    with pytest.raises(SystemExit, match="manifest_sha256"):
+        _build(rerun)
+
+
+def test_build_record_without_seed_1337(monkeypatch, tmp_path):
+    rig = _build_rig(monkeypatch, tmp_path)
+    _ledger(rig.ledger, ("start", 1337), ("lost", 1337))
+    _whole(rig, 2024, 1338)
+    record = _build(rig)
+    assert record["status"] == "MEASURED"
+    gone = "not whole: seed 1337 is dropped"
+    assert record["identity"]["m2_seed1337"] == record["identity"]["full_seed1337"] == gone
+    assert record["d07"]["m2_seed1337"] == record["d08b"] == gone
+    observed = {k: v["observed"] for k, v in record["predictions"].items()}
+    assert observed["tensor_identity"]["m2_seed1337"] == gone
+    assert observed["tensor_identity"]["full_seed1337"] == gone
+    assert observed["gap_pair"] == observed["m2_counts"] == observed["full_counts"] == gone
+    assert record["identity"]["full_seed2024"]["tensors_identical"] is True
+    assert observed["tensor_identity"]["full_seed2024"] is True
+    assert "persona_vs_dialogue_floor_1337" in record["d08"]
+    assert set(record["phase41_adapters"]) == {2024}
+
+    rig = _build_rig(monkeypatch, tmp_path / "no2024")
+    _ledger(rig.ledger, ("start", 2024), ("lost", 2024))
+    _whole(rig, 1337, 1338)
+    record = _build(rig)
+    gone = "not whole: seed 2024 is dropped"
+    assert record["identity"]["full_seed2024"] == gone
+    assert record["predictions"]["gap_pair"]["observed"] == gone
+    assert isinstance(record["d08b"], dict) and set(record["phase41_adapters"]) == {1337}
+
+    rig = _build_rig(monkeypatch, tmp_path / "not_run")
+    _whole(rig, 2024, 1338)
+    record = _build(rig)
+    gone = "not whole: seed 1337 is not_run"
+    assert record["identity"]["m2_seed1337"] == record["d07"]["m2_seed1337"] == gone
+    assert record["seeds"]["not_run"] == [1337, 2025, 1339]
+
+
+def test_insufficient_seeds_has_no_gap_key(monkeypatch, tmp_path):
+    rig = _build_rig(monkeypatch, tmp_path)
+    _whole(rig, 1337)
+    _ledger(rig.ledger, ("start", 2024), ("lost", 2024))
+    record = _build(rig)
+    assert record["status"] == "INSUFFICIENT_SEEDS"
+    for key in ("gap_noise_floor", "recall_floor", "gap_noise_floor_detail"):
+        assert key not in record
+    assert "INSUFFICIENT_SEEDS" in record["stop"] and "stops for Rafael" in record["stop"]
+    assert record["seeds"]["dropped"] == [2024] and record["seeds"]["whole"] == [1337]
+    with pytest.raises(SystemExit, match="gap_noise_floor"):
+        _consumer_fill(tmp_path, monkeypatch, record)
+
+
+def test_emit_records_the_d13_reading(monkeypatch, tmp_path, capsys):
+    rig = _build_rig(monkeypatch, tmp_path)
+    assert phase40_prereg.D13_INCLUDED is True
+    failed = phase40_prereg.d13_not_measured("exception", "RuntimeError: planted")
+    _whole(rig, 1337)
+    _whole(rig, 2024, d13=failed)
+    record = phase40_noise.emit(root=rig.root, ledger_path=rig.ledger)
+    blocks = {1337: _measured(), 2024: failed}
+    assert record["d13"] == {"reading": phase40_prereg.d13_reading(blocks), "blocks": blocks}
+    assert record["seeds"]["whole"] == [1337, 2024]
+    assert record["recall_floor"]["full"]["seeds"] == [1337, 2024]
+    assert record["gap_noise_floor_detail"]["seeds"] == [1337, 2024]
+    out = rig.root / phase40_prereg.NOISE_FLOOR_RECORD
+    assert json.loads(out.read_text(encoding="utf-8"))["status"] == "MEASURED"
+    assert "EMIT MEASURED whole=1337,2024" in capsys.readouterr().out
+
+    # D-13 not approved: the seed records carry null and the record's d13 is None.
+    monkeypatch.setattr(phase40_prereg, "D13_INCLUDED", False)
+    for seed in (1337, 2024):
+        _seed(rig, seed, d13=None)
+    assert _build(rig)["d13"] is None
+    # A null d13 while D-13 is approved refuses with d13_reading's message.
+    monkeypatch.setattr(phase40_prereg, "D13_INCLUDED", True)
+    with pytest.raises(SystemExit, match="neither d13_block nor d13_not_measured"):
+        _build(rig)
+
+
+def test_emit_refuses_an_attempt_after_a_whole_seed(monkeypatch, tmp_path):
+    rig = _build_rig(monkeypatch, tmp_path)
+    _whole(rig, 1337)
+    _ledger(rig.ledger, ("start", 1337), ("lost", 1337))
+    with pytest.raises(SystemExit, match="a whole seed has a later attempt"):
+        _build(rig)
+    with pytest.raises(SystemExit, match="a whole seed has a later attempt"):
+        phase40_noise.emit(root=rig.root, ledger_path=rig.ledger)
+    assert not (rig.root / phase40_prereg.NOISE_FLOOR_RECORD).exists()
+
+
+def test_a2_sha_mismatch_refuses(monkeypatch, tmp_path):
+    rig = _build_rig(monkeypatch, tmp_path)
+    _whole(rig, 1337, 2024)
+    _build(rig)
+    with (rig.root / phase40_prereg.a2_record("m2", 2024)).open("ab") as f:
+        f.write(b" ")
+    with pytest.raises(SystemExit, match="sha256"):
+        _build(rig)
+    # The adapter re-hashed at its original path too (Phase 41 reuses it by sha256 there).
+    _seed(rig, 2024)
+    _build(rig)
+    with _new_adapter("m2", 2024).open("ab") as f:
+        f.write(b"\0")
+    with pytest.raises(SystemExit, match="adapter_sha256"):
+        _build(rig)
+
+
+def test_emit_publishes_floor_beside_v3_and_margin_unamended(monkeypatch, tmp_path):
+    rig = _build_rig(monkeypatch, tmp_path)
+    _whole(rig, 1337, 2024)
+    record = _build(rig)
+    assert record["recall_floor"]["beside"] == {
+        "sampling_floor": phase19_floor.NONTARGET_NOISE_FLOOR,
+        "margin_at_gate": phase35_prereg.e1_condition_b_margin(),
+        "margin_amended": False,
+    }
+    first = _git(
+        "log", "--diff-filter=A", "--format=%H", "--", "scripts/phase40_prereg.py"
+    ).split()[-1]
+    unchanged = subprocess.run(
+        (
+            "git",
+            "diff",
+            "--quiet",
+            f"{first}^",
+            "HEAD",
+            "--",
+            "results/phase19_noise_floors.json",
+            "scripts/phase19_floor.py",
+        ),
+        cwd=_ROOT,
+    )
+    assert unchanged.returncode == 0
+
+
+def _identity_stub(monkeypatch, rig, identical):
+    def stub(new_path, committed_path):
+        rig.identity_calls.append((pathlib.Path(new_path), pathlib.Path(committed_path)))
+        return {"tensors_identical": identical, "criterion": False}
+
+    monkeypatch.setattr(phase40_noise, "adapter_identity", stub)
+
+
+def test_emit_d08_block_and_d07_readings(monkeypatch, tmp_path):
+    rig = _build_rig(monkeypatch, tmp_path)
+    _whole(rig, 1337, 2024)
+    p18 = json.loads(phase19_erasure.PHASE18_ARM_RECORD_PATH.read_text(encoding="utf-8"))
+    retrain = json.loads(_RETRAIN.read_text(encoding="utf-8"))
+    full, m2 = _a2(rig, "full", 1337), _a2(rig, "m2", 1337)
+    outcomes = set()
+    for identical in (True, False):
+        rig.identity_calls.clear()
+        _identity_stub(monkeypatch, rig, identical)
+        record = _build(rig)
+        d07 = record["d07"]["m2_seed1337"]
+        expected = phase40_prereg.d07_reading(
+            identical, _rows(m2), phase40_prereg.a2_rows(retrain, *phase40_prereg.a2_scope(m2))
+        )
+        assert {k: d07[k] for k in expected} == expected
+        assert (d07["label"] is None) is identical
+        assert d07["draw_identity"] == phase37_prereg.draw_identity(m2["draws"], retrain["draws"])
+        family, tiers = phase40_prereg.a2_scope(full)
+        d08b = phase40_prereg.d08b_reading(
+            identical, phase40_prereg.a2_rows(p18, family, tiers), _rows(full)
+        )
+        assert {k: record["d08b"][k] for k in d08b} == d08b
+        assert record["d08b"]["draw_identity"] == phase37_prereg.draw_identity(
+            full["draws"], [d for d in p18["draws"] if d["family"] == family]
+        )
+        outcomes.add(record["d08b"]["outcome"])
+        assert record["d08"] == {
+            "statement": phase40_prereg.ENTRIES["d08_correction"]["value"],
+            "persona_vs_dialogue_floor_1337": {"tensors_identical": identical, "criterion": False},
+        }
+        comp = rig.comparators
+        assert (comp["full_seed1337"], comp["dialogue_floor_seed1337"]) in rig.identity_calls
+        assert (_new_adapter("m2", 1337), comp["m2_seed1337"]) in rig.identity_calls
+        assert (_new_adapter("full", 2024), comp["full_seed2024"]) in rig.identity_calls
+        assert record["predictions"]["tensor_identity"]["observed"]["m2_seed1337"] is identical
+    assert "NOT_SEPARABLE" in outcomes and outcomes <= set(phase40_prereg.D08B_OUTCOMES)
+    assert len(outcomes) == 2
+
+
+def test_emit_is_write_once_and_refuses_a_dirty_tree(monkeypatch, tmp_path, capsys):
+    rig = _build_rig(monkeypatch, tmp_path)
+    _whole(rig, 1337, 2024)
+    out = rig.root / phase40_prereg.NOISE_FLOOR_RECORD
+    phase40_noise.emit(root=rig.root, ledger_path=rig.ledger)
+    before = out.read_bytes()
+    with pytest.raises(SystemExit, match="REFUSING to overwrite"):
+        phase40_noise.emit(root=rig.root, ledger_path=rig.ledger)
+    assert out.read_bytes() == before
+    monkeypatch.undo()
+
+    real = _build_rig(monkeypatch, tmp_path / "real", real=True)
+    _whole(real, 1337)
+    _ledger(real.ledger, ("start", 2024), ("lost", 2024))
+    real_out = real.root / phase40_prereg.NOISE_FLOOR_RECORD
+    planted = []
+
+    def dirty(**kw):
+        planted.append(kw)
+        raise SystemExit("planted: dirty tree")
+
+    monkeypatch.setattr(phase40_noise, "refuse_if_dirty", dirty)
+    with pytest.raises(SystemExit, match="dirty"):
+        phase40_noise.emit()
+    assert not real_out.exists() and len(planted) == 1
+    monkeypatch.setattr(phase40_noise, "refuse_if_dirty", lambda **kw: real.dirty.append(kw))
+    record = phase40_noise.emit()
+    assert real_out.exists() and record["status"] == "INSUFFICIENT_SEEDS"
+    outcomes = phase40_prereg.seed_outcomes(_ledger_lines(real.ledger), phase40_prereg.SEEDS)
+    assert len(real.dirty) == 1
+    assert real.dirty[0]["pathspec"] == phase40_noise._launch_pathspec(outcomes)
+    assert planted[0]["pathspec"] == real.dirty[0]["pathspec"]
+
+
+def _ledger_lines(path):
+    return [json.loads(t) for t in _lines(path)]

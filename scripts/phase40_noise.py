@@ -1066,3 +1066,377 @@ def run(
         whole.append(seed)
     print(f"RUN DONE whole={whole}", flush=True)
     return whole
+
+
+# =================================================================================================
+# The noise-floor record (CPU): built from the seed and A2 records through the frozen prereg only
+# =================================================================================================
+
+NOT_PRODUCED = "not produced by the dropped attempt"
+
+
+def _not_whole(outcomes, *seeds):
+    """None when every seed is whole, else the reason the first one is not (never a KeyError)."""
+    for seed in seeds:
+        if outcomes[seed] != "whole":
+            return f"not whole: seed {seed} is {outcomes[seed]}"
+    return None
+
+
+def _verified_kept(manifest, *, root, what):
+    """Every kept file of a dropped attempt re-hashed at its path under ``root``."""
+    for item in manifest["kept"]:
+        kept = root / item["path"]
+        _prove(
+            kept.is_file() and _sha256(kept) == item["sha256"],
+            f"R-3 b: {what}: kept file {item['path']} is missing or its sha256 changed",
+        )
+
+
+def _listed_attempts(sr, seed, lines, *, root):
+    """R-3 b (c, d), a whole seed's lost attempts as its seed record lists them: each manifest and
+    relaunch declaration by sha256, each kept file re-hashed, and per group the new adapter against
+    the dropped attempt's kept one, tensor by tensor."""
+    import teach_persona as tp  # torch at import: lazy
+
+    prereg = _prereg()
+    lost = prereg.lost_attempts(lines, seed)
+    listed = sr["dropped_attempts"]
+    for attempt in listed:
+        _prove(
+            attempt["lost_utc"] in lost,
+            f"R-3 b: seed {seed}'s record names a lost attempt the ledger lacks "
+            f"({attempt['lost_utc']})",
+        )
+    _prove(
+        [a["lost_utc"] for a in listed] == lost,
+        f"R-3 b (c): every lost attempt of a whole seed is listed in its seed record (seed {seed}: "
+        f"ledger {lost})",
+    )
+    attempts = []
+    for attempt in listed:
+        _prove(
+            _sha256(root / attempt["manifest"]) == attempt["manifest_sha256"],
+            f"R-3 b: {attempt['manifest']}'s sha256 differs from seed {seed}'s manifest_sha256",
+        )
+        for declaration in attempt["relaunch_declarations"]:
+            _prove(
+                _sha256(root / declaration["path"]) == declaration["sha256"],
+                f"R-3 b: {declaration['path']}'s sha256 differs from seed {seed}'s record",
+            )
+        _verified_kept(attempt, root=root, what=f"seed {seed}")
+        identity = {}
+        for group in prereg.GROUPS:
+            new = sr["groups"][group]["adapter"]
+            item = next((i for i in attempt["kept"] if i["from"] == new), None)
+            identity[group] = (
+                NOT_PRODUCED
+                if item is None
+                else adapter_identity(tp._REPO_ROOT / new, root / item["path"])
+            )
+        attempts.append({**attempt, "kept_verified": True, "adapter_identity": identity})
+    return attempts
+
+
+def _left_dropped(seed, lines, *, root):
+    """R-3 b (c) for a seed no relaunch re-ran: each manifest found for its lost attempts
+    (re-hashed) and each partial output still in place."""
+    prereg = _prereg()
+    manifests = []
+    for utc in prereg.lost_attempts(lines, seed):
+        rel = f"{prereg.dropped_attempt_dir(seed, utc)}/{prereg.DROPPED_MANIFEST}"
+        if not (root / rel).exists():
+            continue
+        manifest = _load(root / rel)
+        _verified_kept(manifest, root=root, what=f"dropped seed {seed}")
+        manifests.append(
+            {
+                **manifest,
+                "manifest": rel,
+                "manifest_sha256": _sha256(root / rel),
+                "kept_verified": True,
+            }
+        )
+    return {
+        "manifests": manifests,
+        "in_place": [
+            {"from": rel, "sha256": _sha256(path)} for rel, path in partial_outputs(seed, root=root)
+        ],
+    }
+
+
+def build_record(root, *, ledger_path=None):
+    """NOISE-01 / NOISE-02 (CPU): the noise-floor record from the whole seeds' seed and A2 records,
+    each proved by sha256 first; every reduction is the frozen prereg's (recall_floor,
+    gap_noise_floor, d12_table, d07_reading, d08b_reading, d13_reading)."""
+    import phase19_erasure as pin  # torch at import: lazy
+    import phase19_floor
+    import phase19_run  # torch at import: lazy
+    import phase35_prereg
+    import phase37_prereg
+    import teach_persona as tp  # torch at import: lazy
+
+    prereg = _prereg()
+    root = pathlib.Path(root)
+    off = prereg.committed_adapter_off()
+    lines = phase36_ledger.read_ledger(ledger_path)
+    outcomes = prereg.seed_outcomes(lines, prereg.SEEDS)
+    whole = [s for s in prereg.SEEDS if outcomes[s] == "whole"]
+    srs = {seed: _load(root / prereg.seed_record(seed)) for seed in whole}
+    devices = {srs[s]["provenance"]["run"]["device"] for s in whole}
+    _prove(
+        len(devices) <= 1,
+        f"the whole seeds ran on {sorted(devices)}: one device across every whole seed (a mixed "
+        "set would mix adapter-off scales)",
+    )
+    device = next(iter(devices), None)
+
+    a2, rows, per_seed, dropped_attempts = {}, {g: {} for g in prereg.GROUPS}, {}, {}
+    for seed in whole:
+        sr = srs[seed]
+        a2[seed], per_seed[seed] = {}, {}
+        for group in prereg.GROUPS:
+            entry = sr["groups"][group]
+            rel = entry["a2"]["record"]
+            _prove(
+                _sha256(root / rel) == entry["a2"]["record_sha256"],
+                f"{rel}'s sha256 differs from the one seed {seed}'s record names",
+            )
+            adapter = tp._REPO_ROOT / entry["adapter"]
+            _prove(
+                adapter.is_file() and _sha256(adapter) == entry["adapter_sha256"],
+                f"{entry['adapter']} is missing or differs from seed {seed}'s adapter_sha256",
+            )
+            rec = _load(root / rel)
+            _prove(
+                rec["config"]["device"] == device,
+                f"WR-03: {rel} was measured on {rec['config']['device']!r}, but seed {seed}'s "
+                f"record ran on {device!r}",
+            )
+            _prove(
+                rec["config"]["arm"] == prereg.A2_LABEL,
+                f"ruling b: {rel} carries config.arm {rec['config']['arm']!r}, not the pinned A2 "
+                f"label {prereg.A2_LABEL!r}",
+            )
+            a2[seed][group] = rec
+            rows[group][seed] = prereg.a2_rows(rec, *prereg.a2_scope(rec))
+            per_seed[seed][group] = {
+                "slots": prereg.slot_rows(rows[group][seed]),
+                "dialogue_ppl": rec["dialogue_ppl"],
+                "pre_erasure_dialogue_ppl": rec["pre_erasure"]["dialogue_ppl"],
+                "dialogue_gap": prereg.dialogue_gap(rec, off, device=rec["config"]["device"]),
+                "adapter": entry["adapter"],
+                "adapter_sha256": entry["adapter_sha256"],
+                "a2_record": rel,
+                "a2_record_sha256": entry["a2"]["record_sha256"],
+                "train": entry["train"],
+            }
+        attempts = _listed_attempts(sr, seed, lines, root=root)
+        if attempts:
+            dropped_attempts[seed] = attempts
+    dropped_seed_outputs = {
+        seed: _left_dropped(seed, lines, root=root)
+        for seed in prereg.SEEDS
+        if outcomes[seed] == "dropped"
+    }
+
+    v3_sampling_floor = _load(phase19_run.NOISE_FLOORS_PATH)["nontarget_noise_floor"]["value"]
+    crn = {
+        "confirmation_g": prereg.CONFIRMATIONS["g"],
+        "v3_sampling_floor": v3_sampling_floor,
+        "source": (
+            f"{phase19_run.NOISE_FLOORS_PATH.relative_to(phase19_run._REPO_ROOT).as_posix()}"
+            "::nontarget_noise_floor.value"
+        ),
+    }
+    record = {
+        "front": FRONT,
+        "phase": 40,
+        "device": device,
+        "seeds": {
+            "outcomes": outcomes,
+            "whole": whole,
+            "dropped": [s for s in prereg.SEEDS if outcomes[s] == "dropped"],
+            "not_run": [s for s in prereg.SEEDS if outcomes[s] == "not_run"],
+            "dropped_attempts": dropped_attempts,
+            "dropped_seed_outputs": dropped_seed_outputs,
+        },
+        "per_seed": per_seed,
+    }
+    if len(whole) >= phase35_prereg.ENTRIES["e2_min_seeds"]["value"]:
+        recall = prereg.recall_floor(rows["full"], rows["m2"])
+        gap = prereg.gap_noise_floor({s: per_seed[s]["full"]["dialogue_gap"]["gap"] for s in whole})
+        record.update(
+            status="MEASURED",
+            recall_floor=recall,
+            gap_noise_floor=gap["value"],
+            gap_noise_floor_detail=gap,
+            m2_gap_descriptive=prereg.gap_noise_floor(
+                {s: per_seed[s]["m2"]["dialogue_gap"]["gap"] for s in whole}
+            ),
+            d12=prereg.d12_table(rows["full"], rows["m2"]),
+        )
+        crn["published_below_v3_sampling_floor"] = recall["published"]["value"] < v3_sampling_floor
+    else:
+        record.update(
+            status="INSUFFICIENT_SEEDS",
+            stop=(
+                "INSUFFICIENT_SEEDS: fewer than e2_min_seeds whole seeds; no floor is published "
+                "and the phase stops for Rafael (ruling e)"
+            ),
+        )
+
+    # D-07 / D-08 / D-08b, descriptive: each entry only when the seeds it names are whole.
+    comp = comparators()
+
+    def new(group, seed):
+        return tp._REPO_ROOT / srs[seed]["groups"][group]["adapter"]
+
+    identity = {
+        key: _not_whole(outcomes, seed) or adapter_identity(new(group, seed), comp[key])
+        for key, group, seed in (
+            ("m2_seed1337", "m2", 1337),
+            ("full_seed1337", "full", 1337),
+            ("full_seed2024", "full", 2024),
+        )
+    }
+    d07 = {"m2_seed1337": _not_whole(outcomes, 1337)}
+    d08b = _not_whole(outcomes, 1337)
+    if d07["m2_seed1337"] is None:
+        rec = a2[1337]["m2"]
+        committed = _load(pin.arm_record_path("retrain"))
+        d07["m2_seed1337"] = {
+            **prereg.d07_reading(
+                identity["m2_seed1337"]["tensors_identical"],
+                rows["m2"][1337],
+                prereg.a2_rows(committed, *prereg.a2_scope(rec)),
+            ),
+            "draw_identity": phase37_prereg.draw_identity(rec["draws"], committed["draws"]),
+        }
+        rec = a2[1337]["full"]
+        family, tiers = prereg.a2_scope(rec)
+        phase18 = _load(pin.PHASE18_ARM_RECORD_PATH)
+        d08b = {
+            **prereg.d08b_reading(
+                identity["full_seed1337"]["tensors_identical"],
+                prereg.a2_rows(phase18, family, tiers),
+                rows["full"][1337],
+            ),
+            "draw_identity": phase37_prereg.draw_identity(
+                rec["draws"], [d for d in phase18["draws"] if d["family"] == family]
+            ),
+        }
+    d08 = {
+        "statement": prereg.ENTRIES["d08_correction"]["value"],
+        "persona_vs_dialogue_floor_1337": adapter_identity(
+            comp["full_seed1337"], comp["dialogue_floor_seed1337"]
+        ),
+    }
+    pair = _not_whole(outcomes, 1337, 2024)
+    if pair is None:
+        readings = [per_seed[s]["full"]["dialogue_gap"] for s in (1337, 2024)]
+        pair = {
+            "abs_gap_difference": abs(readings[0]["gap"] - readings[1]["gap"]),
+            "beside": phase19_floor.DIALOGUE_PPL_NOISE_FLOOR,
+            "devices": [r["device"] for r in readings],
+            "rehearsal": [r["rehearsal"] for r in readings],
+        }
+    observed = {
+        "tensor_identity": {
+            key: value if isinstance(value, str) else value["tensors_identical"]
+            for key, value in identity.items()
+        },
+        "gap_pair": pair,
+        "m2_counts": d07["m2_seed1337"]
+        if isinstance(d07["m2_seed1337"], str)
+        else all(c["delta"] == 0 for c in d07["m2_seed1337"]["counts"].values()),
+        "full_counts": d08b
+        if isinstance(d08b, str)
+        else all(c["delta"] == 0 for c in d08b["counts"].values()),
+        "status": record["status"],
+    }
+    blocks = {s: srs[s]["d13"] for s in whole}
+    now = module_sha256()
+    record.update(
+        identity=identity,
+        d07=d07,
+        d08=d08,
+        d08b=d08b,
+        d13={"reading": prereg.d13_reading(blocks), "blocks": blocks}
+        if prereg.D13_INCLUDED
+        else None,
+        a2_label={"label": prereg.A2_LABEL, "explanation": prereg.ENTRIES["a2_pass"]["value"]},
+        crn_addendum=crn,
+        predictions={
+            key: {"prediction": text, "observed": observed[key], "criterion": False}
+            for key, text in prereg.ENTRIES["predictions"]["value"].items()
+        },
+        estimator=json.loads(json.dumps(prereg.E2_NOISE_FLOOR_ESTIMATOR, default=dict)),
+        approval=prereg.approval_block(),
+        rehearsal_disclosure={s: srs[s]["rehearsal_disclosure"] for s in whole},
+        phase41_adapters={
+            s: {
+                g: {
+                    "path": srs[s]["groups"][g]["adapter"],
+                    "sha256": srs[s]["groups"][g]["adapter_sha256"],
+                }
+                for g in prereg.GROUPS
+            }
+            for s in phase35_prereg.e1_teaching_seeds()
+            if s in whole
+        },
+        provenance={
+            "seeds": {s: srs[s]["provenance"]["run"] for s in whole},
+            "emit": {
+                "device": "cpu",
+                "head_at_write": git_sha(),
+                "written_utc": _now(),
+                "module_sha256": now,
+                "modules_changed_since_launch": sorted(
+                    rel
+                    for rel in MODULES
+                    if any(
+                        srs[s]["provenance"]["module_sha256_at_launch"].get(rel) != now[rel]
+                        for s in whole
+                    )
+                ),
+            },
+        },
+    )
+    return record
+
+
+def emit(*, root=None, ledger_path=None):
+    """Write results/phase40_noise_floor.json ONCE (CPU). On the real root, from a clean tree but
+    for the run's own untracked outputs (the same pathspec preflight uses)."""
+    root = pathlib.Path(root) if root is not None else pathlib.Path(_ROOT)
+    prereg = _prereg()
+    out = root / prereg.NOISE_FLOOR_RECORD
+    _prove(
+        not out.exists(),
+        f"{out} exists — REFUSING to overwrite it. The noise-floor record is write-once; a "
+        "correction is a dated continuation via scripts/_addendum.py",
+    )
+    if _is_real(root):
+        refuse_if_dirty(
+            who="phase40_noise",
+            detail=(
+                "the noise-floor record publishes git_sha and hashes its modules from the working "
+                "tree; a record written from a dirty tree names a commit it cannot be regenerated "
+                "from"
+            ),
+            pathspec=_launch_pathspec(
+                prereg.seed_outcomes(phase36_ledger.read_ledger(ledger_path), prereg.SEEDS)
+            ),
+            cwd=_REPO,
+        )
+    record = build_record(root, ledger_path=ledger_path)
+    _write_once(out, record)
+    published = record["recall_floor"]["published"]["value"] if "recall_floor" in record else "-"
+    gap = record.get("gap_noise_floor", "-")
+    print(
+        f"EMIT {record['status']} whole={','.join(map(str, record['seeds']['whole']))} "
+        f"recall_floor={published!r} gap_noise_floor={gap!r}",
+        flush=True,
+    )
+    return record
