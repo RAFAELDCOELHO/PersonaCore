@@ -855,6 +855,11 @@ def test_rows_denominator_on_the_committed_m2_record():
         phase40_prereg.slot_rows(short)
     with pytest.raises(SystemExit, match=r"^\[phase40_prereg\]"):
         phase40_prereg.a2_scope({"config": {"attack_family": "A2"}, "draws": []})
+    # IN-04: a record drawn at another K than the Phase 18 record's config k is refused.
+    other_k = copy.deepcopy(record)
+    other_k["config"]["k"] = 1
+    with pytest.raises(SystemExit, match="config k"):
+        phase40_prereg.a2_rows(other_k, family, tiers)
 
 
 def test_pair_reproduces_the_v3_sampling_floor():

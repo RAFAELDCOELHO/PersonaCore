@@ -934,11 +934,16 @@ def a2_scope(record):
 
 def a2_rows(record, family, tiers):
     """NOISE-01 / D-01: per-fact rows pooled over both tiers by phase19_run._pooled_rows (the 27 =
-    14 + 13 denominator), never an arm record's per_fact (19-09 defect C)."""
+    14 + 13 denominator), never an arm record's per_fact (19-09 defect C), at the Phase 18 K."""
     import phase14_factset  # torch-free, but lazy like every pin import
     import phase19_erasure as pin  # torch at import: lazy
     import phase19_run  # torch at import: lazy
 
+    phase18_k = json.loads(pin.PHASE18_ARM_RECORD_PATH.read_text(encoding="utf-8"))["config"]["k"]
+    _prove(
+        record["config"]["k"] == phase18_k,
+        f"the record's config k {record['config']['k']!r} != the Phase 18 record's {phase18_k!r}",
+    )
     values = {f.id: f.value for f in phase14_factset.LOCKED_FACTS + phase14_factset.SOFT_TIER_FACTS}
     rows = phase19_run._pooled_rows(record["draws"], values, family, tiers)
     for fact_id, row in rows.items():
