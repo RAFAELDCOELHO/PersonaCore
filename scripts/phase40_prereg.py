@@ -18,10 +18,15 @@ proposer). S, the projection, total and stop hours and the D-13 NLL count are co
 from committed records and the modules that own each term, never typed.
 
 Not torch-free at import: ``phase35_prereg.seed_list()`` imports phase23_run, which imports
-teach_persona and torch. Every other heavy import (phase19_erasure, phase19_run,
-phase18_extraction, phase14_factset, phase38_rank, phase36_ledger) stays inside the function that
-needs it. phase38_prereg and phase39_prereg are module-level imports for the E2 + E5 + E6 record
-total; measured, importing them opens no checkpoints/ or data/ file.
+teach_persona and torch. The heavy imports are written inside the functions that need them, but
+importing this module still loads most of them (IN-06). Measured at import: loads
+phase14_factset, phase18_extraction, phase19_erasure, phase19_floor, phase36_ledger,
+phase38_rank; never phase19_run.
+phase14_factset, phase18_extraction, phase19_floor and phase36_ledger arrive through the
+module-level phase35/36/38/39 prereg imports (phase38_prereg and phase39_prereg are there for the
+E2 + E5 + E6 record total); phase19_erasure and phase38_rank through ``d13_nlls_per_adapter()``,
+which runs at import because D13_INCLUDED is True. Measured, importing this module opens no
+checkpoints/ or data/ file (tests/test_phase40_prereg.py's audit hook).
 """
 
 import collections.abc

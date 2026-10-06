@@ -22,6 +22,7 @@ import json
 import math
 import os
 import pathlib
+import re
 import statistics
 import subprocess
 import sys
@@ -724,8 +725,27 @@ print(json.dumps({{
     "seeds": list(phase40_prereg.SEEDS),
     "planted": [os.fspath(p) for p in planted],
     "planted_flagged": list(_FLAGGED),
+    "modules": sorted(m for m in sys.modules if m.startswith("phase")),
 }}))
 """
+
+
+def _lazy_imports(source):
+    """The modules the prereg imports inside a function body (its lazy, heavy imports)."""
+    names = set()
+    for node in ast.parse(source).body:
+        if isinstance(node, ast.FunctionDef):
+            for inner in ast.walk(node):
+                if isinstance(inner, ast.Import):
+                    names |= {alias.name for alias in inner.names}
+    return names
+
+
+def _docstring_import_claim(docstring):
+    """({loaded}, {never}) from the docstring's "Measured at import: loads ...; never ..." line."""
+    match = re.search(r"Measured at import: loads\s+([\w,\s]+); never ([\w,\s]+)\.", docstring)
+    assert match, "the module docstring states no 'Measured at import: loads ...; never ...' line"
+    return tuple({n.strip() for n in group.split(",")} for group in match.groups())
 
 
 def test_importing_the_prereg_opens_no_checkpoint(tmp_path):
@@ -750,6 +770,13 @@ def test_importing_the_prereg_opens_no_checkpoint(tmp_path):
     assert result["import_flagged"] == []
     assert result["safetensors_loaded"] is False
     assert result["e2_s"] == 5
+    # IN-06: the docstring says which lazily imported modules importing the prereg loads.
+    lazy = _lazy_imports((_ROOT / PREREG).read_text(encoding="utf-8"))
+    assert {"phase19_erasure", "phase19_run", "phase38_rank"} <= lazy, "meta-guard: lazy imports"
+    loaded = lazy & set(result["modules"])
+    assert _docstring_import_claim(phase40_prereg.__doc__) == (loaded, lazy - loaded)
+    with pytest.raises(AssertionError, match="Measured at import"):
+        _docstring_import_claim("planted docstring")
     assert result["seeds"] == [1337, 2024, 1338, 2025, 1339]
     # NON-VACUITY: one planted open per predicate branch, each flagged by the hook.
     assert len(result["planted"]) == 4
