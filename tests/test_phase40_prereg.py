@@ -653,24 +653,46 @@ def test_prove_count_and_read():
 
 
 _LABEL = "default taken at plan time, not yet confirmed by Rafael"
-# Keyed by ENTRY NAME: plan 04 moves each name to its confirmed form with a local edit.
+_CONFIRMED_ON = "2026-10-06"
+# Keyed by ENTRY NAME: (the id its derivation cites, the date, Rafael's item letters). Plan 04 moved
+# every name out of plan 02's _UNCONFIRMED and added d12_rereading and predictions (items h, i).
 # seed_outcomes is not here: R-3 was ruled at 40-01, and its derivation cites "R-3".
-_UNCONFIRMED = {
-    "e2_noise_floor_estimator": "D-04",
-    "a2_pass": "NOISE-01",
-    "run_order": "D-15",
-    "record_layout": "D-15",
+_CONFIRMED = {
+    "e2_noise_floor_estimator": ("D-04", _CONFIRMED_ON, "aeg"),
+    "a2_pass": ("NOISE-01", _CONFIRMED_ON, "b"),
+    "run_order": ("D-15", _CONFIRMED_ON, "c"),
+    "record_layout": ("D-15", _CONFIRMED_ON, "f"),
+    "d12_rereading": ("D-12", _CONFIRMED_ON, "h"),
+    "predictions": ("D-07", _CONFIRMED_ON, "i"),
 }
+
+
+def _unconfirmed(entries):
+    """The entry names whose derivation still carries a plan-time 'not yet confirmed' label."""
+    return [name for name, entry in entries.items() if "not yet confirmed" in entry["derivation"]]
 
 
 def test_preferences_are_labelled():
     entries = phase40_prereg.ENTRIES
-    for name, d_id in _UNCONFIRMED.items():
+    assert phase40_prereg.CONFIRMED_ON == _CONFIRMED_ON
+    letters = "".join(confirmed[2] for confirmed in _CONFIRMED.values())
+    assert sorted(letters) == sorted(phase40_prereg.CONFIRMATIONS) == list("abcefghi")
+    for name, (d_id, date, item_letters) in _CONFIRMED.items():
         derivation = entries[name]["derivation"]
-        assert d_id in derivation and _LABEL in derivation, name
-    labelled = {name for name, entry in entries.items() if _LABEL in entry["derivation"]}
-    assert labelled == set(_UNCONFIRMED)
-    assert "seed_outcomes" not in _UNCONFIRMED
+        assert d_id in derivation, name
+        for letter in item_letters:
+            assert derivation.count(f"confirmed by Rafael {date} ({letter})") == 1, (name, letter)
+            assert phase40_prereg._confirmed(letter) in derivation, (name, letter)
+    # Each letter has exactly one home across ENTRIES.
+    for letter in letters:
+        tag = f"confirmed by Rafael {_CONFIRMED_ON} ({letter})"
+        homes = [name for name, entry in entries.items() if tag in entry["derivation"]]
+        assert len(homes) == 1, (letter, homes)
+    assert _unconfirmed(entries) == []
+    assert not hasattr(phase40_prereg, "_DEFAULT")
+    # NON-VACUITY: the plan-time label is found by the same helper.
+    assert _unconfirmed({"x": {"derivation": _LABEL}}) == ["x"]
+    assert "seed_outcomes" not in _CONFIRMED
     assert "R-3" in entries["seed_outcomes"]["derivation"]
 
 

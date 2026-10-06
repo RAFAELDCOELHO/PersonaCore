@@ -407,7 +407,53 @@ def approval_block():
 _CONTEXT = "40-CONTEXT D-{} (9d53c09)"
 _ADDENDUM = "40-CONTEXT Addendum D-{} (544ed02)"
 _APPROVALS = "40-CONTEXT Approvals (03de080)"
-_DEFAULT = "default taken at plan time, not yet confirmed by Rafael"
+# Rafael's confirmations a-c and e-i at plan 40-04's review (2026-10-06), quoted character for
+# character from his reply; item d was not asked again (R-1..R-4 were ruled at 40-01). Each is
+# written into the derivation of the entry its item maps to (40-04-PLAN Task 1): a, e, g ->
+# e2_noise_floor_estimator; b -> a2_pass; c -> run_order; f -> record_layout; h -> d12_rereading;
+# i -> predictions. c and e change the rule, implemented in the entry and its function; g adds
+# to the derivation.
+CONFIRMED_ON = "2026-10-06"
+CONFIRMATIONS = types.MappingProxyType(
+    {
+        "a": ("Confirmo: desvio-padrão amostral (n−1) por slot, com o populacional ao lado."),
+        "b": (
+            "Confirmo: rótulo 'retrain' nos dois grupos, com a paridade afirmada; o grupo fica nos "
+            "campos da Fase 40. O relatório explica o rótulo uma vez."
+        ),
+        "c": (
+            "Confirmo a ordem (D-13 por último na unidade de cada semente), com uma mudança: uma "
+            "falha do D-13 (exceção, portão diferente ou leitura fora de formato) nunca derruba a "
+            "semente. Ela é gravada no registro da semente como D-13 não medido, com o motivo, e a "
+            "semente termina normalmente. Só a morte do processo conta como queda, pelo R-3 b."
+        ),
+        "e": (
+            "Confirmo: com menos de 2 sementes inteiras, nenhum piso é publicado e a fase para "
+            "para mim. Com 2 a 4, o registro declara quantas sementes e quantos pares entraram."
+        ),
+        "f": (
+            "Confirmo os registros e a ordem de commit: livro-caixa, registros de cada semente, "
+            "piso, relatório, cada um com meu approved."
+        ),
+        "g": (
+            "Confirmo, com um acréscimo: como todos os adaptadores usam os mesmos números "
+            "aleatórios e o piso de amostragem do v3.0 usou sorteios independentes, o piso de "
+            "treino não é um limite superior de 'treino mais amostragem' e pode sair menor que "
+            "0,148."
+        ),
+        "h": ("Confirmo: taxa do M2 menos taxa do completo, o mesmo sinal do v3.0."),
+        "i": (
+            "Confirmo: as previsões do D-07 são lidas como descrição; uma diferença é um achado, "
+            "não uma falha."
+        ),
+    }
+)
+
+
+def _confirmed(letter):
+    """Rafael's dated confirmation ``letter``, in the form written into an entry's derivation."""
+    return f'confirmed by Rafael {CONFIRMED_ON} ({letter}): "{CONFIRMATIONS[letter]}"'
+
 
 _ENTRIES = {
     "e2_S": {
@@ -533,7 +579,9 @@ _ENTRIES = {
             "of the v3.0 numbers. R-1, Rafael's ruling (Approvals bullet R-1, mps-equality): the "
             "adapter-off check is device-scoped. R-2, Rafael's ruling (Approvals bullet R-2, "
             "post): when pre != post the gap reads post, pre beside. D-04's sample standard "
-            f"deviation (n - 1) with the population one beside: {_DEFAULT}."
+            f"deviation (n - 1) with the population one beside: {_confirmed('a')} "
+            f"INSUFFICIENT_SEEDS, the 'minimum' key: {_confirmed('e')} D-05's common random "
+            f"numbers wording, with his addition: {_confirmed('g')}"
         ),
         "kind": "preference",
         "source": (
@@ -565,7 +613,7 @@ _ENTRIES = {
         ),
         "derivation": (
             "NOISE-01: every adapter is scored by the pinned A2 pass. D-01: both groups scored by "
-            f"the same pass. The arm label 'retrain' (Claude's discretion): {_DEFAULT}."
+            f"the same pass. The arm label 'retrain' (Claude's discretion): {_confirmed('b')}"
         ),
         "kind": "preference",
         "source": f"{_CONTEXT.format('01')}; 40-CONTEXT Claude's Discretion (9d53c09)",
@@ -588,7 +636,7 @@ _ENTRIES = {
         "derivation": (
             "D-15: per seed, in seed_list() order, the whole seed is the unit. P-1 / D-11: the "
             "dialogue PPL is read from each A2 record. The D-13 scoring placed last in the seed "
-            f"unit: {_DEFAULT}."
+            f"unit, and what a D-13 failure does: {_confirmed('c')}"
         ),
         "kind": "preference",
         "source": f"{_CONTEXT.format('15')}; {_CONTEXT.format('11')}",
@@ -725,7 +773,8 @@ _ENTRIES = {
         ),
         "derivation": (
             "D-12: the floor is published beside v3.0's sampling floor without touching the (b) "
-            "margin, and v3.0's M1 x M2 comparison is re-read against the new spread."
+            "margin, and v3.0's M1 x M2 comparison is re-read against the new spread. The sign, "
+            f"m2 rate - full rate (v3.0's delta_taught_to_m2): {_confirmed('h')}"
         ),
         "kind": "preference",
         "source": _CONTEXT.format("12"),
@@ -795,7 +844,8 @@ _ENTRIES = {
         ),
         "derivation": (
             "D-07: the determinism predictions are written before any run, by reference to the "
-            "committed adapters and records (RESEARCH Pitfall 8), never as typed values."
+            "committed adapters and records (RESEARCH Pitfall 8), never as typed values. The "
+            f"predictions as written, descriptive: {_confirmed('i')}"
         ),
         "kind": "preference",
         "source": f"{_CONTEXT.format('07')}; 40-RESEARCH Pitfall 8",
@@ -840,8 +890,8 @@ _ENTRIES = {
             }
         ),
         "derivation": (
-            "D-15: the whole seed is the record unit. The layout (Claude's discretion, "
-            f"40-CONTEXT): {_DEFAULT}."
+            "D-15: the whole seed is the record unit. The layout and the commit order (Claude's "
+            f"discretion, 40-CONTEXT): {_confirmed('f')}"
         ),
         "kind": "preference",
         "source": f"{_CONTEXT.format('15')}; 40-CONTEXT Claude's Discretion (9d53c09)",
