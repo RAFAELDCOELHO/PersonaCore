@@ -3193,3 +3193,20 @@ def test_in02_a_stray_file_in_the_csv_directory_never_costs_the_trained_seed(
         assert f"CSV DIR KEPT {kept}" in out
     assert [x["event"] for x in phase36_ledger.read_ledger(rig.ledger)] == ["start", "end"]
     print(f"\nIN02 {[line for line in out.splitlines() if 'CSV DIR KEPT' in line]}")
+
+
+def test_in03_a_torn_seed_record_temp_file_is_kept_by_drop_attempt(monkeypatch, tmp_path):
+    """IN-03: a SIGKILL inside the seed record's atomic write leaves atomic_write_json's temp
+    sibling (``results/.phase40_seed<k>.json.<rand>.tmp``, untracked, not gitignored).
+    partial_outputs lists it and drop_attempt moves it with the rest (never a hand deletion)."""
+    rig = _dropped_rig(monkeypatch, tmp_path)
+    record = rig.root / phase40_prereg.seed_record(2024)
+    torn = _plant(record.parent / f".{record.name}.k1ll3d.tmp", b'{"torn": ')
+    listed = dict(phase40_noise.partial_outputs(2024, root=rig.root))
+    rel = torn.relative_to(rig.root).as_posix()
+    assert listed[rel] == torn
+    manifest = _drop(rig)
+    kept = {item["from"]: item for item in manifest["kept"]}
+    assert not torn.exists() and (rig.root / kept[rel]["path"]).read_bytes() == b'{"torn": '
+    assert len(manifest["kept"]) == len(rig.crash) + 1
+    print(f"\nIN03 kept {rel} -> {kept[rel]['path']}")

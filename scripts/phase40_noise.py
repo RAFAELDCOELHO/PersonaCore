@@ -620,6 +620,8 @@ def _output_roots(seed, *, root):
         found.append((tp._REPO_ROOT, paths["csv"].parent))
         found.append((root, root / "data" / CSV_DIR / arm_name(group, seed, rehearsal=rehearsal)))
         found.append((root, root / prereg.a2_record(group, seed)))
+    record = root / prereg.seed_record(seed)  # IN-03: atomic_write_json's temp sibling of a kill
+    found += [(root, p) for p in sorted(record.parent.glob(f".{record.name}.*.tmp"))]
     return found
 
 
