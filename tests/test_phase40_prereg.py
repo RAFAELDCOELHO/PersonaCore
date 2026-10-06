@@ -1045,6 +1045,12 @@ def test_gap_on_the_committed_m2_record(monkeypatch):
         assert gap["adapter_off_matches_committed"] is True
         assert gap["rehearsal"] is False and gap["pre_post_equal"] is True
         assert gap["pre_post_abs_difference"] == {"adapter_on": 0.0, "adapter_off": 0.0}
+        # IN-01: R-2 "pre beside" — the pre reading itself is recorded, not only |pre - post|.
+        assert gap["pre"] == {
+            "adapter_on": _COMMITTED_ON,
+            "adapter_off": _COMMITTED_OFF,
+            "adapter_off_matches_committed": True,
+        }
         assert gap["rules"] == {"R-1": rule, "R-2": phase40_prereg.PRE_POST_RULE}
         assert gap["device"] == "mps" and gap["criterion"] is False
     planted = copy.deepcopy(record)
@@ -1092,6 +1098,35 @@ def test_gap_device_is_the_record_device(monkeypatch):
                 phase40_prereg.dialogue_gap(record, committed, device=device)
 
 
+def test_gap_mps_checks_pre_and_post_adapter_off(monkeypatch):
+    # IN-02, Rafael's option a: on mps under mps-equality BOTH the pre and the post adapter-off
+    # readings must equal the committed value, either differing refuses; R-2 post still picks the
+    # reading the gap uses; off mps nothing refuses and both match flags are recorded.
+    committed = phase40_prereg.committed_adapter_off()
+    record = _record(_RETRAIN)
+    pre_off = copy.deepcopy(record)
+    pre_off["pre_erasure"]["dialogue_ppl"]["adapter_off"] = _CPU_ADAPTER_OFF
+    post_off = copy.deepcopy(record)
+    post_off["dialogue_ppl"]["adapter_off"] = _CPU_ADAPTER_OFF
+    monkeypatch.setattr(phase40_prereg, "ADAPTER_OFF_RULE", "mps-equality")
+    for planted in (pre_off, post_off):
+        with pytest.raises(SystemExit, match="R-1"):
+            phase40_prereg.dialogue_gap(planted, committed, device="mps")
+    for planted in (pre_off, post_off):
+        planted["config"]["device"] = "cpu"
+    gap = phase40_prereg.dialogue_gap(pre_off, committed, device="cpu")
+    assert gap["gap"] == _COMMITTED_ON - _COMMITTED_OFF and gap["rehearsal"] is True
+    assert gap["adapter_off_matches_committed"] is True
+    assert gap["pre"]["adapter_off_matches_committed"] is False
+    gap = phase40_prereg.dialogue_gap(post_off, committed, device="cpu")
+    assert gap["adapter_off_matches_committed"] is False
+    assert gap["pre"]["adapter_off_matches_committed"] is True
+    monkeypatch.setattr(phase40_prereg, "ADAPTER_OFF_RULE", "record-only")
+    pre_off["config"]["device"] = "mps"
+    gap = phase40_prereg.dialogue_gap(pre_off, committed, device="mps")
+    assert gap["pre"]["adapter_off_matches_committed"] is False and gap["rehearsal"] is False
+
+
 def test_gap_pre_post_rule_truth_table(monkeypatch):
     committed = phase40_prereg.committed_adapter_off()
     record = _record(_RETRAIN)
@@ -1105,6 +1140,8 @@ def test_gap_pre_post_rule_truth_table(monkeypatch):
     assert gap["pre_post_equal"] is False
     assert gap["pre_post_abs_difference"]["adapter_on"] > 0
     assert gap["pre_post_abs_difference"]["adapter_off"] == 0.0
+    assert gap["pre"]["adapter_on"] == pre["adapter_on"] != post["adapter_on"]
+    assert gap["pre"]["adapter_off"] == pre["adapter_off"]
     monkeypatch.setattr(phase40_prereg, "PRE_POST_RULE", "mean")
     gap = phase40_prereg.dialogue_gap(planted, committed, device="mps")
     on = statistics.fmean([pre["adapter_on"], post["adapter_on"]])

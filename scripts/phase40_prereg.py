@@ -488,7 +488,9 @@ _ENTRIES = {
                             "results/phase19_noise_floors.json dialogue_ppl_noise_floor "
                             "seed_a.adapter_off == seed_b.adapter_off, read at call time with "
                             "adapter_off_identical_across_seeds true, never retyped; under "
-                            "mps-equality an mps reading must equal it or the gap refuses, and a "
+                            "mps-equality the pre_erasure AND the post adapter-off reading on mps "
+                            "must each equal it or the gap refuses (Rafael 2026-10-06, IN-02 "
+                            "option a; R-2 still picks the reading the gap uses), and a "
                             "reading on any other device (the CPU rehearsal, whose off differs "
                             "from the MPS one) is recorded beside it with "
                             "adapter_off_matches_committed false and labelled rehearsal; under "
@@ -1095,10 +1097,14 @@ def dialogue_gap(record, committed_off, *, device):
             on = statistics.fmean([pre["adapter_on"], post["adapter_on"]])
             off = statistics.fmean([pre["adapter_off"], post["adapter_off"]])
     matches = off == committed_off
+    pre_matches = pre["adapter_off"] == committed_off
     if ADAPTER_OFF_RULE == "mps-equality" and device == "mps":
+        # IN-02, Rafael's option a (2026-10-06): the pre AND the post reading, either differing
+        # refuses; R-2 still picks the reading the gap uses.
         _prove(
-            matches,
-            f"adapter-off {off!r} != committed {committed_off!r} on mps (D-09, R-1 mps-equality)",
+            pre_matches and post["adapter_off"] == committed_off,
+            f"adapter-off pre {pre['adapter_off']!r} / post {post['adapter_off']!r} != committed "
+            f"{committed_off!r} on mps (D-09, R-1 mps-equality)",
         )
     return {
         "gap": on - off,
@@ -1109,6 +1115,11 @@ def dialogue_gap(record, committed_off, *, device):
         "device": device,
         "rehearsal": device != "mps",
         "pre_post_equal": pre_post_equal,
+        "pre": {
+            "adapter_on": pre["adapter_on"],
+            "adapter_off": pre["adapter_off"],
+            "adapter_off_matches_committed": pre_matches,
+        },
         "pre_post_abs_difference": {
             "adapter_on": abs(pre["adapter_on"] - post["adapter_on"]),
             "adapter_off": abs(pre["adapter_off"] - post["adapter_off"]),
