@@ -445,8 +445,8 @@ def _approvals_text():
     return _git("show", f"{_APPROVALS_SHA}:{_CONTEXT_PATH}")
 
 
-def _one_quote(prefix):
-    lines = _lines_at(prefix, _approvals_text())
+def _one_quote(prefix, text=None):
+    lines = _lines_at(prefix, _approvals_text() if text is None else text)
     assert len(lines) == 1, f"meta-guard: {len(lines)} lines start with {prefix!r}"
     quote = _quote(lines[0])
     assert len(quote.split()) >= 2, f"meta-guard: the {prefix!r} quote parsed too short"
@@ -498,21 +498,29 @@ def test_approvals_rulings_r1_to_r4_match_the_typed_values():
     assert _option_ids(planted) != typed
 
 
+_R3_PREFIX = '- **R-3 b conditions (verbatim):** "'
+_TOTAL_PREFIX = '- **Record total (verbatim):** "'
+
+
 def test_r3_conditions_and_record_total_are_quoted_verbatim():
-    conditions = _one_quote('- **R-3 b conditions (verbatim):** "')
-    total = _one_quote('- **Record total (verbatim):** "')
+    conditions = _one_quote(_R3_PREFIX)
+    total = _one_quote(_TOTAL_PREFIX)
     block = phase40_prereg.approval_block()
     assert conditions == phase40_prereg.R3_CONDITIONS_RULING == block["r3_conditions"]
     assert conditions in phase40_prereg.ENTRIES["seed_outcomes"]["derivation"]
     assert total == phase40_prereg.RECORD_TOTAL_RULING == block["record_total_ruling"]
     assert total in phase40_prereg.ENTRIES["approvals"]["derivation"]
-    # NON-VACUITY: one character changed fails the same equality.
-    for quote in (conditions, total):
+    # NON-VACUITY (IN-05): one character planted into the CONTEXT text at 03de080 changes the
+    # parsed quote, so the same equality fails on it.
+    text = _approvals_text()
+    for prefix, quote, constant in (
+        (_R3_PREFIX, conditions, phase40_prereg.R3_CONDITIONS_RULING),
+        (_TOTAL_PREFIX, total, phase40_prereg.RECORD_TOTAL_RULING),
+    ):
         changed = quote[:-1] + ("!" if quote[-1] != "!" else "?")
-        assert changed not in (
-            phase40_prereg.R3_CONDITIONS_RULING,
-            phase40_prereg.RECORD_TOTAL_RULING,
-        )
+        planted = text.replace(prefix + quote, prefix + changed, 1)
+        assert planted != text, "meta-guard: the plant changed nothing"
+        assert _one_quote(prefix, planted) == changed != constant
 
 
 def test_addendum_ruling_is_quoted_verbatim():
