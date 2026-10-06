@@ -192,3 +192,48 @@ The scratch experiments `e1`, `e11` and `e15` are ready to port.
 _Reviewed: 2026-10-06T16:30:00Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
+
+## Resolution (2026-10-06)
+
+Rafael's reply, verbatim (pasted text: proposed by Claude (claude.ai), adopted by Rafael):
+
+> Opção (a). Decisões por achado:
+> - WR-01, WR-02, WR-03, WR-04: corrigir.
+> - IN-01, IN-02, IN-03, IN-04, IN-05, IN-06: corrigir.
+>
+> No novo ensaio em CPU: a mesma forma do primeiro (duas sementes mais a perna de queda do R-3 b), em raiz nova. A identidade do ensaio fica como está, e a divulgação lista cada commit de correção com o motivo.
+>
+> Traga para o "reviewed": a lista de commits, o resultado do novo ensaio (inclusive as três recuperações de WR-01, WR-02 e WR-03 exercitadas pelos testes novos) e o resultado da suíte. O pré-registro não muda.
+
+Every finding is ruled "corrigir" and fixed in its own commit. Each commit adds a test whose natural RED was observed before the fix. `scripts/phase40_prereg.py` is unchanged (`a81c79dcfd4188a767ca45ef6e14d4bfc48dbbebd419fb67bc737fd6bd3505a2`).
+
+| Finding | Ruling | Fix commit | Test (tests/test_phase40_noise.py) | RED before the fix |
+|---|---|---|---|---|
+| WR-01 | corrigir | `11c7e8c` | `test_wr01_crash_between_seed_record_and_end_line_names_rule_i_never_reconcile` | refusal read "end it, or once the run is dead phase36_ledger.py reconcile first" |
+| WR-02 | corrigir | `cf685c4` | `test_wr02_emit_drop_and_declare_refuse_a_mismatched_root_and_ledger` | `emit(ledger_path=other)` on the real root: DID NOT RAISE (it wrote the record) |
+| WR-03 | corrigir | `d1a4195` | `test_wr03_release_failing_in_the_d13_handler_keeps_the_seed_whole` | the cleanup's RuntimeError escaped run(): seed not whole |
+| WR-04 | corrigir | `b3f64f0` | `test_wr04_every_module_is_imported_before_preflight_takes_the_digests` | at the digest, not loaded: `['phase19_run', 'phase39_ctx', 'phase37_prereg']` |
+| IN-01 | corrigir | `cdd30c2` | `test_in01_the_report_has_no_double_blank_line` | `\n\n\n` count measured 2, mixed 1 |
+| IN-02 | corrigir | `892065a` | `test_in02_a_stray_file_in_the_csv_directory_never_costs_the_trained_seed` | `OSError: [Errno 66] Directory not empty` after training |
+| IN-03 | corrigir | `6b81ae4` | `test_in03_a_torn_seed_record_temp_file_is_kept_by_drop_attempt` | `KeyError: 'results/.phase40_seed2024.json.k1ll3d.tmp'` (not listed) |
+| IN-04 | corrigir | `c250f08` | `test_in04_a_wrong_nll_count_is_a_malformed_reading_not_an_exception` | `SystemExit: D-13 scored 925 NLLs, not D13_NLLS_PER_ADAPTER = 926` |
+| IN-05 | corrigir | `0b5c966` | `test_in05_a_dropped_seeds_own_record_is_listed_in_place` | in_place listed only the adapter |
+| IN-06 | corrigir | `11c7e8c`, `cf685c4`, `d1a4195` | the three `test_wr0[123]_*` tests above, each exercising its recovery | (the three REDs above) |
+
+Notes on the fixes:
+- **WR-01.** preflight checks each open seed. If its record exists, it refuses with crash rule (i): append the end line by command, NEVER reconcile. If no record exists, it still says to reconcile once the run is dead. The WR-01 test then runs the rule-(i) recovery: the end line goes in by command, the relaunch runs only 1338, and every seed is whole.
+- **WR-02.** `_root_ledger(root, *paths)` is now the one pairing guard. preflight calls it with ledger and heartbeat, and emit, drop_attempt and declare_relaunch call it first with the ledger. The AST `refuse_if_dirty` count stays 2 (preflight, emit): the guard is about the ledger, not the dirty check. No test pinned that count.
+- **WR-03.** The cleanup failure is appended to the `d13_not_measured` reason, so both failures are kept.
+- **WR-04.** The fix is generic, not just phase39_ctx: `_import_modules()` imports every MODULES file except the running driver right before `module_sha256()`.
+- **IN-01** also fixes the second double blank line noted in 40-07-SUMMARY (after each dropped attempt's kept-files table).
+- **IN-03** has a residual, not fixed here: a seed left dropped (no re-run) whose torn temp file stays in place is listed in `dropped_seed_outputs.in_place`, but `_launch_pathspec` does not exclude it. emit's dirty check would therefore refuse it until it is moved by a reviewed step.
+
+After each commit, these passed on the committed tree:
+- tests/test_phase40_noise.py, test_phase40_prereg.py, test_phase23_resume.py, test_phase21_sc5.py, test_phase36_ledger.py, test_phase36_caps.py and test_phase25_driver.py: 304, 305, 306, 307, 308, 309, 310, 311 and 312 passed, EXIT=0
+- `ruff check .` and `ruff format --check .`: clean
+- `train_arm(`: 1 in the driver, 0 in the tests
+- no `os.replace` in the driver
+- launch-line census: `require_launch(FRONT` 2, `record=prereg.seed_record(seed)` 1
+- no `== 10` / `!= 10`
+
+The CPU re-rehearsal (`_r2`) of these commits is reported to the orchestrator for the "reviewed" checkpoint.
