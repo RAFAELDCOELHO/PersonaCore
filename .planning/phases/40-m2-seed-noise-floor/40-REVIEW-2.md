@@ -237,3 +237,11 @@ After each commit, these passed on the committed tree:
 - no `== 10` / `!= 10`
 
 The CPU re-rehearsal (`_r2`) of these commits is reported to the orchestrator for the "reviewed" checkpoint.
+
+### Re-rehearsal, suite and "reviewed" (2026-10-06)
+
+- CPU re-rehearsal `_r2` at fb62996: REHEARSAL_EXIT=0 (5 STEP lines, identity "kept", data/phase40_rehearsal.json sha256 93dc5195… before and after, every reading equal to the first rehearsal's), R-3 b leg RERUN_EXIT=0 (6 STEP lines, re-run adapters tensor-identical to the dropped attempt's 72/72 per group). The MPS launch disclosure lists the 9 fix commits with their subjects as reasons.
+- Full suite at fb62996: `4495 passed, 4 skipped, 83 warnings in 3275.81s (0:54:35)`, EXIT=0 (same 4 skips as the 8cf3b32 baseline).
+- Residual of IN-03 put to Rafael: a SIGKILL inside the seed-record write followed by a declined re-run leaves a `.tmp` that `_launch_pathspec` does not exclude, so emit's dirty check refuses until a reviewed move.
+- Rafael's reply (pasted text, proposto pelo Claude (claude.ai), adotado por Rafael), verbatim: "IN-03: opção b, limitação conhecida. Se acontecer, o movimento do arquivo passa por mim." / "reviewed" / "No portão de lançamento, uma checagem só de leitura, sem mexer em código: compare tensor a tensor os quatro _latest.pt do segundo ensaio com os do primeiro. Se os tensores forem iguais, registre a causa da diferença de sha256 no SUMMARY e siga. Se algum tensor diferir, pare e me traga antes do aviso de lançamento."
+- IN-03 residual: known limitation; any such move goes through Rafael.
