@@ -1024,10 +1024,12 @@ _COMMITTED_ON = 6.007920892362744
 _COMMITTED_OFF = 4.573349214207799
 
 
-def _with_off(record, off):
+def _with_off(record, off, device=None):
     planted = copy.deepcopy(record)
     for reading in (planted["dialogue_ppl"], planted["pre_erasure"]["dialogue_ppl"]):
         reading["adapter_off"] = off
+    if device is not None:
+        planted["config"]["device"] = device
     return planted
 
 
@@ -1056,22 +1058,38 @@ def test_gap_on_the_committed_m2_record(monkeypatch):
 def test_gap_device_scoped_adapter_off_truth_table(monkeypatch):
     committed = phase40_prereg.committed_adapter_off()
     record = _record(_RETRAIN)
-    cpu = _with_off(record, _CPU_ADAPTER_OFF)
+    cpu = _with_off(record, _CPU_ADAPTER_OFF, device="cpu")
     assert _CPU_ADAPTER_OFF != committed, "meta-guard: the CPU reading equals the committed one"
     for rule in phase40_prereg.ADAPTER_OFF_RULES:
         monkeypatch.setattr(phase40_prereg, "ADAPTER_OFF_RULE", rule)
         gap = phase40_prereg.dialogue_gap(cpu, committed, device="cpu")
         assert gap["gap"] == _COMMITTED_ON - _CPU_ADAPTER_OFF
         assert gap["adapter_off_matches_committed"] is False and gap["rehearsal"] is True
-        own = phase40_prereg.dialogue_gap(record, committed, device="cpu")
+        own = phase40_prereg.dialogue_gap(
+            _with_off(record, committed, "cpu"), committed, device="cpu"
+        )
         assert own["adapter_off_matches_committed"] is True and own["rehearsal"] is True
+    mps = _with_off(record, _CPU_ADAPTER_OFF)
     monkeypatch.setattr(phase40_prereg, "ADAPTER_OFF_RULE", "mps-equality")
     with pytest.raises(SystemExit, match="R-1"):
-        phase40_prereg.dialogue_gap(cpu, committed, device="mps")
+        phase40_prereg.dialogue_gap(mps, committed, device="mps")
     monkeypatch.setattr(phase40_prereg, "ADAPTER_OFF_RULE", "record-only")
-    gap = phase40_prereg.dialogue_gap(cpu, committed, device="mps")
+    gap = phase40_prereg.dialogue_gap(mps, committed, device="mps")
     assert gap["adapter_off_matches_committed"] is False and gap["rehearsal"] is False
     assert gap["committed_adapter_off"] == committed
+
+
+def test_gap_device_is_the_record_device(monkeypatch):
+    # WR-03: the caller's device must be the A2 record's own config.device, so an mps reading is
+    # never labelled a rehearsal and never skips the R-1 mps-equality check.
+    committed = phase40_prereg.committed_adapter_off()
+    record = _with_off(_record(_RETRAIN), _CPU_ADAPTER_OFF)
+    assert record["config"]["device"] == "mps", "meta-guard: the committed record is not mps"
+    for rule in phase40_prereg.ADAPTER_OFF_RULES:
+        monkeypatch.setattr(phase40_prereg, "ADAPTER_OFF_RULE", rule)
+        for device in ("mps:0", "cpu"):
+            with pytest.raises(SystemExit, match="config.device"):
+                phase40_prereg.dialogue_gap(record, committed, device=device)
 
 
 def test_gap_pre_post_rule_truth_table(monkeypatch):

@@ -1072,13 +1072,17 @@ def committed_adapter_off():
 def dialogue_gap(record, committed_off, *, device):
     """D-09 / R-1 / R-2: adapter_on - adapter_off of an A2 arm record's dialogue reading, under
     Rafael's device-scoped adapter-off rule and his pre != post rule (both read at call time)."""
+    _prove(isinstance(device, str) and device, f"device {device!r} is not a non-empty str")
+    _prove(
+        device == record["config"]["device"],
+        f"device {device!r} != the A2 record's config.device {record['config']['device']!r}",
+    )
     post = record["dialogue_ppl"]
     pre = record["pre_erasure"]["dialogue_ppl"]
     _prove(
         pre["n_targets"] == post["n_targets"],
         f"pre_erasure n_targets {pre['n_targets']} != post {post['n_targets']}: not one corpus",
     )
-    _prove(isinstance(device, str) and device, f"device {device!r} is not a non-empty str")
     pre_post_equal = pre == post
     on, off = post["adapter_on"], post["adapter_off"]
     if not pre_post_equal:
