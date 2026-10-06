@@ -122,6 +122,35 @@ def _is_real(root):
     return resolved == pathlib.Path(_ROOT).resolve() or resolved.is_relative_to(_REPO.resolve())
 
 
+def _root_ledger(root, *paths):
+    """WR-02: the ONE root/ledger pairing (preflight, emit, drop_attempt, declare_relaunch);
+    ``paths`` are the explicit ledger (and preflight's heartbeat). The real root reads and writes
+    the milestone ones only; a tmp root its own explicit ones, never the milestone ones
+    (38-REVIEW DR-01). Returns whether ``root`` is real."""
+    if _is_real(root):
+        _prove(
+            all(p is None for p in paths),
+            "the real root runs every seed of SEEDS into the milestone ledger and heartbeat; an "
+            "explicit ledger / heartbeat is a rehearsal into a tmp root outside the repository",
+        )
+        return True
+    _prove(
+        all(p is not None for p in paths),
+        "a rehearsal root needs an explicit ledger_path and heartbeat_path (38-REVIEW DR-01; "
+        "emit, drop_attempt and declare_relaunch take the ledger only)",
+    )
+    milestone = {
+        (phase36_ledger._ROOT / phase36_ledger.LEDGER_PATH).resolve(),
+        pathlib.Path(phase36_ledger.HEARTBEAT_PATH).resolve(),
+    }
+    _prove(
+        {pathlib.Path(p).resolve() for p in paths}.isdisjoint(milestone),
+        "a rehearsal root writes its own ledger and heartbeat, never the milestone ones "
+        "(38-REVIEW DR-01)",
+    )
+    return False
+
+
 def _prereg():
     """phase40_prereg, imported lazily (torch at import through phase35_prereg.seed_list)."""
     import phase40_prereg
@@ -611,6 +640,7 @@ def drop_attempt(
     ``phase40_prereg.dropped_attempt_dir`` (never deleted) and write its write-once manifest. Run
     by Claude with ``.venv/bin/python -c`` only after Rafael's approved; never from run or main."""
     root = pathlib.Path(root) if root is not None else pathlib.Path(_ROOT)
+    _root_ledger(root, ledger_path)
     prereg = _prereg()
     _prove(prereg.DROPPED_SEED_RERUN, "R-3 b: DROPPED_SEED_RERUN is False: no attempt is dropped")
     lines = phase36_ledger.read_ledger(ledger_path)
@@ -660,6 +690,7 @@ def declare_relaunch(seed, *, head_change_declared, approved, root=None, ledger_
     """R-3 b (b): declare a HEAD that moved after drop_attempt, only on Rafael's approved naming
     the move; write-once in the latest dropped attempt's directory."""
     root = pathlib.Path(root) if root is not None else pathlib.Path(_ROOT)
+    _root_ledger(root, ledger_path)
     prereg = _prereg()
     lines = phase36_ledger.read_ledger(ledger_path)
     _utc, rel_dir = _latest_dropped_dir(prereg, lines, seed, what="re-launched")
@@ -783,13 +814,12 @@ def preflight(*, root=None, ledger_path=None, heartbeat_path=None, device=None, 
     """Every refusal before the first ledger start line (D-15, R-3 b). Writes nothing."""
     prereg = _prereg()
     root = pathlib.Path(root) if root is not None else pathlib.Path(_ROOT)
-    real = _is_real(root)
+    real = _root_ledger(root, ledger_path, heartbeat_path)
     if real:
         _prove(
-            seeds is None and ledger_path is None and heartbeat_path is None,
+            seeds is None,
             "the real root runs every seed of SEEDS into the milestone ledger and heartbeat; a "
-            "seeds subset or an explicit ledger / heartbeat is a rehearsal into a tmp root outside "
-            "the repository",
+            "seeds subset is a rehearsal into a tmp root outside the repository",
         )
         chosen = prereg.SEEDS
     else:
@@ -798,22 +828,6 @@ def preflight(*, root=None, ledger_path=None, heartbeat_path=None, device=None, 
             chosen and list(chosen) == [s for s in prereg.SEEDS if s in chosen],
             f"a rehearsal names its seeds: a non-empty subset of SEEDS {prereg.SEEDS} in order, "
             f"not {seeds!r}",
-        )
-        milestone = {
-            (phase36_ledger._ROOT / phase36_ledger.LEDGER_PATH).resolve(),
-            pathlib.Path(phase36_ledger.HEARTBEAT_PATH).resolve(),
-        }
-        _prove(
-            ledger_path is not None and heartbeat_path is not None,
-            "a rehearsal root needs an explicit ledger_path and heartbeat_path (38-REVIEW DR-01)",
-        )
-        _prove(
-            {
-                pathlib.Path(ledger_path).resolve(),
-                pathlib.Path(heartbeat_path).resolve(),
-            }.isdisjoint(milestone),
-            "a rehearsal root writes its own ledger and heartbeat, never the milestone ones "
-            "(38-REVIEW DR-01)",
         )
         _prove(device == "cpu", f"a rehearsal runs on CPU: pass device='cpu', not {device!r}")
     launch_git_sha = git_sha()
@@ -1418,6 +1432,7 @@ def emit(*, root=None, ledger_path=None):
     """Write results/phase40_noise_floor.json ONCE (CPU). On the real root, from a clean tree but
     for the run's own untracked outputs (the same pathspec preflight uses)."""
     root = pathlib.Path(root) if root is not None else pathlib.Path(_ROOT)
+    real = _root_ledger(root, ledger_path)
     prereg = _prereg()
     out = root / prereg.NOISE_FLOOR_RECORD
     _prove(
@@ -1425,7 +1440,7 @@ def emit(*, root=None, ledger_path=None):
         f"{out} exists — REFUSING to overwrite it. The noise-floor record is write-once; a "
         "correction is a dated continuation via scripts/_addendum.py",
     )
-    if _is_real(root):
+    if real:
         refuse_if_dirty(
             who="phase40_noise",
             detail=(

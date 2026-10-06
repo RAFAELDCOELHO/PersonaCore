@@ -3039,3 +3039,44 @@ def test_wr01_crash_between_seed_record_and_end_line_names_rule_i_never_reconcil
     outcomes = phase40_prereg.seed_outcomes(phase36_ledger.read_ledger(rig.ledger), seeds)
     assert outcomes == dict.fromkeys(seeds, "whole")
     print(f"WR01 after rule (i) and the relaunch: {outcomes}")
+
+
+def test_wr02_emit_drop_and_declare_refuse_a_mismatched_root_and_ledger(monkeypatch, tmp_path):
+    """WR-02 / IN-06: emit, drop_attempt and declare_relaunch share preflight's root/ledger
+    pairing (_root_ledger): the real root reads the milestone ledger only, a tmp root its own
+    explicit one. Each mismatch refuses before anything is written; the correct emit() then
+    writes the record from the milestone ledger."""
+    real = _build_rig(monkeypatch, tmp_path / "real", real=True)
+    _whole(real, 1337, 2024)
+    out = real.root / phase40_prereg.NOISE_FLOOR_RECORD
+    other = tmp_path / "other_ledger.jsonl"
+    _ledger(other, ("start", 1337), ("end", 1337))
+    tmp_root = tmp_path / "tmp_root"
+    tmp_root.mkdir()
+    milestone = phase36_ledger._ROOT / phase36_ledger.LEDGER_PATH
+    drop = {"cause_note": "x", "approved": "approved", "head_at_dropped_attempt": "h1"}
+    declare = {"head_change_declared": "y", "approved": "approved"}
+    for call, match in (
+        (lambda: phase40_noise.emit(ledger_path=other), "the real root"),
+        (lambda: phase40_noise.emit(root=tmp_root), "explicit ledger_path"),
+        (lambda: phase40_noise.emit(root=tmp_root, ledger_path=milestone), "never the milestone"),
+        (lambda: phase40_noise.drop_attempt(2024, ledger_path=other, **drop), "the real root"),
+        (lambda: phase40_noise.drop_attempt(2024, root=tmp_root, **drop), "explicit ledger_path"),
+        (lambda: phase40_noise.declare_relaunch(2024, ledger_path=other, **declare), "real root"),
+        (
+            lambda: phase40_noise.declare_relaunch(
+                2024, root=tmp_root, ledger_path=milestone, **declare
+            ),
+            "never the milestone",
+        ),
+    ):
+        with pytest.raises(SystemExit, match=match) as refused:
+            call()
+        print(f"\nWR02 refused: {str(refused.value)[:110]}")
+        assert not out.exists() and not (tmp_root / phase40_prereg.NOISE_FLOOR_RECORD).exists()
+    assert phase40_noise._root_ledger(real.root, None) is True
+    assert phase40_noise._root_ledger(tmp_root, other) is False
+    record = phase40_noise.emit()
+    assert out.exists() and record["status"] == "MEASURED"
+    assert record["seeds"]["whole"] == [1337, 2024]
+    print(f"WR02 the correct emit(): {record['status']} whole={record['seeds']['whole']}")
