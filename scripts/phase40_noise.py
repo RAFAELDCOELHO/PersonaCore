@@ -471,10 +471,11 @@ def d13_scores(adapter_path, a2_record_path, device, state):
     finally:
         model = None
         _release()
-    _prove(
-        n_nlls == prereg.D13_NLLS_PER_ADAPTER,
-        f"D-13 scored {n_nlls} NLLs, not D13_NLLS_PER_ADAPTER = {prereg.D13_NLLS_PER_ADAPTER}",
-    )
+    if n_nlls != prereg.D13_NLLS_PER_ADAPTER:  # IN-04: a wrong count is a malformed reading
+        reason = (
+            f"D-13 scored {n_nlls} NLLs, not D13_NLLS_PER_ADAPTER = {prereg.D13_NLLS_PER_ADAPTER}"
+        )
+        return {**prereg.d13_not_measured("malformed_reading", reason), "n_nlls": n_nlls}
     block = prereg.d13_block(
         curve=curve,
         gate_rank=gate_rank,

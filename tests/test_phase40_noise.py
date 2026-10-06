@@ -3210,3 +3210,20 @@ def test_in03_a_torn_seed_record_temp_file_is_kept_by_drop_attempt(monkeypatch, 
     assert not torn.exists() and (rig.root / kept[rel]["path"]).read_bytes() == b'{"torn": '
     assert len(manifest["kept"]) == len(rig.crash) + 1
     print(f"\nIN03 kept {rel} -> {kept[rel]['path']}")
+
+
+def test_in04_a_wrong_nll_count_is_a_malformed_reading_not_an_exception(monkeypatch, tmp_path):
+    """IN-04: d13_scores returns d13_not_measured('malformed_reading') when it scored a count
+    other than D13_NLLS_PER_ADAPTER (it used to raise, which run() recorded as 'exception')."""
+    _log, path, _slot, _taught = _d13_rig(monkeypatch, tmp_path, a2_rank=1)
+    expected = phase40_prereg.D13_NLLS_PER_ADAPTER
+    monkeypatch.setattr(phase40_prereg, "D13_NLLS_PER_ADAPTER", expected + 1)
+    out = phase40_noise.d13_scores("adapter.pt", path, "cpu", {})
+    assert out == {
+        **phase40_prereg.d13_not_measured(
+            "malformed_reading",
+            f"D-13 scored {expected} NLLs, not D13_NLLS_PER_ADAPTER = {expected + 1}",
+        ),
+        "n_nlls": expected,
+    }
+    print(f"\nIN04 {out}")
