@@ -667,6 +667,66 @@ _CONFIRMED = {
 }
 
 
+# Rafael's answers 1 and 2 to plan 40-04's two open points (2026-10-06): (entry, tag, the sha256 of
+# the exact UTF-8 bytes of his answer, its "1. " / "2. " numbering stripped, its lines joined by
+# "\n" as in his paste; no normalization).
+_CLARIFIED = {
+    "c": (
+        "run_order",
+        "c, answer 1",
+        "47720fde68b5a56d1b829e34d12280238791331c5c4bab8802e2f8938bd48ad6",
+    ),
+    "f": (
+        "record_layout",
+        "f, answer 2",
+        "accb024ca4b76d09bf425827df8c7e8e9d2ab7bcca63cf6f89384d0240355521",
+    ),
+}
+
+
+def test_clarifications_are_pinned_byte_for_byte():
+    import hashlib
+
+    entries = phase40_prereg.ENTRIES
+    assert set(phase40_prereg.CLARIFICATIONS) == set(_CLARIFIED)
+    for letter, (name, tag, digest) in _CLARIFIED.items():
+        text = phase40_prereg.CLARIFICATIONS[letter]
+        assert hashlib.sha256(text.encode("utf-8")).hexdigest() == digest, letter
+        clarified = phase40_prereg._clarified(letter)
+        assert clarified == f'clarified by Rafael {_CONFIRMED_ON} ({tag}): "{text}"'
+        homes = [
+            n
+            for n, e in entries.items()
+            if f"clarified by Rafael {_CONFIRMED_ON} (" + tag in e["derivation"]
+        ]
+        assert homes == [name], (letter, homes)
+        assert entries[name]["derivation"].count(clarified) == 1, letter
+    assert "\n- o terceiro cobre o relatório." in phase40_prereg.CLARIFICATIONS["f"]
+    # NON-VACUITY: one changed character changes the digest.
+    planted = phase40_prereg.CLARIFICATIONS["f"].replace("Três", "Tres", 1)
+    assert hashlib.sha256(planted.encode("utf-8")).hexdigest() != _CLARIFIED["f"][2]
+
+
+def test_record_layout_three_approvals():
+    # Rafael's answer 2 (f): three approved, not one per commit.
+    layout = phase40_prereg.ENTRIES["record_layout"]["value"]
+    approvals = layout["approvals"]
+    assert type(approvals) is tuple and len(approvals) == 3
+    assert [a["approved"] for a in approvals] == ["first", "second", "third"]
+    first, second, third = approvals
+    assert "ledger" in first["covers"] and "every whole seed" in first["covers"]
+    assert "a2_record" in first["covers"] and "one checkpoint" in first["shown"]
+    assert first["commits"] == (
+        "the ledger first",
+        "then one commit per whole seed (its seed record with the A2 records it names)",
+    )
+    assert second["covers"] == "NOISE_FLOOR_RECORD" and third["covers"] == "REPORT_RECORD"
+    assert len(second["commits"]) == len(third["commits"]) == 1
+    assert "none during the run" in layout["commits"]
+    with pytest.raises(TypeError):
+        first["covers"] = "planted"
+
+
 def _unconfirmed(entries):
     """The entry names whose derivation still carries a plan-time 'not yet confirmed' label."""
     return [name for name, entry in entries.items() if "not yet confirmed" in entry["derivation"]]

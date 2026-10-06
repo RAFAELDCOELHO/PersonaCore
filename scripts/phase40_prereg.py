@@ -455,6 +455,36 @@ def _confirmed(letter):
     return f'confirmed by Rafael {CONFIRMED_ON} ({letter}): "{CONFIRMATIONS[letter]}"'
 
 
+# Rafael's answers 1 (item c) and 2 (item f) to the two points 40-04's review left open, the same
+# day, copied byte for byte from his reply ("1. " / "2. " stripped; answer 2 keeps its line breaks).
+CLARIFICATIONS = types.MappingProxyType(
+    {
+        "c": (
+            'Sim. "Portão diferente" é o portão da âncora do D-13 (o rank no |R| = 8 '
+            "commitado contra o rank de exposição do próprio registro do A2). É o único portão "
+            "do D-13, e uma diferença fica gravada como gate_mismatch sem derrubar a semente."
+        ),
+        "f": (
+            "Três approved, não um por commit:\n"
+            "- o primeiro cobre o livro-caixa e todos os registros de semente (com os registros "
+            "do A2 que eles nomeiam), mostrados juntos num checkpoint só. Os commits continuam "
+            "separados: livro-caixa primeiro, depois um por semente.\n"
+            "- o segundo cobre o registro do piso.\n"
+            "- o terceiro cobre o relatório.\n"
+            "Escreva isso no record_layout. Depois me mostre o diff e o sha256 novo do "
+            'pré-registro, e eu respondo "reviewed".'
+        ),
+    }
+)
+_CLARIFICATION_ANSWERS = types.MappingProxyType({"c": "answer 1", "f": "answer 2"})
+
+
+def _clarified(letter):
+    """Rafael's dated clarification of item ``letter``, as written into an entry's derivation."""
+    answer = _CLARIFICATION_ANSWERS[letter]
+    return f'clarified by Rafael {CONFIRMED_ON} ({letter}, {answer}): "{CLARIFICATIONS[letter]}"'
+
+
 _ENTRIES = {
     "e2_S": {
         "value": _BUDGET["e2_seed_count"],
@@ -636,7 +666,8 @@ _ENTRIES = {
         "derivation": (
             "D-15: per seed, in seed_list() order, the whole seed is the unit. P-1 / D-11: the "
             "dialogue PPL is read from each A2 record. The D-13 scoring placed last in the seed "
-            f"unit, and what a D-13 failure does: {_confirmed('c')}"
+            f"unit, and what a D-13 failure does: {_confirmed('c')} The gate it names: "
+            f"{_clarified('c')}"
         ),
         "kind": "preference",
         "source": f"{_CONTEXT.format('15')}; {_CONTEXT.format('11')}",
@@ -884,14 +915,46 @@ _ENTRIES = {
                 ),
                 "report": "REPORT_RECORD, rendered from the committed noise-floor record",
                 "commits": (
-                    "none during the run; after Rafael's approved: the ledger first, then each "
-                    "whole seed's records, then the noise-floor record, then the report"
+                    "none during the run; afterwards, under three approved from Rafael (not one "
+                    "per commit), in the order of approvals"
+                ),
+                "approvals": (
+                    types.MappingProxyType(
+                        {
+                            "approved": "first",
+                            "covers": (
+                                "the ledger and every whole seed's records: seed_record(seed) "
+                                "with the a2_record(group, seed) records it names"
+                            ),
+                            "shown": "all together in one checkpoint",
+                            "commits": (
+                                "the ledger first",
+                                "then one commit per whole seed (its seed record with the A2 "
+                                "records it names)",
+                            ),
+                        }
+                    ),
+                    types.MappingProxyType(
+                        {
+                            "approved": "second",
+                            "covers": "NOISE_FLOOR_RECORD",
+                            "commits": ("the noise-floor record",),
+                        }
+                    ),
+                    types.MappingProxyType(
+                        {
+                            "approved": "third",
+                            "covers": "REPORT_RECORD",
+                            "commits": ("the report",),
+                        }
+                    ),
                 ),
             }
         ),
         "derivation": (
             "D-15: the whole seed is the record unit. The layout and the commit order (Claude's "
-            f"discretion, 40-CONTEXT): {_confirmed('f')}"
+            f"discretion, 40-CONTEXT): {_confirmed('f')} How many approved: "
+            f"{_clarified('f')}"
         ),
         "kind": "preference",
         "source": f"{_CONTEXT.format('15')}; 40-CONTEXT Claude's Discretion (9d53c09)",
