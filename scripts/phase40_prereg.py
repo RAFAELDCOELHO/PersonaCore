@@ -468,7 +468,11 @@ _ENTRIES = {
                         ),
                         "minimum": (
                             "S' >= phase35_prereg.ENTRIES['e2_min_seeds'] whole seeds; below it "
-                            "no floor is published and the record status is INSUFFICIENT_SEEDS"
+                            "no floor is published, the record status is INSUFFICIENT_SEEDS and "
+                            "the phase stops for Rafael; at or above it, with fewer than S whole "
+                            "seeds as with all S, the record declares how many seeds and how many "
+                            "pairs entered (n_seeds, n_pairs in each group floor, the published "
+                            "floor and gap_noise_floor; Rafael's ruling e, 2026-10-06)"
                         ),
                     }
                 ),
@@ -1065,7 +1069,13 @@ def recall_floor(full_rows_by_seed, m2_rows_by_seed):
     return {
         "full": full,
         "m2": m2,
-        "published": {"value": max(full["floor"], m2["floor"]), "group": group, "tie": tie},
+        "published": {
+            "value": max(full["floor"], m2["floor"]),
+            "group": group,
+            "tie": tie,
+            "n_seeds": full["n_seeds"],
+            "n_pairs": full["n_pairs"],
+        },
         "beside": {
             "sampling_floor": phase19_floor.NONTARGET_NOISE_FLOOR,
             "margin_at_gate": phase35_prereg.e1_condition_b_margin(),
@@ -1164,6 +1174,8 @@ def gap_noise_floor(gaps_by_seed):
         "max": max(diffs),
         "pairs": pairs,
         "gaps": dict(gaps_by_seed),
+        "n_seeds": len(gaps_by_seed),
+        "seeds": list(gaps_by_seed),
         "n_pairs": len(pairs),
         "beside": phase19_floor.DIALOGUE_PPL_NOISE_FLOOR,
     }

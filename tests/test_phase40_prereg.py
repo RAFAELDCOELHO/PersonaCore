@@ -1042,7 +1042,13 @@ def test_recall_floor_publishes_the_larger_group_beside_v3():
     floor = phase40_prereg.recall_floor(full, m2)
     assert floor["full"] == phase40_prereg.group_floor(full)
     assert floor["m2"] == phase40_prereg.group_floor(m2)
-    assert floor["published"] == {"value": floor["m2"]["floor"], "group": "m2", "tie": False}
+    assert floor["published"] == {
+        "value": floor["m2"]["floor"],
+        "group": "m2",
+        "tie": False,
+        "n_seeds": 2,
+        "n_pairs": 1,
+    }
     assert floor["beside"] == {
         "sampling_floor": phase19_floor.NONTARGET_NOISE_FLOOR,
         "margin_at_gate": phase35_prereg.e1_condition_b_margin(),
@@ -1053,7 +1059,13 @@ def test_recall_floor_publishes_the_larger_group_beside_v3():
     assert flipped["published"]["group"] == "full"
     assert flipped["published"]["value"] == floor["m2"]["floor"]
     tie = phase40_prereg.recall_floor(full, full)
-    assert tie["published"] == {"value": tie["full"]["floor"], "group": "full", "tie": True}
+    assert tie["published"] == {
+        "value": tie["full"]["floor"],
+        "group": "full",
+        "tie": True,
+        "n_seeds": 2,
+        "n_pairs": 1,
+    }
     with pytest.raises(SystemExit, match=r"^\[phase40_prereg\]"):
         phase40_prereg.recall_floor(full, {1337: _rows({}), 1338: _rows({})})
 
@@ -1194,6 +1206,28 @@ def test_gap_pre_post_rule_truth_table(monkeypatch):
         monkeypatch.setattr(phase40_prereg, "PRE_POST_RULE", rule)
         gap = phase40_prereg.dialogue_gap(record, committed, device="mps")
         assert gap["gap"] == _COMMITTED_ON - _COMMITTED_OFF and gap["pre_post_equal"] is True
+
+
+def test_floors_declare_how_many_seeds_and_pairs_entered():
+    # Ruling e (2026-10-06): below e2_min_seeds whole seeds no floor; from there on (2 to 4 whole
+    # seeds, or all S) every floor output declares how many seeds and how many pairs entered.
+    minimum = phase35_prereg.ENTRIES["e2_min_seeds"]["value"]
+    for n in (minimum, minimum + 1, phase40_prereg.E2_S):
+        seeds = phase40_prereg.SEEDS[:n]
+        full = {s: _rows({"house_number": i}) for i, s in enumerate(seeds)}
+        m2 = {s: _rows({"hometown": 2 * i}) for i, s in enumerate(seeds)}
+        floor = phase40_prereg.recall_floor(full, m2)
+        for block in (floor["full"], floor["m2"], floor["published"]):
+            assert (block["n_seeds"], block["n_pairs"]) == (n, math.comb(n, 2)), (n, block)
+        gap = phase40_prereg.gap_noise_floor({s: float(i) for i, s in enumerate(seeds)})
+        assert (gap["n_seeds"], gap["n_pairs"]) == (n, math.comb(n, 2)), n
+        assert gap["seeds"] == list(seeds)
+    assert [minimum, minimum + 1, phase40_prereg.E2_S] == [2, 3, 5], "meta-guard: S' = 2, 3, 5"
+    one = {phase40_prereg.SEEDS[0]: _rows({})}
+    with pytest.raises(SystemExit, match="INSUFFICIENT_SEEDS"):
+        phase40_prereg.recall_floor(one, one)
+    with pytest.raises(SystemExit, match="INSUFFICIENT_SEEDS"):
+        phase40_prereg.gap_noise_floor({phase40_prereg.SEEDS[0]: 1.0})
 
 
 def test_gap_noise_floor_truth_table():
