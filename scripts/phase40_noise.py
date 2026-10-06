@@ -29,6 +29,7 @@ import datetime
 import gc
 import hashlib
 import json
+import os
 import pathlib
 import shutil
 import subprocess
@@ -1440,3 +1441,545 @@ def emit(*, root=None, ledger_path=None):
         flush=True,
     )
     return record
+
+
+# =================================================================================================
+# The report: the record rendered, nothing else (every number read from the record)
+# =================================================================================================
+
+
+def _table(header, rows):
+    """A GFM table; a pipe inside a cell is escaped, else it would add cells."""
+
+    def line(cells):
+        return "| " + " | ".join(str(c).replace("|", "\\|") for c in cells) + " |"
+
+    return [line(header), "|" + "---|" * len(header), *(line(row) for row in rows), ""]
+
+
+def _seed_order(keys):
+    """The record's seeds (JSON str keys) in SEEDS order, never key order."""
+    return [str(s) for s in _prereg().SEEDS if str(s) in keys]
+
+
+def _slot_order(keys):
+    """The record's slots in GATED_NONTARGET_SLOTS order, then the target."""
+    import phase19_erasure as pin  # torch at import: lazy
+
+    return [s for s in (*pin.GATED_NONTARGET_SLOTS, pin.TARGET_SLOT) if s in keys]
+
+
+def _seeds_text(seeds):
+    return ", ".join(map(str, seeds)) or "none"
+
+
+def _attempt_lines(attempt, launch_git_sha):
+    """R-3 b: one dropped attempt's manifest, its kept files and relaunch declarations."""
+    beside = f" beside the seed's git_sha_at_launch `{launch_git_sha}`" if launch_git_sha else ""
+    lines = [
+        f"- lost line utc: {attempt['lost_utc']}",
+        f"- cause note: {attempt['cause_note']}",
+        f"- Rafael's approved: {attempt['approved']}",
+        f"- HEAD at the dropped attempt: `{attempt['head_at_dropped_attempt']}`{beside}",
+        f"- declared change: {attempt['head_change_declared'] or 'none'}",
+        f"- manifest: `{attempt['manifest']}` sha256 `{attempt['manifest_sha256']}`",
+        "",
+        *_table(
+            ("kept from", "kept at", "sha256"),
+            [[i["from"], i["path"], i["sha256"]] for i in attempt["kept"]],
+        ),
+    ]
+    for d in attempt.get("relaunch_declarations", []):
+        lines.append(
+            f"- relaunch declaration `{d['path']}` sha256 `{d['sha256']}`: launch "
+            f"`{d['launch_git_sha']}`, declared change {d['head_change_declared']}, approved "
+            f"{d['approved']}"
+        )
+    return [*lines, ""]
+
+
+def _disclosure_lines(seed, disclosure):
+    if disclosure.get("this_is_the_rehearsal"):
+        return [f"Seed {seed}: this is the rehearsal.", ""]
+    changed = [rel for rel, flag in disclosure["changed"].items() if flag]
+    commits = [
+        f"- `{c['sha']}` {c['reason']} (touched: {', '.join(c['modules'])})"
+        for c in disclosure["commits"]
+    ]
+    return [
+        f"Seed {seed}: {disclosure['statement']}",
+        f"- rehearsal git sha `{disclosure['rehearsal_git_sha']}`, launch git sha "
+        f"`{disclosure['launch_git_sha']}`",
+        f"- changed modules: {', '.join(changed) or 'none'}",
+        *(commits or ["- no commit touched a disclosed module since the rehearsal"]),
+        "",
+    ]
+
+
+def _identity_text(value):
+    if isinstance(value, str):
+        return value
+    return (
+        f"tensors_identical {value['tensors_identical']} ({value.get('n_equal')}/"
+        f"{value.get('n_tensors')} tensors equal, tensor by tensor)"
+    )
+
+
+def _counts_table(counts):
+    return _table(
+        ("slot", "new", "committed", "delta"),
+        [
+            [slot, "/".join(map(str, c["new"])), "/".join(map(str, c["committed"])), c["delta"]]
+            for slot in _slot_order(counts)
+            for c in (counts[slot],)
+        ],
+    )
+
+
+def _draws_text(identity):
+    return (
+        f"draw identity: bit_identical {identity['bit_identical']}, "
+        f"{identity['differing_completions']}/{identity['n_completions']} completions and "
+        f"{identity['differing_entries']}/{identity['n_entries']} entries differ"
+    )
+
+
+def render_report(record):
+    """The noise-floor report, rendered from the record only (pure; returns the markdown)."""
+    record = json.loads(json.dumps(record, sort_keys=True))  # one key type: the file's
+    groups = _prereg().GROUPS
+    measured = record["status"] == "MEASURED"
+    seeds, per_seed = record["seeds"], record["per_seed"]
+    out = ["# Phase 40 — E2 training-seed noise floor", ""]
+
+    out += [
+        "## Status",
+        "",
+        f"Status: **{record['status']}**; device {record['device']}; whole seeds "
+        f"{_seeds_text(seeds['whole'])}; dropped {_seeds_text(seeds['dropped'])}; not run "
+        f"{_seeds_text(seeds['not_run'])}.",
+        "",
+    ]
+    if "stop" in record:
+        out += [record["stop"], ""]
+
+    a = record["approval"]
+    out += [
+        "## Approval and cost (D-11, D-13, D-14)",
+        "",
+        "Rafael's ruling, verbatim:",
+        "",
+        f"> {a['ruling']}",
+        "",
+        "His R-3 b conditions, verbatim:",
+        "",
+        f"> {a['r3_conditions']}",
+        "",
+        "His record-total sentence, verbatim:",
+        "",
+        f"> {a['record_total_ruling']}",
+        "",
+        *_table(
+            ("quantity", "hours"),
+            [
+                [key, repr(a[key])]
+                for key in (
+                    "e2_projection_hours",
+                    "committed_front_hours_e2",
+                    "e2_stop_hours",
+                    "committed_total_hours",
+                    "e2_total_hours",
+                    "e2_e5_e6_total_hours",
+                    "e2_e5_e6_total_hours_e6_actual_gate",
+                )
+            ],
+        ),
+        f"Rulings: {', '.join(f'{k} {v}' for k, v in a['rulings'].items())}; D-11 approved "
+        f"{a['d11_approved']}; D-13 included {a['d13_included']} ({a['d13_nlls_per_adapter']} "
+        f"NLLs per adapter, {a['d13_adapters']} adapters).",
+        "",
+    ]
+
+    out += [
+        "## Seeds (D-15)",
+        "",
+        *_table(
+            ("seed", "outcome"),
+            [[s, seeds["outcomes"][s]] for s in _seed_order(seeds["outcomes"])],
+        ),
+    ]
+    for s in _seed_order(seeds["dropped_attempts"]):
+        launch = record["provenance"]["seeds"][s].get("git_sha_at_launch")
+        for attempt in seeds["dropped_attempts"][s]:
+            out += [f"Seed {s} was re-run after a dropped attempt:", ""]
+            out += _attempt_lines(attempt, launch)
+            out += [
+                *(
+                    f"- {g} adapter, this attempt vs the dropped one: "
+                    f"{_identity_text(attempt['adapter_identity'][g])}"
+                    for g in groups
+                ),
+                "",
+            ]
+    for s in _seed_order(seeds["dropped_seed_outputs"]):
+        left = seeds["dropped_seed_outputs"][s]
+        out += [f"Seed {s} is left dropped (no relaunch re-ran it):", ""]
+        for manifest in left["manifests"]:
+            out += _attempt_lines(manifest, None)
+        out += _table(
+            ("partial output in place", "sha256"),
+            [[i["from"], i["sha256"]] for i in left["in_place"]],
+        )
+    if not seeds["dropped_attempts"] and not seeds["dropped_seed_outputs"]:
+        out += ["no dropped attempt", ""]
+
+    label = record["a2_label"]
+    rows, tiers = [], []
+    for s in _seed_order(per_seed):
+        for g in groups:
+            slots = per_seed[s][g]["slots"]
+            for slot in _slot_order(slots):
+                r = slots[slot]
+                tiers = sorted(r["per_tier"])
+                rows.append(
+                    [
+                        s,
+                        g,
+                        slot,
+                        r["fact_id"],
+                        f"{r['n_answerable']}/{r['n_questions']}",
+                        repr(r["rate"]),
+                        *(
+                            f"{r['per_tier'][t]['n_answerable']}/{r['per_tier'][t]['n_questions']}"
+                            for t in tiers
+                        ),
+                    ]
+                )
+    out += [
+        "## A2 recall per seed with its denominator (NOISE-01)",
+        "",
+        f"Every A2 record of both groups carries config.arm {label['label']!r} because it names "
+        f"the pinned A2 pass, not a group: {label['explanation']}",
+        "",
+        *_table(("seed", "group", "slot", "fact", "recall", "rate", *tiers), rows),
+    ]
+
+    crn = record["crn_addendum"]
+    out += ["## Training-seed floor beside v3.0's sampling floor (NOISE-02, D-01..D-05)", ""]
+    if measured:
+        rf = record["recall_floor"]
+        pub, beside = rf["published"], rf["beside"]
+        out += [
+            *(
+                f"- {g} group floor {rf[g]['floor']!r} (max {rf[g]['max']!r}, min "
+                f"{rf[g]['min']!r}): {rf[g]['n_seeds']} whole seeds, {rf[g]['n_pairs']} pairs "
+                "entered"
+                for g in groups
+            ),
+            "",
+            f"Published floor: {pub['value']!r} (group {pub['group']}, tie {pub['tie']}): "
+            f"{pub['n_seeds']} whole seeds, {pub['n_pairs']} pairs entered; beside v3.0's "
+            f"sampling floor {beside['sampling_floor']!r}; the (b) margin at the gate "
+            f"{beside['margin_at_gate']!r}, not amended (margin_amended "
+            f"{beside['margin_amended']}).",
+            "",
+        ]
+    else:
+        out += ["No floor is published: the record status is INSUFFICIENT_SEEDS.", ""]
+    out += [
+        "Rafael's confirmation g, verbatim:",
+        "",
+        f"> {crn['confirmation_g']}",
+        "",
+        "Every adapter is drawn at the same generator states (common random numbers), while "
+        f"v3.0's sampling floor {crn['v3_sampling_floor']!r} ({crn['source']}) used independent "
+        "draws: under common random numbers the training-seed floor is not an upper bound on "
+        "training plus sampling and may come out below that value.",
+        "",
+    ]
+    if crn.get("published_below_v3_sampling_floor"):
+        out += [
+            f"The published floor {record['recall_floor']['published']['value']!r} is below "
+            f"v3.0's sampling floor {crn['v3_sampling_floor']!r}, as the addendum allows.",
+            "",
+        ]
+
+    out += ["## Every pair (D-02, D-04)", ""]
+    out += (
+        _table(
+            ("group", "seeds", "d", "deltas"),
+            [
+                [g, _seeds_text(p["seeds"]), repr(p["d"]), ", ".join(map(repr, p["deltas"]))]
+                for g in groups
+                for p in record["recall_floor"][g]["pairs"]
+            ],
+        )
+        if measured
+        else ["not published (INSUFFICIENT_SEEDS)", ""]
+    )
+    out += ["## Per-slot spread (D-04)", ""]
+    out += (
+        _table(
+            ("group", "slot", "rates", "counts", "range", "sd_sample", "sd_population"),
+            [
+                [
+                    g,
+                    slot,
+                    ", ".join(map(repr, sp["rates"])),
+                    ", ".join(f"{n}/{q}" for n, q in sp["counts"]),
+                    repr(sp["range"]),
+                    repr(sp["sd_sample"]),
+                    repr(sp["sd_population"]),
+                ]
+                for g in groups
+                for per_slot in (record["recall_floor"][g]["per_slot"],)
+                for slot in _slot_order(per_slot)
+                for sp in (per_slot[slot],)
+            ],
+        )
+        if measured
+        else ["not published (INSUFFICIENT_SEEDS)", ""]
+    )
+
+    out += ["## gap_noise_floor (D-09, D-10)", ""]
+    if measured:
+        d, m2 = record["gap_noise_floor_detail"], record["m2_gap_descriptive"]
+        out += [
+            f"gap_noise_floor = {record['gap_noise_floor']!r} (max {d['max']!r}): {d['n_seeds']} "
+            f"whole seeds, {d['n_pairs']} pairs entered; beside the v3.0/v4.0 one-pair floor "
+            f"{d['beside']!r}.",
+            "",
+            *_table(
+                ("seeds", "abs gap difference"),
+                [[_seeds_text(p["seeds"]), repr(p["abs_gap_difference"])] for p in d["pairs"]],
+            ),
+            f"M2 group, descriptive, never a verdict: {m2['value']!r} (max {m2['max']!r}): "
+            f"{m2['n_seeds']} whole seeds, {m2['n_pairs']} pairs entered.",
+            "",
+        ]
+    else:
+        out += ["No gap_noise_floor is published: not published (INSUFFICIENT_SEEDS).", ""]
+    out += _table(
+        (
+            "seed",
+            "group",
+            "device",
+            "adapter_on",
+            "adapter_off",
+            "committed adapter_off",
+            "matches",
+            "pre adapter_on",
+            "pre adapter_off",
+            "pre matches",
+            "rehearsal",
+            "pre_post_equal",
+            "gap",
+        ),
+        [
+            [
+                s,
+                g,
+                r["device"],
+                repr(r["adapter_on"]),
+                repr(r["adapter_off"]),
+                repr(r["committed_adapter_off"]),
+                r["adapter_off_matches_committed"],
+                repr(r["pre"]["adapter_on"]),
+                repr(r["pre"]["adapter_off"]),
+                r["pre"]["adapter_off_matches_committed"],
+                r["rehearsal"],
+                r["pre_post_equal"],
+                repr(r["gap"]),
+            ]
+            for s in _seed_order(per_seed)
+            for g in groups
+            for r in (per_seed[s][g]["dialogue_gap"],)
+        ],
+    )
+
+    out += ["## Full x M2 re-reading (D-12, descriptive)", "", "descriptive, never a verdict.", ""]
+    out += (
+        _table(
+            ("slot", "v3.0 delta_taught_to_m2", "full seed", "M2 seed", "same seed", "m2 - full"),
+            [
+                [
+                    slot,
+                    repr(block["v3_delta_taught_to_m2"]),
+                    p["full_seed"],
+                    p["m2_seed"],
+                    p["same_seed"],
+                    repr(p["m2_minus_full"]),
+                ]
+                for slot in _slot_order(record["d12"]["per_slot"])
+                for block in (record["d12"]["per_slot"][slot],)
+                for p in block["pairs"]
+            ],
+        )
+        if measured
+        else ["not computed (INSUFFICIENT_SEEDS)", ""]
+    )
+
+    d07 = record["d07"]["m2_seed1337"]
+    out += [
+        "## Determinism check (D-07, descriptive)",
+        "",
+        "descriptive, never a verdict: every comparison is tensor by tensor, never the file "
+        "sha256.",
+        "",
+        *_table(
+            ("new adapter vs committed", "reading"),
+            [[key, _identity_text(value)] for key, value in record["identity"].items()],
+        ),
+    ]
+    if isinstance(d07, str):
+        out += [f"M2@1337 A2 counts vs results/phase19_arm_retrain.json: {d07}", ""]
+    else:
+        out += [
+            "M2@1337 A2 counts vs results/phase19_arm_retrain.json, label: "
+            f"{d07['label'] or 'none (tensor-identical)'}",
+            "",
+            *_counts_table(d07["counts"]),
+            _draws_text(d07["draw_identity"]),
+            "",
+        ]
+
+    d08, d08b = record["d08"], record["d08b"]
+    out += [
+        "## persona_adapter.pt correction and the Phase 18 residual (D-08, D-08b)",
+        "",
+        d08["statement"],
+        "",
+        "persona_adapter.pt vs the dialogue-floor seed-1337 adapter, re-measured: "
+        f"{_identity_text(d08['persona_vs_dialogue_floor_1337'])}",
+        "",
+    ]
+    if isinstance(d08b, str):
+        out += [f"D-08b: {d08b}", ""]
+    else:
+        out += [
+            f"D-08b outcome {d08b['outcome']}, max abs rate difference "
+            f"{d08b['max_abs_rate_difference']!r} (full@1337 vs the Phase 18 run_arm counts):",
+            "",
+            *_counts_table(d08b["counts"]),
+            _draws_text(d08b["draw_identity"]),
+            "",
+        ]
+
+    out += ["## Target rank across the M2 seeds (D-13, descriptive)", ""]
+    if record["d13"] is None:
+        out += ["D-13 was not approved: not measured.", ""]
+    else:
+        reading, blocks = record["d13"]["reading"], record["d13"]["blocks"]
+        out += [
+            "descriptive, never a verdict. Measured seeds: "
+            f"{_seeds_text(reading['measured_seeds'])}.",
+            "",
+            *(
+                f"- seed {nm['seed']}: not measured ({nm['failure_kind']}): {nm['reason']} — the "
+                "seed is kept: ruling c"
+                for nm in reading["not_measured"]
+            ),
+            "",
+            *_table(
+                (
+                    "seed",
+                    "anchor gate rank",
+                    "A2 exposure rank",
+                    "R_q committed n1/n",
+                    "R_q minted n1/n",
+                ),
+                [
+                    [
+                        s,
+                        b["anchor_gate"]["rank"],
+                        b["anchor_gate"]["a2_record_rank"],
+                        f"{b['r_q']['committed']['n1']}/{b['r_q']['committed']['n']}",
+                        f"{b['r_q']['minted']['n1']}/{b['r_q']['minted']['n']}",
+                    ]
+                    for s in _seed_order(blocks)
+                    for b in (blocks[s],)
+                    if b["measured"]
+                ],
+            ),
+        ]
+
+    out += [
+        "## Predictions recorded before the run",
+        "",
+        *_table(
+            ("prediction", "as written", "observed", "criterion"),
+            [
+                [
+                    key,
+                    p["prediction"],
+                    p["observed"]
+                    if isinstance(p["observed"], str)
+                    else json.dumps(p["observed"], sort_keys=True),
+                    p["criterion"],
+                ]
+                for key in _prereg().ENTRIES["predictions"]["value"]
+                for p in (record["predictions"][key],)
+            ],
+        ),
+    ]
+
+    emit_block = record["provenance"]["emit"]
+    out += ["## Provenance", ""]
+    for s in _seed_order(record["provenance"]["seeds"]):
+        run = record["provenance"]["seeds"][s]
+        out += [f"- seed {s} run: " + ", ".join(f"{k} {run[k]}" for k in sorted(run)), ""]
+        out += _disclosure_lines(s, record["rehearsal_disclosure"][s])
+    out += [
+        f"- emit: device {emit_block['device']}, head at write `{emit_block['head_at_write']}`, "
+        f"written {emit_block['written_utc']}",
+        "- modules changed since launch: "
+        f"{', '.join(emit_block['modules_changed_since_launch']) or 'none'}",
+        "",
+    ]
+    return "\n".join(out)
+
+
+def _tracked_and_clean(rel):
+    """True iff ``rel`` is tracked and unmodified against HEAD (cwd _REPO)."""
+    return all(
+        subprocess.run(("git", *args), cwd=_REPO, capture_output=True).returncode == 0
+        for args in (("ls-files", "--error-unmatch", rel), ("diff", "--quiet", "HEAD", "--", rel))
+    )
+
+
+def report(*, root=None):
+    """Write results/phase40_noise_floor_report.md ONCE from the record (on the real root only
+    from a tracked, unmodified record)."""
+    root = pathlib.Path(root) if root is not None else pathlib.Path(_ROOT)
+    prereg = _prereg()
+    record_path = root / prereg.NOISE_FLOOR_RECORD
+    _prove(record_path.exists(), f"{record_path} is missing: emit the record first")
+    _prove(
+        not _is_real(root) or _tracked_and_clean(prereg.NOISE_FLOOR_RECORD),
+        f"{prereg.NOISE_FLOOR_RECORD} must be committed and unmodified before the report renders "
+        "it",
+    )
+    out = root / prereg.REPORT_RECORD
+    _prove(
+        not out.exists(),
+        f"{out} exists — REFUSING to overwrite it. The report is write-once; a correction is a "
+        "dated continuation via scripts/_addendum.py",
+    )
+    out.write_text(render_report(_load(record_path)), encoding="utf-8")
+    print(f"REPORT {out}", flush=True)
+    return out
+
+
+def main(argv=None):
+    argv = sys.argv[1:] if argv is None else list(argv)
+    commands = {"preflight": preflight, "run": run, "emit": emit, "report": report}
+    if len(argv) != 1 or argv[0] not in commands:
+        raise SystemExit(__doc__)
+    # git_sha() reads the process cwd: every command runs at the repository root.
+    os.chdir(_REPO)
+    commands[argv[0]]()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))
