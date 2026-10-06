@@ -1243,6 +1243,10 @@ def seed_outcomes(ledger_lines, seeds):
             all(close is not None for _, close in mine),
             f"seed {seed}: an attempt is still open: phase36_ledger.py reconcile first",
         )
+        _prove(
+            not any(close["event"] == "end" for _, close in mine[:-1]),
+            f"seed {seed}: a whole seed has a later attempt (R-3 b: never for a completed seed)",
+        )
         close = mine[-1][1]
         if close["event"] == "lost":
             outcomes[seed] = "dropped"

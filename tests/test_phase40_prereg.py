@@ -1260,6 +1260,17 @@ def test_seed_outcomes_whole_dropped_not_run(monkeypatch):
     opened = [*_ledger_lines(), _ledger_line("start", 1338, "t9")]
     with pytest.raises(SystemExit, match="reconcile"):
         phase40_prereg.seed_outcomes(opened, seeds)
+    # WR-01 (R-3 b "nunca para semente concluída"): any attempt after a whole one is refused.
+    whole = [
+        _ledger_line("start", 1337, "t1"),
+        _ledger_line("end", 1337, "t2", phase40_prereg.seed_record(1337)),
+    ]
+    for close in (
+        _ledger_line("lost", 1337, "t4"),
+        _ledger_line("end", 1337, "t4", phase40_prereg.seed_record(1337)),
+    ):
+        with pytest.raises(SystemExit, match="R-3 b"):
+            phase40_prereg.seed_outcomes([*whole, _ledger_line("start", 1337, "t3"), close], seeds)
     monkeypatch.setattr(phase40_prereg, "DROPPED_SEED_RERUN", False)
     assert phase40_prereg.pending_seeds(outcomes) == (1338, 1339)
     assert phase40_prereg.pending_seeds(outcomes, rerun=frozenset({2024})) == (1338, 1339)
