@@ -116,6 +116,20 @@ def module_sha256():
 _prove(set(DISCLOSED_MODULES) <= set(MODULES), "DISCLOSED_MODULES must be a subset of MODULES")
 
 
+def _import_modules():
+    """WR-04: import every MODULES file (the driver is the running code) BEFORE preflight takes
+    module_sha256(), so no module the seed records' module_sha256_at_launch names is first read
+    from disk hours into the run (phase39_ctx was first imported inside seed 1337's D-13)."""
+    import importlib
+
+    for rel in MODULES:
+        path = pathlib.PurePosixPath(rel).with_suffix("")
+        if rel != DRIVER_FILE:
+            importlib.import_module(
+                ".".join(path.parts[1:]) if path.parts[0] == "src" else path.name
+            )
+
+
 def _is_real(root):
     """The real root, or any root inside the repository."""
     resolved = pathlib.Path(root).resolve()
@@ -832,6 +846,7 @@ def preflight(*, root=None, ledger_path=None, heartbeat_path=None, device=None, 
         _prove(device == "cpu", f"a rehearsal runs on CPU: pass device='cpu', not {device!r}")
     launch_git_sha = git_sha()
     _prove(launch_git_sha != "unknown", "git_sha() could not read HEAD (run from the repo root)")
+    _import_modules()
     launch_modules = module_sha256()
     for path in run_inputs():
         _prove(

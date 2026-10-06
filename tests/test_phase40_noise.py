@@ -3109,3 +3109,44 @@ def test_wr03_release_failing_in_the_d13_handler_keeps_the_seed_whole(monkeypatc
         "planted: torch.mps.empty_cache failed after the MPS error)",
     )
     print(f"\nWR03 seed whole, d13: {d13_block}")
+
+
+def _module_name(rel):
+    """``scripts/x.py`` -> ``x``; ``src/a/b.py`` -> ``a.b`` (the import name of a MODULES file)."""
+    path = pathlib.PurePosixPath(rel).with_suffix("")
+    return ".".join(path.parts[1:]) if path.parts[0] == "src" else path.name
+
+
+def test_wr04_every_module_is_imported_before_preflight_takes_the_digests(tmp_path):
+    """WR-04: in a fresh interpreter, at the moment preflight takes module_sha256() (the seed
+    records' module_sha256_at_launch), every MODULES file is already imported: none is first read
+    from disk hours later (phase39_ctx was first imported inside seed 1337's D-13)."""
+    names = [_module_name(rel) for rel in phase40_noise.MODULES]
+    code = textwrap.dedent(
+        f"""
+        import pathlib, sys
+        sys.path[:0] = ["scripts", "src"]
+        import phase40_noise
+
+        def probe():
+            print("NOT_LOADED", [m for m in {names!r} if m not in sys.modules])
+            raise SystemExit(0)
+
+        phase40_noise.module_sha256 = probe
+        t = pathlib.Path({str(tmp_path)!r})
+        phase40_noise.preflight(
+            root=t, ledger_path=t / "l.jsonl", heartbeat_path=t / "h.jsonl", device="cpu",
+            seeds=(1337,),
+        )
+        print("PROBE NOT REACHED")
+        """
+    )
+    done = subprocess.run(
+        [sys.executable, "-c", code], cwd=_ROOT, capture_output=True, text=True, timeout=300
+    )
+    print(f"\nWR04 {done.stdout.strip()}")
+    assert done.returncode == 0, done.stderr[-2000:]
+    assert done.stdout.strip().splitlines()[-1] == "NOT_LOADED []"
+    assert sorted(tmp_path.iterdir()) == []  # preflight wrote nothing
+    assert phase40_noise._import_modules() is None
+    assert [m for m in names if m not in sys.modules] == []
