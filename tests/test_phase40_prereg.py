@@ -1416,11 +1416,20 @@ def test_seed_outcomes_dropped_manifest_truth_table():
         ("kept", _manifest(kept=[{**item, "path": "data/elsewhere/a.pt"}])),
         ("sha256", _manifest(kept=[{k: v for k, v in item.items() if k != "sha256"}])),
         ("extra", _manifest(kept=[{**item, "extra": 1}])),
+        # IN-03: no '..' escape from the attempt directory, a real sha256, a non-empty from.
+        ("..", _manifest(kept=[{**item, "path": item["path"] + "/../../../../results/x.json"}])),
+        ("sha256", _manifest(kept=[{**item, "sha256": ""}])),
+        ("sha256", _manifest(kept=[{**item, "sha256": "G" * 64}])),
+        ("from", _manifest(kept=[{**item, "from": " "}])),
     ]
     for key, manifest in plants:
         failures = _manifest_failures(manifest)
         assert failures, key
         assert any(key in failure for failure in failures), (key, failures)
+    # IN-03: "Never raises on a bad manifest", including one that is not a mapping.
+    for bad in (None, [], "manifest"):
+        failures = _manifest_failures(bad)
+        assert failures and "mapping" in failures[0], bad
 
 
 def test_seed_outcomes_approved_refuses_negations():

@@ -1342,6 +1342,8 @@ def _approved(text):
 def dropped_manifest_failures(manifest, *, seed, lost_utc):
     """R-3 b (a, b, c, e): the failures of a crashed attempt's manifest, checked on the manifest
     ALONE; [] when every condition holds. Never raises on a bad manifest."""
+    if not isinstance(manifest, collections.abc.Mapping):
+        return [f"manifest is {type(manifest).__name__}, not a mapping"]
     keys = tuple(manifest)
     if set(keys) != set(DROPPED_MANIFEST_KEYS) or len(keys) != len(DROPPED_MANIFEST_KEYS):
         missing = sorted(set(DROPPED_MANIFEST_KEYS) - set(keys))
@@ -1378,8 +1380,15 @@ def dropped_manifest_failures(manifest, *, seed, lost_utc):
             continue
         if not all(isinstance(item[k], str) for k in _KEPT_KEYS):
             failures.append(f"kept[{index}] has a non-str field (c)")
-        elif not item["path"].startswith(prefix):
+            continue
+        if not item["path"].startswith(prefix):
             failures.append(f"kept[{index}] path {item['path']!r} is not under {prefix} (c)")
+        if ".." in pathlib.PurePosixPath(item["path"]).parts:
+            failures.append(f"kept[{index}] path {item['path']!r} has a '..' segment (c)")
+        if not re.fullmatch(r"[0-9a-f]{64}", item["sha256"]):
+            failures.append(f"kept[{index}] sha256 {item['sha256']!r} is not 64 hex (c)")
+        if not _text(item["from"]):
+            failures.append(f"kept[{index}] from {item['from']!r} is empty (c)")
     return failures
 
 
