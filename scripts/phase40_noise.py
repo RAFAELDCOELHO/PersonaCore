@@ -30,16 +30,17 @@ import hashlib
 import json
 import pathlib
 import shutil
+import subprocess
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "src"))
 
 import phase25_run  # noqa: E402  — atomic_write_json, beat, start_heartbeat (torch-free)
-import phase36_caps  # noqa: E402,F401  (torch-free; the run loop's caps, plan 06)
-import phase36_ledger  # noqa: E402,F401  (torch-free; the per-seed attempt, plan 06)
+import phase36_caps  # noqa: E402  (torch-free; the launch caps)
+import phase36_ledger  # noqa: E402  (torch-free; the per-seed attempt)
 
-from personacore.provenance import git_sha, refuse_if_dirty  # noqa: E402,F401
+from personacore.provenance import git_sha, refuse_if_dirty  # noqa: E402
 
 # FIXED: the cwd of every git call and the base of the module digests.
 _REPO = pathlib.Path(__file__).resolve().parent.parent
@@ -434,3 +435,272 @@ def d13_scores(adapter_path, a2_record_path, device, state):
         minted_ranks=minted_ranks,
     )
     return {**block, "n_nlls": n_nlls}
+
+
+# =================================================================================================
+# The rehearsal identity and its disclosure (the phase39_ctx shape)
+# =================================================================================================
+
+_IDENTITY_KEYS = frozenset({"git_sha", "module_sha256", "seeds", "started_utc"})
+
+
+def _load(path):
+    return json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
+
+
+def rehearsal_identity_path():
+    """The gitignored rehearsal identity under the output root (``_ROOT`` read at call time)."""
+    return pathlib.Path(_ROOT) / "data" / "phase40_rehearsal.json"
+
+
+def _kept_identity(path, *, seeds):
+    """The identity already at ``path`` (None when absent), refused when it recorded a different
+    seed set: a wider rehearsal would go undisclosed under it (38-REVIEW DR-02)."""
+    path = pathlib.Path(path)
+    if not path.exists():
+        return None
+    kept = _load(path)
+    _prove(
+        kept["seeds"] == list(seeds),
+        f"{path} recorded a different seed set ({kept['seeds']}, not {list(seeds)}): a wider "
+        "rehearsal would go undisclosed (38-REVIEW DR-02)",
+    )
+    return kept
+
+
+def record_rehearsal(path, *, seeds):
+    """The FIRST rehearsal attempt's identity (prereg digest included); never overwritten."""
+    path = pathlib.Path(path)
+    kept = _kept_identity(path, seeds=seeds)
+    if kept is not None:
+        print(f"REHEARSAL KEPT {kept['git_sha']}", flush=True)
+        return {"status": "kept", **kept}
+    identity = {
+        "git_sha": git_sha(),
+        "module_sha256": {rel: _sha256(_REPO / rel) for rel in DISCLOSED_MODULES},
+        "seeds": list(seeds),
+        "started_utc": _now(),
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    phase25_run.atomic_write_json(path, identity)
+    print(f"REHEARSAL RECORDED {identity['git_sha']}", flush=True)
+    return {"status": "recorded", **identity}
+
+
+def rehearsal_disclosure(identity, *, launch_git_sha, launch_module_sha256):
+    """Every commit touching a DISCLOSED_MODULES file between the rehearsal and the launch, its
+    subject as the reason, and per-module changed flags (the prereg's on its own)."""
+    log = subprocess.run(
+        (
+            "git",
+            "log",
+            "--format=%H%x09%s",
+            f"{identity['git_sha']}..{launch_git_sha}",
+            "--",
+            *DISCLOSED_MODULES,
+        ),
+        cwd=_REPO,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    commits = []
+    for line in log.splitlines():
+        sha, reason = line.split("\t", 1)
+        touched = subprocess.run(
+            ("git", "show", "--name-only", "--format=", sha),
+            cwd=_REPO,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.split()
+        commits.append(
+            {
+                "sha": sha,
+                "reason": reason,
+                "modules": [r for r in DISCLOSED_MODULES if r in touched],
+            }
+        )
+    changed = {
+        rel: launch_module_sha256[rel] != identity["module_sha256"][rel]
+        for rel in DISCLOSED_MODULES
+    }
+    driver_changed = any(changed.values())
+    _prove(
+        not driver_changed or commits,
+        "a disclosed module changed after the rehearsal without a commit",
+    )
+    since = (
+        f"{len(commits)} commit(s) touched a disclosed module since"
+        if commits
+        else "no commit touched a disclosed module since"
+    )
+    return {
+        "statement": (
+            f"The CPU rehearsal ran seeds {identity['seeds']} on this prereg before the MPS run; "
+            f"{since} it."
+        ),
+        "seeds_read": identity["seeds"],
+        "rehearsal_git_sha": identity["git_sha"],
+        "rehearsal_module_sha256": identity["module_sha256"],
+        "launch_git_sha": launch_git_sha,
+        "launch_module_sha256": {rel: launch_module_sha256[rel] for rel in DISCLOSED_MODULES},
+        "changed": changed,
+        "prereg_changed": changed[PREREG_FILE],
+        "driver_changed": driver_changed,
+        "commits": commits,
+    }
+
+
+# =================================================================================================
+# Preflight: every refusal before the first start line
+# =================================================================================================
+
+
+def _launch_pathspec(outcomes):
+    """LAUNCH_PATHSPEC plus one ``:(exclude)`` per record of a whole or dropped seed, and per
+    in-process csv directory of a dropped seed: the run's own untracked outputs, nothing else
+    (emit excludes the same set)."""
+    import teach_persona as tp  # torch at import: lazy
+
+    prereg = _prereg()
+    excluded = []
+    for seed in prereg.SEEDS:
+        if outcomes.get(seed) not in ("whole", "dropped"):
+            continue
+        excluded.append(prereg.seed_record(seed))
+        excluded += [prereg.a2_record(g, seed) for g in prereg.GROUPS]
+        if outcomes[seed] == "dropped":
+            excluded += [
+                _rel(arm_paths(g, seed)["csv"].parent, tp._REPO_ROOT) for g in prereg.GROUPS
+            ]
+    return LAUNCH_PATHSPEC + tuple(":(exclude)" + rel for rel in excluded)
+
+
+def preflight(*, root=None, ledger_path=None, heartbeat_path=None, device=None, seeds=None):
+    """Every refusal before the first ledger start line (D-15, R-3 b). Writes nothing."""
+    prereg = _prereg()
+    root = pathlib.Path(root) if root is not None else pathlib.Path(_ROOT)
+    real = _is_real(root)
+    if real:
+        _prove(
+            seeds is None and ledger_path is None and heartbeat_path is None,
+            "the real root runs every seed of SEEDS into the milestone ledger and heartbeat; a "
+            "seeds subset or an explicit ledger / heartbeat is a rehearsal into a tmp root outside "
+            "the repository",
+        )
+        chosen = prereg.SEEDS
+    else:
+        chosen = tuple(seeds) if seeds is not None else ()
+        _prove(
+            chosen and list(chosen) == [s for s in prereg.SEEDS if s in chosen],
+            f"a rehearsal names its seeds: a non-empty subset of SEEDS {prereg.SEEDS} in order, "
+            f"not {seeds!r}",
+        )
+        milestone = {
+            (phase36_ledger._ROOT / phase36_ledger.LEDGER_PATH).resolve(),
+            pathlib.Path(phase36_ledger.HEARTBEAT_PATH).resolve(),
+        }
+        _prove(
+            ledger_path is not None and heartbeat_path is not None,
+            "a rehearsal root needs an explicit ledger_path and heartbeat_path (38-REVIEW DR-01)",
+        )
+        _prove(
+            {
+                pathlib.Path(ledger_path).resolve(),
+                pathlib.Path(heartbeat_path).resolve(),
+            }.isdisjoint(milestone),
+            "a rehearsal root writes its own ledger and heartbeat, never the milestone ones "
+            "(38-REVIEW DR-01)",
+        )
+        _prove(device == "cpu", f"a rehearsal runs on CPU: pass device='cpu', not {device!r}")
+    launch_git_sha = git_sha()
+    _prove(launch_git_sha != "unknown", "git_sha() could not read HEAD (run from the repo root)")
+    launch_modules = module_sha256()
+    for path in run_inputs():
+        _prove(
+            pathlib.Path(path).exists(),
+            f"{path} is missing: the run reads it, so this refuses before the ledger start line",
+        )
+    lines = phase36_ledger.read_ledger(ledger_path)
+    still = set(phase36_ledger.open_runs(lines)) & {prereg.run_id(s) for s in prereg.SEEDS}
+    _prove(
+        not still,
+        f"the ledger holds an open attempt for {', '.join(sorted(still))}: end it, or once the run "
+        "is dead phase36_ledger.py reconcile first",
+    )
+    outcomes = prereg.seed_outcomes(lines, chosen)
+    pending = prereg.pending_seeds(outcomes)
+    _prove(
+        pending, f"nothing to run: every seed of {list(chosen)} is whole or dropped ({outcomes})"
+    )
+    refuse_if_dirty(
+        who="phase40_noise",
+        detail=(
+            "every seed record publishes git_sha and hashes its modules from the working tree; a "
+            "run launched from a dirty tree names a commit it cannot be regenerated from"
+        ),
+        pathspec=_launch_pathspec(outcomes) if real else LAUNCH_PATHSPEC,
+        cwd=_REPO,
+    )
+    rehearsal = not real
+    for seed in pending:
+        for group in prereg.GROUPS:
+            paths = arm_paths(group, seed, rehearsal=rehearsal)
+            arm = arm_name(group, seed, rehearsal=rehearsal)
+            for path in (
+                paths["adapter"],
+                paths["checkpoint"],
+                paths["bin"],
+                paths["mask"],
+                paths["csv"],
+                root / "data" / CSV_DIR / arm / "run.csv",
+                root / prereg.a2_record(group, seed),
+            ):
+                _prove(not path.exists(), f"{path} exists: an output of pending seed {seed}")
+        record = root / prereg.seed_record(seed)
+        _prove(not record.exists(), f"{record} exists: an output of pending seed {seed}")
+    gate = phase36_ledger.require_launch(FRONT, ledger_path=ledger_path)
+    phase36_caps.check_unit_caps(FRONT, adapters=len(prereg.GROUPS), seeds=len(prereg.SEEDS))
+    device = _device() if device is None else device
+    if real:
+        _prove(device == "mps", f"E2 runs on MPS on the real root; resolved {device!r}")
+        path = rehearsal_identity_path()
+        _prove(
+            path.exists(),
+            f"the rehearsal identity {path} is missing: run the CPU rehearsal first",
+        )
+        identity = _load(path)
+        _prove(
+            isinstance(identity, dict)
+            and set(identity) == _IDENTITY_KEYS
+            and isinstance(identity["module_sha256"], dict)
+            and set(identity["module_sha256"]) == set(DISCLOSED_MODULES),
+            f"{path} is malformed (38-REVIEW DR-03)",
+        )
+        _prove(
+            identity["module_sha256"][PREREG_FILE] == launch_modules[PREREG_FILE],
+            f"{PREREG_FILE} changed after the rehearsal: the prereg is frozen",
+        )
+        disclosure = rehearsal_disclosure(
+            identity, launch_git_sha=launch_git_sha, launch_module_sha256=launch_modules
+        )
+    else:
+        disclosure = {"this_is_the_rehearsal": True}
+    print(
+        f"PREFLIGHT OK {launch_git_sha} device={device} "
+        f"pending={','.join(map(str, pending))} d13={prereg.D13_INCLUDED} "
+        f"projection_h={prereg.E2_PROJECTION_HOURS!r} stop_h={prereg.E2_STOP_HOURS!r} "
+        f"spent_E2_s={gate['spent_seconds'][FRONT]}",
+        flush=True,
+    )
+    return {
+        "root": root,
+        "pending": pending,
+        "launch_git_sha": launch_git_sha,
+        "launch_modules": launch_modules,
+        "device": device,
+        "gate": gate,
+        "rehearsal_disclosure": disclosure,
+        "dropped_attempts": {},
+    }

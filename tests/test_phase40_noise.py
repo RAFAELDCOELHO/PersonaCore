@@ -12,10 +12,12 @@ import inspect
 import json
 import pathlib
 import plistlib
+import re
 import shutil
 import subprocess
 import sys
 import textwrap
+import types
 
 import pytest
 import torch
@@ -36,6 +38,8 @@ import phase14_recall  # noqa: E402  (same)
 import phase18_extraction  # noqa: E402  (same)
 import phase19_erasure  # noqa: E402  (same; never aliased)
 import phase35_prereg  # noqa: E402  (same)
+import phase36_caps  # noqa: E402  (same)
+import phase36_ledger  # noqa: E402  (same)
 import phase38_prereg  # noqa: E402  (same)
 import phase38_rank  # noqa: E402  (same)
 import phase39_ctx  # noqa: E402  (same)
@@ -45,6 +49,7 @@ import phase40_prereg  # noqa: E402  (same; frozen: import only)
 import teach_persona  # noqa: E402  (same)
 
 from personacore.checkpoint import ADAPTER_SCHEMA_VERSION  # noqa: E402
+from personacore.provenance import refuse_if_dirty  # noqa: E402
 from test_phase29_prereg import _git  # noqa: E402
 
 # Every input file the run reads, as the (module, constant) its reader takes it from.
@@ -87,6 +92,14 @@ def _real_tree_untouched():
     yield
     assert _git("status", "--porcelain", "--", "results", "ledger") == before
     assert _phase40_outputs() == outputs
+
+
+@pytest.fixture(autouse=True)
+def _tracked_budget_only(monkeypatch):
+    """Plan 06 interfaces (4): committed_budget reads the committed budget, and spent() never reads
+    a committed seed record's clock for a tmp ledger's end line (the real ledger is untracked
+    here, so read_ledger's append-only proof skips it too)."""
+    monkeypatch.setattr(phase36_caps, "tracked_files", lambda: [phase36_caps.BUDGET_RECORD])
 
 
 def _repo_rig(monkeypatch, tmp_path, dirty=None):
@@ -612,3 +625,509 @@ def test_plist_mirrors_the_r1b_agent():
     assert {k: v for k, v in ours.items() if k not in changed} == {
         k: v for k, v in r1b.items() if k not in changed
     }
+
+
+# =================================================================================================
+# (8) Plan 06: preflight, the rehearsal identity and its disclosure.
+# =================================================================================================
+
+
+def _tmp_rig(monkeypatch, tmp_path, seeds=(1337, 2024)):
+    """A rehearsal (tmp) root on `_repo_rig`: explicit tmp ledger and heartbeat, device cpu, HEAD
+    stubbed to "h1"."""
+    dirty = []
+    root = _repo_rig(monkeypatch, tmp_path, dirty=dirty)
+    monkeypatch.setattr(phase40_noise, "git_sha", lambda: "h1")
+    ledger, heartbeat = tmp_path / "ledger.jsonl", tmp_path / "heartbeat.jsonl"
+    return types.SimpleNamespace(
+        root=root,
+        dirty=dirty,
+        ledger=ledger,
+        heartbeat=heartbeat,
+        identity=tmp_path / "identity.json",
+        kw={
+            "root": root,
+            "ledger_path": ledger,
+            "heartbeat_path": heartbeat,
+            "device": "cpu",
+            "seeds": tuple(seeds),
+        },
+    )
+
+
+def _real_root_rig(monkeypatch, tmp_path, *, identity=True):
+    """The real-root branches against a rig (plan 06 interfaces (3)): phase40_noise._ROOT and the
+    milestone ledger / heartbeat point into it; HEAD is the repository's real HEAD (the disclosure
+    runs git log in _REPO); run_inputs, the caps and the device are stubbed."""
+    dirty = []
+    root = _repo_rig(monkeypatch, tmp_path, dirty=dirty)
+    monkeypatch.setattr(phase40_noise, "_ROOT", root)
+    monkeypatch.setattr(phase36_ledger, "_ROOT", root)
+    monkeypatch.setattr(phase36_ledger, "LEDGER_PATH", "ledger/rig_ledger.jsonl")
+    heartbeat = root / "data" / "rig_heartbeat.jsonl"
+    monkeypatch.setattr(phase36_ledger, "HEARTBEAT_PATH", heartbeat)
+    head = _git("rev-parse", "HEAD")
+    monkeypatch.setattr(phase40_noise, "git_sha", lambda: head)
+    monkeypatch.setattr(phase40_noise, "run_inputs", lambda: ())
+    monkeypatch.setattr(phase36_caps, "check_unit_caps", lambda front, **counts: dict(counts))
+    monkeypatch.setattr(phase40_noise, "_device", lambda: "mps")
+    if identity:
+        phase40_noise.record_rehearsal(
+            phase40_noise.rehearsal_identity_path(), seeds=phase40_prereg.SEEDS[:2]
+        )
+    return types.SimpleNamespace(
+        root=root,
+        dirty=dirty,
+        ledger=root / "ledger" / "rig_ledger.jsonl",
+        heartbeat=heartbeat,
+        head=head,
+        kw={},
+    )
+
+
+def _ledger(path, *events):
+    """Append ``(event, seed)`` lines for run_id(seed) (an end names seed_record(seed))."""
+    for event, seed in events:
+        extra = {}
+        if event == "end":
+            extra["record"] = phase40_prereg.seed_record(seed)
+        if event == "lost":
+            extra.update(seconds=0.0, flag=phase36_ledger.NO_BEAT_FLAG)
+        phase36_ledger.append(
+            event,
+            run_id=phase40_prereg.run_id(seed),
+            phase=40,
+            front="E2",
+            ledger_path=path,
+            **extra,
+        )
+
+
+def _lines(path):
+    return path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+
+
+def _raise(message):
+    def planted(*args, **kwargs):
+        raise SystemExit(message)
+
+    return planted
+
+
+def _launch(rig):
+    """The launch every refusal row goes through."""
+    return phase40_noise.preflight(**rig.kw)
+
+
+def _plant(path, data=b"planted"):
+    path = pathlib.Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+    return path
+
+
+def _row_dirty(rig, mp):
+    mp.setattr(phase40_noise, "refuse_if_dirty", _raise("[provenance] REFUSING: planted dirt"))
+    return "planted dirt"
+
+
+def _row_unknown_sha(rig, mp):
+    mp.setattr(phase40_noise, "git_sha", lambda: "unknown")
+    return "git_sha[(][)] could not read HEAD"
+
+
+def _row_open_attempt(rig, mp):
+    _ledger(rig.ledger, ("start", 1337))
+    return re.escape(f"open attempt for {phase40_prereg.run_id(1337)}") + ".*reconcile first"
+
+
+def _row_require_launch(rig, mp):
+    mp.setattr(phase36_ledger, "require_launch", _raise("[phase36_ledger] planted PAUSE"))
+    return "planted PAUSE"
+
+
+def _row_caps(rig, mp):
+    mp.setattr(phase36_caps, "check_unit_caps", _raise("[phase36_caps] planted cap"))
+    return "planted cap"
+
+
+def _row_no_ledger_path(rig, mp):
+    rig.kw["ledger_path"] = None
+    return "explicit ledger_path and heartbeat_path"
+
+
+def _row_no_heartbeat_path(rig, mp):
+    rig.kw["heartbeat_path"] = None
+    return "explicit ledger_path and heartbeat_path"
+
+
+def _row_milestone_ledger(rig, mp):
+    rig.kw["ledger_path"] = phase36_ledger._ROOT / phase36_ledger.LEDGER_PATH
+    return "never the milestone ones"
+
+
+def _row_milestone_heartbeat(rig, mp):
+    rig.kw["heartbeat_path"] = phase36_ledger.HEARTBEAT_PATH
+    return "never the milestone ones"
+
+
+def _row_tmp_mps(rig, mp):
+    rig.kw["device"] = "mps"
+    return "a rehearsal runs on CPU"
+
+
+def _row_tmp_no_seeds(rig, mp):
+    rig.kw["seeds"] = None
+    return "a rehearsal names its seeds"
+
+
+def _row_tmp_seeds_out_of_order(rig, mp):
+    rig.kw["seeds"] = (2024, 1337)
+    return "a rehearsal names its seeds"
+
+
+def _row_real_cpu(rig, mp):
+    mp.setattr(phase40_noise, "_device", lambda: "cpu")
+    return "E2 runs on MPS on the real root"
+
+
+def _row_real_subset(rig, mp):
+    rig.kw["seeds"] = (1337,)
+    return "the real root runs every seed of SEEDS"
+
+
+def _row_real_ledger(rig, mp):
+    rig.kw["ledger_path"] = rig.root / "ledger" / "other.jsonl"
+    return "the real root runs every seed of SEEDS"
+
+
+def _row_real_no_identity(rig, mp):
+    return "rehearsal identity.*is missing"
+
+
+def _row_real_prereg_drift(rig, mp):
+    path = phase40_noise.rehearsal_identity_path()
+    identity = json.loads(path.read_text(encoding="utf-8"))
+    identity["module_sha256"][phase40_noise.PREREG_FILE] = "0" * 64
+    path.write_text(json.dumps(identity), encoding="utf-8")
+    return "scripts/phase40_prereg.py changed after the rehearsal"
+
+
+_TMP_ROWS = (
+    _row_dirty,
+    _row_unknown_sha,
+    _row_open_attempt,
+    _row_require_launch,
+    _row_caps,
+    _row_no_ledger_path,
+    _row_no_heartbeat_path,
+    _row_milestone_ledger,
+    _row_milestone_heartbeat,
+    _row_tmp_mps,
+    _row_tmp_no_seeds,
+    _row_tmp_seeds_out_of_order,
+)
+_REAL_ROWS = (
+    _row_real_cpu,
+    _row_real_subset,
+    _row_real_ledger,
+    _row_real_no_identity,
+    _row_real_prereg_drift,
+)
+
+
+@pytest.mark.parametrize(
+    "plant", _TMP_ROWS + _REAL_ROWS, ids=[f.__name__[5:] for f in _TMP_ROWS + _REAL_ROWS]
+)
+def test_preflight_refusals(monkeypatch, tmp_path, plant):
+    if plant in _REAL_ROWS:
+        rig = _real_root_rig(monkeypatch, tmp_path, identity=plant is not _row_real_no_identity)
+    else:
+        rig = _tmp_rig(monkeypatch, tmp_path)
+    match = plant(rig, monkeypatch)
+    ledger_before = _lines(rig.ledger)
+    with pytest.raises(SystemExit, match=match):
+        _launch(rig)
+    assert _lines(rig.ledger) == ledger_before
+    assert not rig.heartbeat.exists()
+
+
+def _missing_input(rig, mp, owner, name):
+    missing = rig.root / "missing" / name
+    mp.setattr(owner, name, missing)
+    return missing
+
+
+@pytest.mark.parametrize(
+    "which",
+    [name for _, name in _RUN_INPUTS] + ["m2_seed1337", "full_seed2024", "dialogue_floor_seed1337"],
+)
+def test_preflight_refuses_a_missing_run_input(monkeypatch, tmp_path, which):
+    rig = _tmp_rig(monkeypatch, tmp_path)
+    owners = {name: owner for owner, name in _RUN_INPUTS}
+    if which in owners:
+        missing = _missing_input(rig, monkeypatch, owners[which], which)
+    else:
+        missing = phase40_noise.comparators()[which]
+        missing.unlink()
+    with pytest.raises(SystemExit, match=re.escape(f"{missing} is missing")):
+        _launch(rig)
+    assert not rig.ledger.exists() and not rig.heartbeat.exists()
+
+
+def _pending_outputs(group, seed, root, *, rehearsal):
+    """Every output path a pending seed must not have yet, by name."""
+    paths = phase40_noise.arm_paths(group, seed, rehearsal=rehearsal)
+    arm = phase40_noise.arm_name(group, seed, rehearsal=rehearsal)
+    return {
+        "seed_record": root / phase40_prereg.seed_record(seed),
+        "a2_record": root / phase40_prereg.a2_record(group, seed),
+        "adapter": paths["adapter"],
+        "checkpoint": paths["checkpoint"],
+        "bin": paths["bin"],
+        "mask": paths["mask"],
+        "csv": paths["csv"],
+        "moved_csv": root / "data" / phase40_noise.CSV_DIR / arm / "run.csv",
+    }
+
+
+@pytest.mark.parametrize("group", ["full", "m2"])
+@pytest.mark.parametrize(
+    "key", ["seed_record", "a2_record", "adapter", "checkpoint", "bin", "mask", "csv", "moved_csv"]
+)
+def test_preflight_refuses_an_existing_output_of_a_pending_seed(monkeypatch, tmp_path, key, group):
+    rig = _tmp_rig(monkeypatch, tmp_path)
+    path = _plant(_pending_outputs(group, 2024, rig.root, rehearsal=True)[key])
+    with pytest.raises(SystemExit, match=re.escape(f"{path} exists")):
+        _launch(rig)
+    assert not rig.ledger.exists() and not rig.heartbeat.exists()
+
+
+def test_preflight_ok_prints_the_line(monkeypatch, tmp_path, capsys):
+    rig = _tmp_rig(monkeypatch, tmp_path)
+    pf = phase40_noise.preflight(**rig.kw)
+    out = capsys.readouterr().out
+    expected = (
+        f"PREFLIGHT OK h1 device=cpu pending=1337,2024 d13={phase40_prereg.D13_INCLUDED} "
+        f"projection_h={phase40_prereg.E2_PROJECTION_HOURS!r} "
+        f"stop_h={phase40_prereg.E2_STOP_HOURS!r} spent_E2_s=0.0"
+    )
+    assert expected in out.splitlines()
+    assert set(pf) == {
+        "root",
+        "pending",
+        "launch_git_sha",
+        "launch_modules",
+        "device",
+        "gate",
+        "rehearsal_disclosure",
+        "dropped_attempts",
+    }
+    assert pf["pending"] == (1337, 2024) and isinstance(pf["pending"], tuple)
+    assert pf["root"] == rig.root and pf["device"] == "cpu" and pf["launch_git_sha"] == "h1"
+    assert pf["launch_modules"] == phase40_noise.module_sha256()
+    assert pf["gate"]["front"] == "E2"
+    assert pf["rehearsal_disclosure"] == {"this_is_the_rehearsal": True}
+    assert pf["dropped_attempts"] == {}
+    (call,) = rig.dirty
+    assert call["pathspec"] == phase40_noise.LAUNCH_PATHSPEC
+    assert call["cwd"] == phase40_noise._REPO and call["who"] == "phase40_noise"
+    assert not rig.ledger.exists() and not rig.heartbeat.exists()
+
+
+def test_preflight_pending_after_a_crash(monkeypatch, tmp_path):
+    rig = _tmp_rig(monkeypatch, tmp_path, seeds=phase40_prereg.SEEDS)
+    _ledger(rig.ledger, ("start", 1337), ("end", 1337), ("start", 2024), ("lost", 2024))
+    monkeypatch.setattr(phase40_prereg, "DROPPED_SEED_RERUN", False)
+    assert phase40_noise.preflight(**rig.kw)["pending"] == phase40_prereg.SEEDS[2:]
+    # A whole seed is never pending and its outputs are never checked for absence.
+    for path in _pending_outputs("full", 1337, rig.root, rehearsal=True).values():
+        if path.name != "run.csv" or "data" in path.parts:
+            _plant(path)
+    # The declined-rerun branch: a dropped seed without a manifest is not pending and its crashed
+    # outputs stay in place.
+    monkeypatch.setattr(phase40_prereg, "DROPPED_SEED_RERUN", True)
+    crashed = _pending_outputs("full", 2024, rig.root, rehearsal=True)
+    for key in ("adapter", "checkpoint", "csv", "a2_record"):
+        _plant(crashed[key])
+    pf = phase40_noise.preflight(**rig.kw)
+    assert pf["pending"] == phase40_prereg.SEEDS[2:]
+    assert 1337 not in pf["pending"] and 2024 not in pf["pending"]
+    assert pf["dropped_attempts"] == {}
+    # Nothing left to run refuses.
+    only = _tmp_rig(monkeypatch, tmp_path / "only", seeds=(1337,))
+    _ledger(only.ledger, ("start", 1337), ("end", 1337))
+    with pytest.raises(SystemExit, match="nothing to run"):
+        phase40_noise.preflight(**only.kw)
+
+
+def _expected_pathspec(outcomes):
+    excluded = []
+    for seed in phase40_prereg.SEEDS:
+        if outcomes.get(seed) not in ("whole", "dropped"):
+            continue
+        excluded.append(phase40_prereg.seed_record(seed))
+        excluded += [phase40_prereg.a2_record(g, seed) for g in phase40_prereg.GROUPS]
+        if outcomes[seed] == "dropped":
+            excluded += [
+                phase40_noise.arm_paths(g, seed)["csv"]
+                .parent.relative_to(teach_persona._REPO_ROOT)
+                .as_posix()
+                for g in phase40_prereg.GROUPS
+            ]
+    return phase40_noise.LAUNCH_PATHSPEC + tuple(":(exclude)" + rel for rel in excluded)
+
+
+def test_preflight_relaunch_pathspec_excludes_only_the_runs_own_records(monkeypatch, tmp_path):
+    rig = _real_root_rig(monkeypatch, tmp_path)
+    _ledger(None, ("start", 1337), ("end", 1337), ("start", 2024), ("lost", 2024))
+    assert rig.ledger.exists()
+    monkeypatch.setattr(phase40_prereg, "DROPPED_SEED_RERUN", False)
+    _plant(rig.root / phase40_prereg.seed_record(1337))
+    for group in phase40_prereg.GROUPS:
+        _plant(rig.root / phase40_prereg.a2_record(group, 1337))
+    _plant(rig.root / phase40_prereg.a2_record("full", 2024))
+    expected = _expected_pathspec({1337: "whole", 2024: "dropped"})
+    assert expected[len(phase40_noise.LAUNCH_PATHSPEC) :] == (
+        ":(exclude)results/phase40_seed1337.json",
+        ":(exclude)results/phase40_a2_full_seed1337.json",
+        ":(exclude)results/phase40_a2_m2_seed1337.json",
+        ":(exclude)results/phase40_seed2024.json",
+        ":(exclude)results/phase40_a2_full_seed2024.json",
+        ":(exclude)results/phase40_a2_m2_seed2024.json",
+        ":(exclude)results/phase40_e2_full_seed2024",
+        ":(exclude)results/phase40_e2_m2_seed2024",
+    )
+    for rerun in (False, True):  # True with no manifest: the real-root declined-rerun row
+        monkeypatch.setattr(phase40_prereg, "DROPPED_SEED_RERUN", rerun)
+        before = len(rig.dirty)
+        pf = phase40_noise.preflight()
+        assert pf["pending"] == phase40_prereg.SEEDS[2:]
+        assert len(rig.dirty) == before + 1
+        call = rig.dirty[-1]
+        assert call["cwd"] == phase40_noise._REPO
+        assert tuple(call["pathspec"]) == expected
+    # A tmp root's pathspec is LAUNCH_PATHSPEC alone.
+    other = tmp_path / "rehearsal"
+    phase40_noise.preflight(
+        root=other,
+        ledger_path=tmp_path / "rh_ledger.jsonl",
+        heartbeat_path=tmp_path / "rh_heartbeat.jsonl",
+        device="cpu",
+        seeds=(1337,),
+    )
+    assert tuple(rig.dirty[-1]["pathspec"]) == phase40_noise.LAUNCH_PATHSPEC
+
+
+def test_preflight_pathspec_on_a_real_git_rig(tmp_path):
+    repo = tmp_path / "git"
+
+    def git(*args):
+        subprocess.run(("git", *args), cwd=repo, capture_output=True, text=True, check=True)
+
+    _plant(repo / "scripts" / "a.py", b"x = 1\n")
+    _plant(repo / "results" / ".keep", b"")
+    git("init", "-q")
+    git("add", "scripts/a.py", "results/.keep")
+    git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "rig")
+    outcomes = dict.fromkeys(phase40_prereg.SEEDS, "not_run") | {1337: "whole", 2024: "dropped"}
+    pathspec = phase40_noise._launch_pathspec(outcomes)
+    assert pathspec == _expected_pathspec(outcomes)
+
+    def check(spec):
+        return refuse_if_dirty(who="rig", detail="rig", pathspec=spec, cwd=repo)
+
+    for rel in (
+        "results/phase40_seed1337.json",
+        "results/phase40_a2_full_seed1337.json",
+        "results/phase40_a2_full_seed2024.json",
+        "results/phase40_e2_full_seed2024/run.csv",
+    ):
+        _plant(repo / rel)
+    assert check(pathspec) == ""
+    for rel, named in (
+        ("results/phase40_seed1338.json", "results/phase40_seed1338.json"),
+        ("results/phase40_e2_full_seed1337/run.csv", "results/phase40_e2_full_seed1337/"),
+        ("scripts/b.py", "scripts/b.py"),
+    ):
+        planted = _plant(repo / rel)
+        with pytest.raises(SystemExit, match=re.escape(named)):
+            check(pathspec)
+        planted.unlink()
+        if planted.parent.name.startswith("phase40_e2"):
+            planted.parent.rmdir()
+    assert check(pathspec) == ""
+    nothing = phase40_noise._launch_pathspec(dict.fromkeys(phase40_prereg.SEEDS, "not_run"))
+    assert nothing == phase40_noise.LAUNCH_PATHSPEC
+    with pytest.raises(SystemExit, match=re.escape("results/phase40_seed1337.json")):
+        check(nothing)
+
+
+def test_rehearsal_identity_and_disclosure(monkeypatch, tmp_path):
+    monkeypatch.setattr(phase40_noise, "_ROOT", tmp_path / "a")
+    path = phase40_noise.rehearsal_identity_path()
+    assert path == tmp_path / "a" / "data" / "phase40_rehearsal.json"
+    monkeypatch.setattr(phase40_noise, "_ROOT", tmp_path)
+    path = phase40_noise.rehearsal_identity_path()
+    assert path == tmp_path / "data" / "phase40_rehearsal.json"
+    monkeypatch.setattr(phase40_noise, "git_sha", lambda: "h1")
+    first = phase40_noise.record_rehearsal(path, seeds=(1337, 2024))
+    assert first["status"] == "recorded"
+    identity = json.loads(path.read_text(encoding="utf-8"))
+    assert set(identity) == {"git_sha", "module_sha256", "seeds", "started_utc"}
+    assert identity["git_sha"] == "h1" and identity["seeds"] == [1337, 2024]
+    assert identity["module_sha256"] == {
+        rel: phase40_noise._sha256(_ROOT / rel) for rel in phase40_noise.DISCLOSED_MODULES
+    }
+    monkeypatch.setattr(phase40_noise, "git_sha", lambda: "h2")
+    kept = phase40_noise.record_rehearsal(path, seeds=(1337, 2024))
+    assert kept == {"status": "kept", **identity}
+    assert json.loads(path.read_text(encoding="utf-8")) == identity
+    with pytest.raises(SystemExit, match="different seed set"):
+        phase40_noise.record_rehearsal(path, seeds=(1337,))
+    assert json.loads(path.read_text(encoding="utf-8")) == identity
+
+    # The disclosure: git log stubbed.
+    logs = {"log": "", "show": ""}
+
+    def fake_run(args, **kw):
+        assert kw["cwd"] == phase40_noise._REPO
+        out = logs["log"] if args[1] == "log" else logs["show"]
+        if args[1] == "log":
+            assert args[3] == "h1..h9" and tuple(args[5:]) == phase40_noise.DISCLOSED_MODULES
+        return types.SimpleNamespace(stdout=out)
+
+    monkeypatch.setattr(phase40_noise.subprocess, "run", fake_run)
+    launch = dict(identity["module_sha256"])
+    empty = phase40_noise.rehearsal_disclosure(
+        identity, launch_git_sha="h9", launch_module_sha256=launch
+    )
+    assert empty["commits"] == [] and "no commit" in empty["statement"]
+    assert empty["prereg_changed"] is False and empty["driver_changed"] is False
+    assert empty["seeds_read"] == [1337, 2024]
+    launch[phase40_noise.DRIVER_FILE] = "f" * 64
+    with pytest.raises(SystemExit, match="without a commit"):
+        phase40_noise.rehearsal_disclosure(
+            identity, launch_git_sha="h9", launch_module_sha256=launch
+        )
+    logs.update(log="c0ffee\tfix the driver\n", show="scripts/phase40_noise.py\nREADME.md\n")
+    moved = phase40_noise.rehearsal_disclosure(
+        identity, launch_git_sha="h9", launch_module_sha256=launch
+    )
+    assert moved["commits"] == [
+        {"sha": "c0ffee", "reason": "fix the driver", "modules": [phase40_noise.DRIVER_FILE]}
+    ]
+    assert moved["changed"] == {phase40_noise.DRIVER_FILE: True, phase40_noise.PREREG_FILE: False}
+    assert moved["driver_changed"] is True and moved["prereg_changed"] is False
+    assert "fix the driver" not in moved["statement"] and "1 commit" in moved["statement"]
+
+
+def test_preflight_rehearsal_disclosure_on_the_real_root(monkeypatch, tmp_path):
+    rig = _real_root_rig(monkeypatch, tmp_path)
+    pf = phase40_noise.preflight()
+    identity = json.loads(phase40_noise.rehearsal_identity_path().read_text(encoding="utf-8"))
+    assert pf["rehearsal_disclosure"] == phase40_noise.rehearsal_disclosure(
+        identity, launch_git_sha=rig.head, launch_module_sha256=phase40_noise.module_sha256()
+    )
+    assert pf["rehearsal_disclosure"]["commits"] == []
+    assert pf["device"] == "mps" and pf["pending"] == phase40_prereg.SEEDS
