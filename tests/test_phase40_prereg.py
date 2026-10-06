@@ -1516,27 +1516,98 @@ def test_seed_outcomes_relaunch_head_truth_table():
 
 
 def test_d13_block_reduction(monkeypatch):
+    import phase19_erasure as pin
+
+    q = pin.N_TARGET_QUESTIONS
     monkeypatch.setattr(phase40_prereg, "D13_INCLUDED", True)
     curve = {"8": 3, "32": 4}
+    committed, minted = [1, 1, 3] + [2] * (q - 3), [2, 1] + [3] * (q - 2)
     block = phase40_prereg.d13_block(
-        curve=curve, gate_rank=2, a2_rank=2, committed_ranks=[1, 1, 3], minted_ranks=[2, 1]
+        curve=curve, gate_rank=2, a2_rank=2, committed_ranks=committed, minted_ranks=minted
     )
+    assert block["measured"] is True
     assert block["anchor_curve"] == curve
     assert block["anchor_gate"] == {"rank": 2, "a2_record_rank": 2, "equal": True}
     assert block["r_q"]["committed"] == {
-        "ranks": [1, 1, 3],
-        "n1": phase39_prereg.n1([1, 1, 3]),
-        "n": 3,
+        "ranks": committed,
+        "n1": phase39_prereg.n1(committed),
+        "n": q,
     }
     assert block["r_q"]["committed"]["n1"] == 2
-    assert block["r_q"]["minted"] == {"ranks": [2, 1], "n1": 1, "n": 2}
+    assert block["r_q"]["minted"] == {"ranks": minted, "n1": 1, "n": q}
     assert block["criterion"] is False
+    # Ruling c (2026-10-06): a gate mismatch is a D-13 failure, recorded as D-13 not measured.
     unequal = phase40_prereg.d13_block(
-        curve=curve, gate_rank=2, a2_rank=3, committed_ranks=[], minted_ranks=[]
+        curve=curve, gate_rank=2, a2_rank=3, committed_ranks=committed, minted_ranks=minted
     )
-    assert unequal["anchor_gate"]["equal"] is False
+    assert unequal["measured"] is False and unequal["failure_kind"] == "gate_mismatch"
+    assert "2" in unequal["reason"] and "3" in unequal["reason"]
+    # IN-07 + ruling c: an R_q set off the N_TARGET_QUESTIONS denominator, a rank that is not an
+    # int >= 1, or an empty curve is a malformed reading, recorded as D-13 not measured.
+    malformed = [
+        {"committed_ranks": committed[:3]},
+        {"minted_ranks": minted[:2]},
+        {"committed_ranks": [0, *committed[1:]]},
+        {"minted_ranks": [True, *minted[1:]]},
+        {"minted_ranks": iter(minted)},
+        {"gate_rank": 2.0, "a2_rank": 2.0},
+        {"curve": {}},
+    ]
+    good = {
+        "curve": curve,
+        "gate_rank": 2,
+        "a2_rank": 2,
+        "committed_ranks": committed,
+        "minted_ranks": minted,
+    }
+    for change in malformed:
+        bad = phase40_prereg.d13_block(**{**good, **change})
+        assert bad["measured"] is False, change
+        assert bad["failure_kind"] == "malformed_reading", change
     monkeypatch.setattr(phase40_prereg, "D13_INCLUDED", False)
     with pytest.raises(SystemExit, match="D-13"):
-        phase40_prereg.d13_block(
-            curve=curve, gate_rank=2, a2_rank=2, committed_ranks=[], minted_ranks=[]
-        )
+        phase40_prereg.d13_block(**good)
+
+
+def test_d13_failure_never_drops_the_seed(monkeypatch):
+    # Ruling c (2026-10-06): an exception, a gate mismatch or a malformed reading is recorded in
+    # the seed record as D-13 not measured, with its reason; the seed finishes normally.
+    assert phase40_prereg.D13_FAILURE_KINDS == ("exception", "gate_mismatch", "malformed_reading")
+    rule = phase40_prereg.ENTRIES["run_order"]["value"]
+    for name in ("D13_FAILURE_KINDS", "NEVER drops the seed", "d13_not_measured", "d13_reading"):
+        assert name in rule, name
+    assert "gate_mismatch" in phase40_prereg.ENTRIES["d13_addition"]["value"]["anchor_gate"]
+    for kind in phase40_prereg.D13_FAILURE_KINDS:
+        block = phase40_prereg.d13_not_measured(kind, "why")
+        assert block == {
+            "measured": False,
+            "failure_kind": kind,
+            "reason": "why",
+            "criterion": False,
+        }
+        json.dumps(block)
+    for kind, reason in (("crash", "why"), ("exception", ""), ("exception", None)):
+        with pytest.raises(SystemExit, match=r"^\[phase40_prereg\]"):
+            phase40_prereg.d13_not_measured(kind, reason)
+    monkeypatch.setattr(phase40_prereg, "D13_INCLUDED", True)
+    measured = {"measured": True, "criterion": False}
+    reading = phase40_prereg.d13_reading(
+        {
+            1337: measured,
+            2024: phase40_prereg.d13_not_measured("exception", "RuntimeError('mps')"),
+            1338: measured,
+        }
+    )
+    assert reading == {
+        "measured_seeds": [1337, 1338],
+        "not_measured": [
+            {"seed": 2024, "failure_kind": "exception", "reason": "RuntimeError('mps')"}
+        ],
+        "criterion": False,
+    }
+    for bad in ({"criterion": False}, {"measured": 1}, None):
+        with pytest.raises(SystemExit, match=r"^\[phase40_prereg\]"):
+            phase40_prereg.d13_reading({1337: bad})
+    monkeypatch.setattr(phase40_prereg, "D13_INCLUDED", False)
+    with pytest.raises(SystemExit, match="D-13"):
+        phase40_prereg.d13_reading({1337: measured})

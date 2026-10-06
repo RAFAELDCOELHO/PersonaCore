@@ -572,7 +572,14 @@ _ENTRIES = {
             "if D13_INCLUDED — the D-13 scoring of M2; D-09's dialogue PPL is read from each A2 "
             "record (inside the pass, no separate step); one ledger attempt per seed "
             "(run_id(seed)); phase36_ledger.require_launch('E2') before each seed's start line; "
-            "the seed record is written before its ledger end line"
+            "the seed record is written before its ledger end line. A D-13 failure (one of "
+            "D13_FAILURE_KINDS: an exception raised by the D-13 scoring, SystemExit included; a "
+            "gate mismatch; a malformed reading) NEVER drops the seed: the seed record carries "
+            "d13_not_measured(kind, reason) in place of the D-13 block (d13_block returns it "
+            "itself for a gate mismatch or a malformed reading) and the seed finishes normally "
+            "(seed record, then its end line); only process death, which leaves no end line and "
+            "is closed by a lost line, drops an attempt (R-3 b); the noise-floor record's D-13 "
+            "reading, d13_reading, lists the measured and the not-measured seeds with each reason"
         ),
         "derivation": (
             "D-15: per seed, in seed_list() order, the whole seed is the unit. P-1 / D-11: the "
@@ -732,7 +739,9 @@ _ENTRIES = {
                 "anchor_gate": (
                     "the committed |R| = 8 scored with score_values and ranked with "
                     "phase38_prereg.rank_in_prefix, compared with the same adapter's A2 record "
-                    "exposure rank; descriptive, never a stop"
+                    "exposure rank; descriptive, never a stop; a mismatch is a D-13 failure "
+                    "(gate_mismatch): that seed's D-13 is recorded not measured, the seed is kept "
+                    "(run_order, Rafael's ruling c)"
                 ),
                 "r_q": (
                     "n1 (phase39_prereg.n1) of the target over its 27 A2 questions under the "
@@ -1445,11 +1454,55 @@ def latest_head_failures(manifest, declaration, *, launch_git_sha):
     return failures
 
 
+# Rafael's ruling c (run_order, 2026-10-06): a D-13 failure never drops the seed. The seed record
+# carries d13_not_measured(kind, reason) in place of the D-13 block and the seed finishes normally;
+# only process death (a lost line) drops an attempt (R-3 b).
+D13_FAILURE_KINDS = ("exception", "gate_mismatch", "malformed_reading")
+
+
+def d13_not_measured(kind, reason):
+    """Ruling c: the seed record's D-13 block when D-13 failed (one of D13_FAILURE_KINDS)."""
+    _prove(
+        kind in D13_FAILURE_KINDS, f"D-13 failure kind {kind!r} is not one of {D13_FAILURE_KINDS}"
+    )
+    _prove(_text(reason), f"D-13 failure reason {reason!r} is not a non-empty str")
+    return {"measured": False, "failure_kind": kind, "reason": reason, "criterion": False}
+
+
 def d13_block(*, curve, gate_rank, a2_rank, committed_ranks, minted_ranks):
     """D-13: the M2 adapter's anchor curve, anchor gate and R_q n1 (phase39_prereg.n1); only when
-    Rafael approved D-13; descriptive."""
+    Rafael approved D-13; descriptive. A malformed reading (IN-07: an R_q set off the
+    N_TARGET_QUESTIONS denominator) or a gate mismatch returns d13_not_measured (ruling c)."""
     _prove(D13_INCLUDED, "D-13 was not approved: its block is never computed")
+    import phase19_erasure as pin  # torch at import: lazy
+
+    def is_rank(value):
+        return type(value) is int and value >= 1
+
+    sets = (("committed", committed_ranks), ("minted", minted_ranks))
+    if not (isinstance(curve, collections.abc.Mapping) and curve):
+        return d13_not_measured("malformed_reading", f"anchor curve {curve!r} is empty")
+    if not (is_rank(gate_rank) and is_rank(a2_rank)):
+        return d13_not_measured(
+            "malformed_reading", f"gate rank {gate_rank!r} / A2 rank {a2_rank!r} not int >= 1"
+        )
+    for name, ranks in sets:
+        if not (
+            isinstance(ranks, (list, tuple))
+            and len(ranks) == pin.N_TARGET_QUESTIONS
+            and all(is_rank(r) for r in ranks)
+        ):
+            return d13_not_measured(
+                "malformed_reading",
+                f"R_q {name} ranks {ranks!r}: not N_TARGET_QUESTIONS ints >= 1 (IN-07)",
+            )
+    if gate_rank != a2_rank:
+        return d13_not_measured(
+            "gate_mismatch",
+            f"anchor gate rank {gate_rank} != the A2 record's exposure rank {a2_rank}",
+        )
     return {
+        "measured": True,
         "anchor_curve": curve,
         "anchor_gate": {
             "rank": gate_rank,
@@ -1458,7 +1511,27 @@ def d13_block(*, curve, gate_rank, a2_rank, committed_ranks, minted_ranks):
         },
         "r_q": {
             name: {"ranks": list(ranks), "n1": phase39_prereg.n1(ranks), "n": len(ranks)}
-            for name, ranks in (("committed", committed_ranks), ("minted", minted_ranks))
+            for name, ranks in sets
         },
+        "criterion": False,
+    }
+
+
+def d13_reading(blocks_by_seed):
+    """Ruling c: the noise-floor record's D-13 reading over the whole seeds, each seed's block a
+    d13_block or a d13_not_measured: which seeds were measured and which were not, and why."""
+    _prove(D13_INCLUDED, "D-13 was not approved: its reading is never computed")
+    for seed, block in blocks_by_seed.items():
+        _prove(
+            isinstance(block, collections.abc.Mapping) and type(block.get("measured")) is bool,
+            f"seed {seed}: D-13 block {block!r} is neither d13_block nor d13_not_measured",
+        )
+    return {
+        "measured_seeds": [seed for seed, block in blocks_by_seed.items() if block["measured"]],
+        "not_measured": [
+            {"seed": seed, "failure_kind": block["failure_kind"], "reason": block["reason"]}
+            for seed, block in blocks_by_seed.items()
+            if not block["measured"]
+        ],
         "criterion": False,
     }
