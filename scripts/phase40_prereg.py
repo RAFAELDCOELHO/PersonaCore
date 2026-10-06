@@ -30,6 +30,7 @@ import itertools
 import json
 import math
 import pathlib
+import re
 import statistics
 import sys
 import types
@@ -1313,6 +1314,16 @@ def _text(value):
     return isinstance(value, str) and bool(value.strip())
 
 
+def _approved(text):
+    """Rafael's approved (WR-02): the standalone token ``approved``, never a negated one ("not",
+    "não", "nao" or "un" before it)."""
+    return (
+        isinstance(text, str)
+        and re.search(r"(?<![\w-])approved\b", text) is not None
+        and re.search(r"\b(?:not|não|nao|un)[\s-]*approved\b", text, re.IGNORECASE) is None
+    )
+
+
 def dropped_manifest_failures(manifest, *, seed, lost_utc):
     """R-3 b (a, b, c, e): the failures of a crashed attempt's manifest, checked on the manifest
     ALONE; [] when every condition holds. Never raises on a bad manifest."""
@@ -1330,7 +1341,7 @@ def dropped_manifest_failures(manifest, *, seed, lost_utc):
         failures.append(f"lost_utc {manifest['lost_utc']!r} != {lost_utc!r} (e: that attempt)")
     if not _text(manifest["cause_note"]):
         failures.append("cause_note is empty (a: a cause note)")
-    if not (isinstance(manifest["approved"], str) and "approved" in manifest["approved"]):
+    if not _approved(manifest["approved"]):
         failures.append(f"approved {manifest['approved']!r} lacks Rafael's 'approved' (a)")
     head, relaunch = manifest["head_at_dropped_attempt"], manifest["relaunch_git_sha"]
     for key, sha in (("head_at_dropped_attempt", head), ("relaunch_git_sha", relaunch)):
@@ -1378,7 +1389,7 @@ def relaunch_declaration_failures(declaration, *, relaunch_git_sha):
     if not _text(declaration["head_change_declared"]):
         failures.append("head_change_declared is empty (b)")
     approved = declaration["approved"]
-    if not (isinstance(approved, str) and "approved" in approved):
+    if not _approved(approved):
         failures.append(f"approved {approved!r} lacks Rafael's 'approved' (b)")
     return failures
 

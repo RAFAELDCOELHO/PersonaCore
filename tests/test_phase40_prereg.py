@@ -1368,6 +1368,21 @@ def test_seed_outcomes_dropped_manifest_truth_table():
         assert any(key in failure for failure in failures), (key, failures)
 
 
+def test_seed_outcomes_approved_refuses_negations():
+    # WR-02: a negated or conditional reply is never Rafael's approved, at both R-3 b sites.
+    for text in ("not approved", "não approved", "unapproved", "nao approved", "Not approved"):
+        assert any("approved" in f for f in _manifest_failures(_manifest(approved=text))), text
+        declaration = {"launch_git_sha": "H2", "head_change_declared": "y", "approved": text}
+        failures = phase40_prereg.relaunch_declaration_failures(declaration, relaunch_git_sha="H")
+        assert any("approved" in f for f in failures), text
+        assert phase40_prereg._approved(text) is False, text
+    for text in ("", "ok", None, 1):
+        assert phase40_prereg._approved(text) is False, text
+    for text in ("approved", phase40_prereg.APPROVALS_RULING, "aprovo a re-execução. approved"):
+        assert phase40_prereg._approved(text) is True, text
+        assert _manifest_failures(_manifest(approved=text)) == [], text
+
+
 def test_seed_outcomes_relaunch_head_truth_table():
     assert phase40_prereg.relaunch_declaration_name("h2") == "relaunch_h2.json"
     with pytest.raises(SystemExit, match=r"^\[phase40_prereg\]"):
