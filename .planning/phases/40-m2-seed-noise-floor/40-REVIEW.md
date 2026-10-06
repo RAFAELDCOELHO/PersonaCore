@@ -189,6 +189,61 @@ None found that would flip when plans 05-10 land:
 
 Evidence script: `/private/tmp/claude-501/-Users-juliorcoelho-PersonaCore/d19c6c2a-db59-41c1-946c-681523a61ee9/scratchpad/exp40.py`.
 
+## Resolution (2026-10-06)
+
+Rafael's reply, pasted text (proposto pelo Claude (claude.ai), adotado por Rafael), copied byte for byte from the paste. Every edit landed in `scripts/phase40_prereg.py` and `tests/test_phase40_prereg.py` before his "reviewed", with no `results/phase40_*` record tracked. After each commit, `tests/test_phase40_prereg.py`, `tests/test_phase35_prereg.py`, `tests/test_phase36_caps.py` and `ruff check . && ruff format --check .` ran green. Each fix's test was seen RED first.
+
+### Rulings per finding (verbatim)
+
+```
+Decisões por achado:
+- WR-01, WR-02, WR-03: corrigir.
+- IN-01, IN-03, IN-04, IN-05, IN-06, IN-07: corrigir.
+- IN-02: opção a. Em MPS, a leitura pré e a leitura pós com adaptador desligado são conferidas contra o valor commitado, e qualquer uma que difira recusa o gap.
+```
+
+| Finding | Ruling | Fix commit | RED seen first | After the fix |
+|---------|--------|------------|----------------|---------------|
+| WR-01 | fix | 75a2ab5 | start,end,start,(lost or end) for 1337: DID NOT RAISE | `seed_outcomes` refuses a whole seed with a later attempt (R-3 b) |
+| WR-02 | fix | f3b50da | 'not approved' gave `[]` from both R-3 b sites | `_approved(text)`: the standalone token `approved`, no `not`/`não`/`nao`/`un` before it, used at both sites; "approved", APPROVALS_RULING and "aprovo a re-execução. approved" still pass |
+| WR-03 | fix | 9f4592a | 'mps:0' and 'cpu' on an mps record: DID NOT RAISE | `dialogue_gap` refuses a device that is not the record's `config.device` |
+| IN-01 | fix | 4b12a5d | `KeyError: 'pre'` | the reading carries `pre` {adapter_on, adapter_off, adapter_off_matches_committed} |
+| IN-02 | option a | 4b12a5d | pre adapter-off off the committed value on mps: DID NOT RAISE | on mps under mps-equality, pre and post adapter-off are both checked against the committed 4.573349214207799 and either differing refuses; R-2 post still picks the reading the gap uses; off mps both match flags are recorded |
+| IN-03 | fix | bc21cc3 | a `..` kept path gave `[]` | refuses a `..` segment, a sha256 that is not 64 lowercase hex, an empty `from`, and a non-mapping manifest (returned as a failure, never raised) |
+| IN-04 | fix | 97a06bf | `config.k = 1`: DID NOT RAISE | `a2_rows` refuses a record whose `config.k` differs from the Phase 18 record's (48) |
+| IN-05 | fix | 7dc13b6 | under a parser that ignores the text, the old leg passed and the new leg failed | the non-vacuity leg plants one character into 40-CONTEXT at 03de080 and requires the parsed quote to follow it |
+| IN-06 | fix | cf49c7e | the docstring had no 'Measured at import' line | the docstring line "Measured at import: loads phase14_factset, phase18_extraction, phase19_erasure, phase19_floor, phase36_ledger, phase38_rank; never phase19_run." is checked against the audit-hook probe's `sys.modules` |
+| IN-07 | fix (with ruling c) | 541da56 | the old test's 3 and 2 ranks gave a block back | an R_q set off N_TARGET_QUESTIONS (or a rank that is not an int >= 1, or an empty curve) is a malformed reading: `d13_block` returns `d13_not_measured("malformed_reading", ...)` (ruling c), not a SystemExit |
+
+Re-running the reviewer's experiments (`exp40.py` legs, on the fixed file):
+- E1 now raises "a whole seed has a later attempt".
+- E3: all four negations fail at both sites.
+- E4 gives the `..`, sha256 and `from` failures.
+- E5 returns "manifest is NoneType, not a mapping".
+- E6: 'mps:0' and 'cpu' raise on config.device, and 'mps' raises R-1.
+- E7 records `pre`.
+- E8 raises R-1.
+- E9 raises on k.
+
+### Confirmations per item (verbatim) and their prereg home
+
+Item d was not asked again (R-1..R-4 were ruled at 40-01). The quotes live in `CONFIRMATIONS`. Each is written as `confirmed by Rafael 2026-10-06 (<letter>): "..."` into its entry's derivation, all in 0c80656. `_DEFAULT` was deleted.
+
+| Item | Rafael (verbatim) | Entry | Ruling |
+|------|-------------------|-------|--------|
+| a | "Confirmo: desvio-padrão amostral (n−1) por slot, com o populacional ao lado." | `e2_noise_floor_estimator` | D-04 sample SD (statistics.stdev, n - 1) with the population SD beside — confirmed. |
+| b | "Confirmo: rótulo 'retrain' nos dois grupos, com a paridade afirmada; o grupo fica nos campos da Fase 40. O relatório explica o rótulo uma vez." | `a2_pass` | A2 label 'retrain' for both groups — confirmed. The report's one-time explanation of the label is plan 07's. |
+| c | "Confirmo a ordem (D-13 por último na unidade de cada semente), com uma mudança: uma falha do D-13 (exceção, portão diferente ou leitura fora de formato) nunca derruba a semente. Ela é gravada no registro da semente como D-13 não medido, com o motivo, e a semente termina normalmente. Só a morte do processo conta como queda, pelo R-3 b." | `run_order` | D-15 placement — CHANGED: a D-13 failure never drops the seed. Implemented in 541da56: `D13_FAILURE_KINDS = ("exception", "gate_mismatch", "malformed_reading")`, `d13_not_measured(kind, reason)`, `d13_block(...)` returning it for a gate mismatch or a malformed reading, `d13_reading(blocks_by_seed)` for the noise-floor record; the run_order value and d13_addition's anchor_gate say so. |
+| e | "Confirmo: com menos de 2 sementes inteiras, nenhum piso é publicado e a fase para para mim. Com 2 a 4, o registro declara quantas sementes e quantos pares entraram." | `e2_noise_floor_estimator` | INSUFFICIENT_SEEDS — CHANGED (addition): with 2 to 4 whole seeds the record declares how many seeds and pairs entered. Implemented in 01a33ee: recall_floor's `published` and gap_noise_floor carry `n_seeds` and `n_pairs` (group_floor already did); tested at S' = 2, 3, 5; the estimator's `minimum` key says so. |
+| f | "Confirmo os registros e a ordem de commit: livro-caixa, registros de cada semente, piso, relatório, cada um com meu approved." | `record_layout` | Records and commit order — confirmed. |
+| g | "Confirmo, com um acréscimo: como todos os adaptadores usam os mesmos números aleatórios e o piso de amostragem do v3.0 usou sorteios independentes, o piso de treino não é um limite superior de 'treino mais amostragem' e pode sair menor que 0,148." | `e2_noise_floor_estimator` | D-05 wording — confirmed with an addition, written verbatim into the derivation; the report wording is the driver plans' job. |
+| h | "Confirmo: taxa do M2 menos taxa do completo, o mesmo sinal do v3.0." | `d12_rereading` | D-12 sign (m2 - full, v3.0's) — confirmed. |
+| i | "Confirmo: as previsões do D-07 são lidas como descrição; uma diferença é um achado, não uma falha." | `predictions` | D-07 predictions — confirmed (descriptive; a mismatch is a finding). |
+
+On c: "portão diferente" is implemented as the D-13 anchor gate, `gate_rank != a2_rank` (the committed |R| rank against the A2 record's exposure rank). That is the only gate in D-13. The driver must catch every exception raised by its D-13 scoring, including the prereg's `SystemExit`, and record it as `d13_not_measured("exception", reason)`.
+
+Open question on f: his words end "cada um com meu approved", but the record_layout value (unchanged) says "after Rafael's approved". This section does not settle whether that means one approved per commit step or one approved for the whole sequence. The driver plans quote his words.
+
 ---
 
 _Reviewed: 2026-10-05_
