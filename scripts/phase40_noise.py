@@ -553,6 +553,206 @@ def rehearsal_disclosure(identity, *, launch_git_sha, launch_module_sha256):
 
 
 # =================================================================================================
+# R-3 b: a crashed attempt's outputs moved aside, and the re-run of its seed
+# =================================================================================================
+
+
+def _output_roots(seed, *, root):
+    """``[(base, path)]``: every file or directory a crashed attempt of ``seed`` can leave."""
+    import teach_persona as tp  # torch at import: lazy
+
+    prereg = _prereg()
+    root = pathlib.Path(root)
+    rehearsal = not _is_real(root)
+    found = []
+    for group in prereg.GROUPS:
+        paths = arm_paths(group, seed, rehearsal=rehearsal)
+        for key in ("adapter", "checkpoint", "bin", "mask"):
+            found.append((tp._REPO_ROOT, paths[key]))
+        found.append((tp._REPO_ROOT, paths["csv"].parent))
+        found.append((root, root / "data" / CSV_DIR / arm_name(group, seed, rehearsal=rehearsal)))
+        found.append((root, root / prereg.a2_record(group, seed)))
+    return found
+
+
+def partial_outputs(seed, *, root):
+    """R-3 b (c): sorted ``(rel, path)`` of every existing file a crashed attempt of ``seed`` left
+    (``rel`` relative to the root it lives under). Shared by drop_attempt and emit."""
+    found = []
+    for base, path in _output_roots(seed, root=root):
+        files = [path] if path.is_file() else sorted(p for p in path.rglob("*") if p.is_file())
+        found += [(_rel(f, base), f) for f in files]
+    return sorted(found)
+
+
+def _latest_dropped_dir(prereg, lines, seed, *, what):
+    _prove(
+        prereg.seed_outcomes(lines, prereg.SEEDS)[seed] == "dropped",
+        f"R-3 b: seed {seed}: only a crashed attempt (closed by a lost line) is {what}, never a "
+        "whole or not-run seed",
+    )
+    utc = prereg.lost_attempts(lines, seed)[-1]
+    return utc, prereg.dropped_attempt_dir(seed, utc)
+
+
+def drop_attempt(
+    seed,
+    *,
+    cause_note,
+    approved,
+    head_at_dropped_attempt,
+    head_change_declared=None,
+    root=None,
+    ledger_path=None,
+):
+    """R-3 b: move the latest crashed attempt's partial outputs under
+    ``phase40_prereg.dropped_attempt_dir`` (never deleted) and write its write-once manifest. Run
+    by Claude with ``.venv/bin/python -c`` only after Rafael's approved; never from run or main."""
+    root = pathlib.Path(root) if root is not None else pathlib.Path(_ROOT)
+    prereg = _prereg()
+    _prove(prereg.DROPPED_SEED_RERUN, "R-3 b: DROPPED_SEED_RERUN is False: no attempt is dropped")
+    lines = phase36_ledger.read_ledger(ledger_path)
+    _prove(
+        prereg.run_id(seed) not in phase36_ledger.open_runs(lines),
+        f"seed {seed} has an open attempt: phase36_ledger.py reconcile first",
+    )
+    lost_utc, rel_dir = _latest_dropped_dir(prereg, lines, seed, what="dropped")
+    _prove(
+        not (root / prereg.seed_record(seed)).exists(),
+        f"crash rule (i): {prereg.seed_record(seed)} exists; append its end line, never drop it",
+    )
+    _prove(not (root / rel_dir).exists(), f"{root / rel_dir} exists: write-once")
+    relaunch = git_sha()
+    _prove(relaunch != "unknown", "git_sha() could not read HEAD (run from the repo root)")
+    outputs = partial_outputs(seed, root=root)
+    manifest = {
+        "seed": seed,
+        "run_id": prereg.run_id(seed),
+        "lost_utc": lost_utc,
+        "cause_note": cause_note,
+        "approved": approved,
+        "head_at_dropped_attempt": head_at_dropped_attempt,
+        "relaunch_git_sha": relaunch,
+        "head_change_declared": head_change_declared,
+        "kept": [
+            {"from": rel, "path": f"{rel_dir}/{rel}", "sha256": _sha256(path)}
+            for rel, path in outputs
+        ],
+    }
+    failures = prereg.dropped_manifest_failures(manifest, seed=seed, lost_utc=lost_utc)
+    _prove(not failures, f"R-3 b: the manifest fails: {'; '.join(failures)}")
+    for (_, path), item in zip(outputs, manifest["kept"]):
+        new = root / item["path"]
+        new.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(path), str(new))
+        _prove(_sha256(new) == item["sha256"], f"{new} changed in the move")
+    for _base, path in _output_roots(seed, root=root):
+        if path.is_dir() and not any(path.iterdir()):
+            path.rmdir()  # emptied by the moves; never rmtree
+    _write_once(root / rel_dir / prereg.DROPPED_MANIFEST, manifest)
+    print(f"DROPPED {seed} {rel_dir} kept={len(manifest['kept'])}", flush=True)
+    return manifest
+
+
+def declare_relaunch(seed, *, head_change_declared, approved, root=None, ledger_path=None):
+    """R-3 b (b): declare a HEAD that moved after drop_attempt, only on Rafael's approved naming
+    the move; write-once in the latest dropped attempt's directory."""
+    root = pathlib.Path(root) if root is not None else pathlib.Path(_ROOT)
+    prereg = _prereg()
+    lines = phase36_ledger.read_ledger(ledger_path)
+    _utc, rel_dir = _latest_dropped_dir(prereg, lines, seed, what="re-launched")
+    path = root / rel_dir / prereg.DROPPED_MANIFEST
+    _prove(path.exists(), f"R-3 b: seed {seed} has no manifest {path}: drop_attempt never ran")
+    manifest = _load(path)
+    launch = git_sha()
+    declaration = {
+        "launch_git_sha": launch,
+        "head_change_declared": head_change_declared,
+        "approved": approved,
+    }
+    failures = prereg.relaunch_declaration_failures(
+        declaration, relaunch_git_sha=manifest["relaunch_git_sha"]
+    )
+    _prove(not failures, f"R-3 b: the declaration fails: {'; '.join(failures)}")
+    _write_once(root / rel_dir / prereg.relaunch_declaration_name(launch), declaration)
+    print(f"DECLARED {seed} {launch}", flush=True)
+    return declaration
+
+
+def rerun_seeds(lines, outcomes, *, root):
+    """R-3: the dropped seeds a relaunch re-runs: those whose LATEST lost attempt has its
+    drop_attempt manifest on disk (Rafael's approved). Without it a dropped seed is not pending."""
+    prereg = _prereg()
+    if not prereg.DROPPED_SEED_RERUN:
+        return frozenset()
+    root = pathlib.Path(root)
+    return frozenset(
+        seed
+        for seed, outcome in outcomes.items()
+        if outcome == "dropped"
+        and (
+            root
+            / prereg.dropped_attempt_dir(seed, prereg.lost_attempts(lines, seed)[-1])
+            / prereg.DROPPED_MANIFEST
+        ).exists()
+    )
+
+
+def _dropped_attempts(seed, lines, *, root, launch_git_sha):
+    """R-3 b, for a re-run seed: every lost attempt's manifest (oldest first) proved whole, every
+    kept file's sha256, every relaunch declaration; the launch HEAD checked on the latest only."""
+    prereg = _prereg()
+    utcs = prereg.lost_attempts(lines, seed)
+    attempts = []
+    for utc in utcs:
+        rel_dir = prereg.dropped_attempt_dir(seed, utc)
+        rel = f"{rel_dir}/{prereg.DROPPED_MANIFEST}"
+        _prove(
+            (root / rel).exists(),
+            f"R-3 b: seed {seed}'s dropped attempt {utc} has no manifest {rel}: every lost attempt "
+            "of a re-run seed is listed",
+        )
+        manifest = _load(root / rel)
+        failures = prereg.dropped_manifest_failures(manifest, seed=seed, lost_utc=utc)
+        _prove(not failures, f"R-3 b: {rel} fails: {'; '.join(failures)}")
+        for item in manifest["kept"]:
+            kept = root / item["path"]
+            _prove(
+                kept.is_file() and _sha256(kept) == item["sha256"],
+                f"R-3 b: kept file {item['path']} is missing or its sha256 differs from {rel}'s",
+            )
+        declarations = []
+        for path in sorted((root / rel_dir).glob(prereg.relaunch_declaration_name("*"))):
+            declaration = _load(path)
+            failures = prereg.relaunch_declaration_failures(
+                declaration, relaunch_git_sha=manifest["relaunch_git_sha"]
+            )
+            _prove(not failures, f"R-3 b: {path} fails: {'; '.join(failures)}")
+            declarations.append({**declaration, "path": _rel(path, root), "sha256": _sha256(path)})
+        if utc == utcs[-1]:
+            own = root / rel_dir / prereg.relaunch_declaration_name(launch_git_sha)
+            failures = prereg.latest_head_failures(
+                manifest, _load(own) if own.exists() else None, launch_git_sha=launch_git_sha
+            )
+            _prove(
+                not failures,
+                f"R-3 b: HEAD moved after drop_attempt ({manifest['relaunch_git_sha']} -> "
+                f"{launch_git_sha}): STOP — take it to Rafael; only on his approved "
+                f"phase40_noise.declare_relaunch, never a relaunch otherwise "
+                f"({'; '.join(failures)})",
+            )
+        attempts.append(
+            {
+                **manifest,
+                "manifest": rel,
+                "manifest_sha256": _sha256(root / rel),
+                "relaunch_declarations": declarations,
+            }
+        )
+    return attempts
+
+
+# =================================================================================================
 # Preflight: every refusal before the first start line
 # =================================================================================================
 
@@ -630,7 +830,8 @@ def preflight(*, root=None, ledger_path=None, heartbeat_path=None, device=None, 
         "is dead phase36_ledger.py reconcile first",
     )
     outcomes = prereg.seed_outcomes(lines, chosen)
-    pending = prereg.pending_seeds(outcomes)
+    rerun = rerun_seeds(lines, outcomes, root=root)
+    pending = prereg.pending_seeds(outcomes, rerun)
     _prove(
         pending, f"nothing to run: every seed of {list(chosen)} is whole or dropped ({outcomes})"
     )
@@ -660,6 +861,11 @@ def preflight(*, root=None, ledger_path=None, heartbeat_path=None, device=None, 
                 _prove(not path.exists(), f"{path} exists: an output of pending seed {seed}")
         record = root / prereg.seed_record(seed)
         _prove(not record.exists(), f"{record} exists: an output of pending seed {seed}")
+    dropped_attempts = {
+        seed: _dropped_attempts(seed, lines, root=root, launch_git_sha=launch_git_sha)
+        for seed in pending
+        if seed in rerun
+    }
     gate = phase36_ledger.require_launch(FRONT, ledger_path=ledger_path)
     phase36_caps.check_unit_caps(FRONT, adapters=len(prereg.GROUPS), seeds=len(prereg.SEEDS))
     device = _device() if device is None else device
@@ -702,5 +908,5 @@ def preflight(*, root=None, ledger_path=None, heartbeat_path=None, device=None, 
         "device": device,
         "gate": gate,
         "rehearsal_disclosure": disclosure,
-        "dropped_attempts": {},
+        "dropped_attempts": dropped_attempts,
     }

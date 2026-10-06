@@ -1131,3 +1131,259 @@ def test_preflight_rehearsal_disclosure_on_the_real_root(monkeypatch, tmp_path):
     )
     assert pf["rehearsal_disclosure"]["commits"] == []
     assert pf["device"] == "mps" and pf["pending"] == phase40_prereg.SEEDS
+
+
+# =================================================================================================
+# (9) Plan 06: R-3 b — partial_outputs, drop_attempt, declare_relaunch, rerun_seeds.
+# =================================================================================================
+
+
+def _plant_crash(root, seed):
+    """A crash right after the full A2 pass of ``seed``'s rehearsal arms: the full adapter and
+    checkpoint, both bins and masks, the m2 in-process csv, the full moved csv, the full A2
+    record. Returns {rel: path} of every planted file."""
+    full = phase40_noise.arm_paths("full", seed, rehearsal=True)
+    m2 = phase40_noise.arm_paths("m2", seed, rehearsal=True)
+    arm = phase40_noise.arm_name("full", seed, rehearsal=True)
+    planted = [
+        full["adapter"],
+        full["checkpoint"],
+        full["bin"],
+        full["mask"],
+        m2["bin"],
+        m2["mask"],
+        m2["csv"],
+        root / "data" / phase40_noise.CSV_DIR / arm / "run.csv",
+        root / phase40_prereg.a2_record("full", seed),
+    ]
+    return {_plant(p, str(p).encode()).relative_to(root).as_posix(): p for p in planted}
+
+
+def _dropped_rig(monkeypatch, tmp_path, seeds=phase40_prereg.SEEDS):
+    rig = _tmp_rig(monkeypatch, tmp_path, seeds=seeds)
+    _ledger(rig.ledger, ("start", 1337), ("end", 1337), ("start", 2024), ("lost", 2024))
+    monkeypatch.setattr(phase40_prereg, "DROPPED_SEED_RERUN", True)
+    rig.crash = _plant_crash(rig.root, 2024)
+    return rig
+
+
+def _lost_utc(rig, seed):
+    return phase40_prereg.lost_attempts(phase36_ledger.read_ledger(rig.ledger), seed)[-1]
+
+
+def _drop(rig, seed=2024, **kw):
+    args = {
+        "cause_note": "x",
+        "approved": "approved",
+        "head_at_dropped_attempt": "h1",
+        "root": rig.root,
+        "ledger_path": rig.ledger,
+    }
+    return phase40_noise.drop_attempt(seed, **{**args, **kw})
+
+
+def test_crash_drop_attempt_moves_and_lists(monkeypatch, tmp_path, capsys):
+    rig = _dropped_rig(monkeypatch, tmp_path)
+    listed = phase40_noise.partial_outputs(2024, root=rig.root)
+    assert listed == sorted(rig.crash.items())
+    dropped_root = rig.root / phase40_prereg.DROPPED_ROOT
+    ledger = _lines(rig.ledger)
+
+    def refused(match, seed=2024, ledger_path=None, **kw):
+        with pytest.raises(SystemExit, match=match):
+            _drop(rig, seed, **({"ledger_path": ledger_path} if ledger_path else {}), **kw)
+        assert phase40_noise.partial_outputs(2024, root=rig.root) == listed
+        assert not dropped_root.exists()
+        assert _lines(rig.ledger) == ledger
+
+    monkeypatch.setattr(phase40_prereg, "DROPPED_SEED_RERUN", False)
+    refused("DROPPED_SEED_RERUN")
+    monkeypatch.setattr(phase40_prereg, "DROPPED_SEED_RERUN", True)
+    refused("only a crashed attempt", seed=1337)  # whole: never a completed seed
+    refused("only a crashed attempt", seed=1338)  # not_run
+    still_open = tmp_path / "open.jsonl"
+    _ledger(still_open, ("start", 2024), ("lost", 2024), ("start", 2024))
+    refused("reconcile first", ledger_path=still_open)
+    later = tmp_path / "later.jsonl"
+    _ledger(later, ("start", 1337), ("end", 1337), ("start", 1337), ("lost", 1337))
+    refused("a whole seed has a later attempt", seed=1337, ledger_path=later)
+    record = _plant(rig.root / phase40_prereg.seed_record(2024))
+    refused("crash rule [(]i[)]")
+    record.unlink()
+    monkeypatch.setattr(phase40_noise, "git_sha", lambda: "unknown")
+    refused("could not read HEAD")
+    monkeypatch.setattr(phase40_noise, "git_sha", lambda: "h1")
+    refused("cause_note is empty", cause_note=" ")
+    refused("lacks Rafael's 'approved'", approved="ok")
+    refused("lacks Rafael's 'approved'", approved="not approved")
+    refused("lacks Rafael's 'approved'", approved="unapproved")
+    refused("head_change_declared None: HEAD h0 -> h1", head_at_dropped_attempt="h0")
+    # The WR-01 ledger refuses preflight too, with nothing written.
+    with pytest.raises(SystemExit, match="a whole seed has a later attempt"):
+        phase40_noise.preflight(**{**rig.kw, "ledger_path": later})
+    assert not rig.heartbeat.exists()
+
+    utc = _lost_utc(rig, 2024)
+    rel_dir = phase40_prereg.dropped_attempt_dir(2024, utc)
+    digests = {rel: phase40_noise._sha256(path) for rel, path in listed}
+    manifest = _drop(rig)
+    assert f"DROPPED 2024 {rel_dir} kept={len(listed)}" in capsys.readouterr().out
+    assert tuple(manifest) == phase40_prereg.DROPPED_MANIFEST_KEYS
+    assert manifest["relaunch_git_sha"] == "h1" and manifest["lost_utc"] == utc
+    assert manifest["head_change_declared"] is None
+    assert manifest["kept"] == [
+        {"from": rel, "path": f"{rel_dir}/{rel}", "sha256": digests[rel]} for rel, _ in listed
+    ]
+    for item in manifest["kept"]:
+        assert phase40_noise._sha256(rig.root / item["path"]) == item["sha256"]
+        assert not (rig.root / item["from"]).exists()
+    assert phase40_noise.partial_outputs(2024, root=rig.root) == []
+    m2_csv_dir = phase40_noise.arm_paths("m2", 2024, rehearsal=True)["csv"].parent
+    full_arm = phase40_noise.arm_name("full", 2024, rehearsal=True)
+    assert not m2_csv_dir.exists()
+    assert not (rig.root / "data" / phase40_noise.CSV_DIR / full_arm).exists()
+    on_disk = json.loads((rig.root / rel_dir / phase40_prereg.DROPPED_MANIFEST).read_text())
+    assert on_disk == manifest
+    assert phase40_prereg.dropped_manifest_failures(manifest, seed=2024, lost_utc=utc) == []
+    with pytest.raises(SystemExit, match="write-once"):
+        _drop(rig)
+    assert _lines(rig.ledger) == ledger
+
+    # A crash before any output keeps nothing; a declared HEAD change is accepted.
+    _ledger(rig.ledger, ("start", 1339), ("lost", 1339))
+    early = _drop(rig, 1339, head_at_dropped_attempt="h0", head_change_declared="rebased")
+    assert early["kept"] == [] and early["head_at_dropped_attempt"] == "h0"
+
+
+def test_drop_attempt_declare_relaunch_refusals(monkeypatch, tmp_path):
+    rig = _dropped_rig(monkeypatch, tmp_path)
+    _drop(rig)
+    rel_dir = rig.root / phase40_prereg.dropped_attempt_dir(2024, _lost_utc(rig, 2024))
+    args = {
+        "head_change_declared": "y",
+        "approved": "approved",
+        "root": rig.root,
+        "ledger_path": rig.ledger,
+    }
+
+    def declarations():
+        return sorted(p.name for p in rel_dir.glob(phase40_prereg.relaunch_declaration_name("*")))
+
+    with pytest.raises(SystemExit, match="drop-time HEAD"):
+        phase40_noise.declare_relaunch(2024, **args)
+    assert declarations() == []
+    monkeypatch.setattr(phase40_noise, "git_sha", lambda: "h2")
+    for change, match in (
+        ({"head_change_declared": " "}, "head_change_declared is empty"),
+        ({"approved": "ok"}, "lacks Rafael's 'approved'"),
+        ({"approved": "not approved"}, "lacks Rafael's 'approved'"),
+    ):
+        with pytest.raises(SystemExit, match=match):
+            phase40_noise.declare_relaunch(2024, **{**args, **change})
+        assert declarations() == []
+    with pytest.raises(SystemExit, match="only a crashed attempt"):
+        phase40_noise.declare_relaunch(1337, **args)
+    _ledger(rig.ledger, ("start", 1339), ("lost", 1339))
+    with pytest.raises(SystemExit, match="no manifest"):
+        phase40_noise.declare_relaunch(1339, **args)
+    declaration = phase40_noise.declare_relaunch(2024, **args)
+    assert declaration == {
+        "launch_git_sha": "h2",
+        "head_change_declared": "y",
+        "approved": "approved",
+    }
+    assert declarations() == [phase40_prereg.relaunch_declaration_name("h2")]
+    written = rel_dir / phase40_prereg.relaunch_declaration_name("h2")
+    assert json.loads(written.read_text(encoding="utf-8")) == declaration
+    with pytest.raises(SystemExit, match="write-once"):
+        phase40_noise.declare_relaunch(2024, **args)
+
+
+def _attempt_entry(root, rel_dir, declarations=()):
+    rel = f"{rel_dir}/{phase40_prereg.DROPPED_MANIFEST}"
+    manifest = json.loads((root / rel).read_text(encoding="utf-8"))
+    listed = []
+    for name in declarations:
+        d_rel = f"{rel_dir}/{name}"
+        d = json.loads((root / d_rel).read_text(encoding="utf-8"))
+        listed.append({**d, "path": d_rel, "sha256": phase40_noise._sha256(root / d_rel)})
+    return {
+        **manifest,
+        "manifest": rel,
+        "manifest_sha256": phase40_noise._sha256(root / rel),
+        "relaunch_declarations": listed,
+    }
+
+
+def test_preflight_rerun_needs_the_dropped_manifest(monkeypatch, tmp_path):
+    rig = _dropped_rig(monkeypatch, tmp_path, seeds=(1337, 2024, 1338))
+    manifest = _drop(rig)
+    rel_dir = phase40_prereg.dropped_attempt_dir(2024, _lost_utc(rig, 2024))
+    lines = phase36_ledger.read_ledger(rig.ledger)
+    outcomes = phase40_prereg.seed_outcomes(lines, (1337, 2024, 1338))
+    assert phase40_noise.rerun_seeds(lines, outcomes, root=rig.root) == frozenset({2024})
+    pf = phase40_noise.preflight(**rig.kw)
+    assert pf["pending"] == (2024, 1338)
+    assert pf["dropped_attempts"] == {2024: [_attempt_entry(rig.root, rel_dir)]}
+
+    # Without the manifest (moved out to evidence) 2024 is not pending: the declined-rerun branch.
+    manifest_path = rig.root / rel_dir / phase40_prereg.DROPPED_MANIFEST
+    evidence = _plant(tmp_path / "evidence" / "manifest.json", manifest_path.read_bytes())
+    manifest_path.unlink()
+    assert phase40_noise.preflight(**rig.kw)["pending"] == (1338,)
+    shutil.move(str(evidence), str(manifest_path))
+
+    def refused(match):
+        with pytest.raises(SystemExit, match=match):
+            phase40_noise.preflight(**rig.kw)
+        assert not rig.heartbeat.exists()
+
+    kept = rig.root / manifest["kept"][0]["path"]
+    original = kept.read_bytes()
+    kept.write_bytes(b"changed")
+    refused("sha256")
+    kept.write_bytes(original)
+    monkeypatch.setattr(phase40_noise, "git_sha", lambda: "h2")
+    refused("HEAD moved after drop_attempt [(]h1 -> h2[)]: STOP")
+    monkeypatch.setattr(phase40_noise, "git_sha", lambda: "h1")
+    adapter = _plant(phase40_noise.arm_paths("full", 2024, rehearsal=True)["adapter"])
+    refused(re.escape(f"{adapter} exists"))
+    adapter.unlink()
+
+    monkeypatch.setattr(phase40_noise, "git_sha", lambda: "h2")
+    phase40_noise.declare_relaunch(
+        2024,
+        head_change_declared="y",
+        approved="approved",
+        root=rig.root,
+        ledger_path=rig.ledger,
+    )
+    declared = [phase40_prereg.relaunch_declaration_name("h2")]
+    pf = phase40_noise.preflight(**rig.kw)
+    assert pf["pending"] == (2024, 1338)
+    assert pf["dropped_attempts"] == {2024: [_attempt_entry(rig.root, rel_dir, declared)]}
+
+    # A second crash of 2024, dropped under h3: both attempts listed oldest first; the older one
+    # is checked for integrity only.
+    _ledger(rig.ledger, ("start", 2024), ("lost", 2024))
+    monkeypatch.setattr(phase40_noise, "git_sha", lambda: "h3")
+    _plant_crash(rig.root, 2024)
+    _drop(rig, head_at_dropped_attempt="h3")
+    rel_dir2 = phase40_prereg.dropped_attempt_dir(2024, _lost_utc(rig, 2024))
+    assert rel_dir2 != rel_dir
+    pf = phase40_noise.preflight(**rig.kw)
+    assert pf["pending"] == (2024, 1338)
+    assert pf["dropped_attempts"] == {
+        2024: [_attempt_entry(rig.root, rel_dir, declared), _attempt_entry(rig.root, rel_dir2)]
+    }
+    older = rig.root / rel_dir / phase40_prereg.DROPPED_MANIFEST
+    older_bytes = older.read_bytes()
+    older.unlink()
+    refused("no manifest")
+    older.write_bytes(older_bytes)
+
+    monkeypatch.setattr(phase40_prereg, "DROPPED_SEED_RERUN", False)
+    lines = phase36_ledger.read_ledger(rig.ledger)
+    outcomes = phase40_prereg.seed_outcomes(lines, (1337, 2024, 1338))
+    assert phase40_noise.rerun_seeds(lines, outcomes, root=rig.root) == frozenset()
+    assert phase40_noise.preflight(**rig.kw)["pending"] == (1338,)
