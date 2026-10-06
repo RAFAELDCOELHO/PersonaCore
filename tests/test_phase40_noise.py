@@ -3080,3 +3080,32 @@ def test_wr02_emit_drop_and_declare_refuse_a_mismatched_root_and_ledger(monkeypa
     assert out.exists() and record["status"] == "MEASURED"
     assert record["seeds"]["whole"] == [1337, 2024]
     print(f"WR02 the correct emit(): {record['status']} whole={record['seeds']['whole']}")
+
+
+def test_wr03_release_failing_in_the_d13_handler_keeps_the_seed_whole(monkeypatch, tmp_path):
+    """WR-03 / IN-06: D-13 raises and the handler's own _release() then raises too (an MPS
+    empty_cache after the error). Ruling c still holds: the seed is whole, its record carries
+    d13_not_measured('exception') naming both failures, and the ledger reads start, end."""
+    broken = {"mps": False}
+
+    def d13(seed):
+        broken["mps"] = True
+        raise RuntimeError("planted MPS error inside D-13")
+
+    rig = _run_fakes(monkeypatch, _tmp_rig(monkeypatch, tmp_path, seeds=(1337,)), d13=d13)
+
+    def release():
+        if broken["mps"]:
+            raise RuntimeError("planted: torch.mps.empty_cache failed after the MPS error")
+
+    monkeypatch.setattr(phase40_noise, "_release", release)
+    assert phase40_noise.run(**_run_kw(rig)) == [1337]
+    lines = phase36_ledger.read_ledger(rig.ledger)
+    assert [x["event"] for x in lines] == ["start", "end"]
+    d13_block = _record(rig, 1337)["d13"]
+    assert d13_block == phase40_prereg.d13_not_measured(
+        "exception",
+        "RuntimeError: planted MPS error inside D-13 (then _release raised RuntimeError: "
+        "planted: torch.mps.empty_cache failed after the MPS error)",
+    )
+    print(f"\nWR03 seed whole, d13: {d13_block}")

@@ -1010,8 +1010,12 @@ def run(
                         adapters["m2"], root / prereg.a2_record("m2", seed), pf["device"], state
                     )
                 except (Exception, SystemExit) as exc:
-                    _release()
-                    d13 = prereg.d13_not_measured("exception", f"{type(exc).__name__}: {exc}")
+                    reason = f"{type(exc).__name__}: {exc}"
+                    try:
+                        _release()
+                    except Exception as cleanup:  # WR-03: the cleanup may not fail the seed either
+                        reason += f" (then _release raised {type(cleanup).__name__}: {cleanup})"
+                    d13 = prereg.d13_not_measured("exception", reason)
                 else:
                     defect = None
                     if (
