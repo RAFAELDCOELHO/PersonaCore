@@ -338,7 +338,10 @@ def train_adapter(group, seed, *, root, rehearsal=False):
     )
     csv_dst.parent.mkdir(parents=True, exist_ok=True)
     shutil.move(str(paths["csv"]), str(csv_dst))
-    paths["csv"].parent.rmdir()  # empty after the move; anything else left there refuses
+    try:
+        paths["csv"].parent.rmdir()  # empty after the move
+    except OSError as exc:  # IN-02: a stray file never costs the trained seed; dirty checks see it
+        print(f"CSV DIR KEPT {paths['csv'].parent}: {exc.strerror}", flush=True)
     _prove(
         _sha256(recall.ADAPTER_PATH) == production,
         f"{recall.ADAPTER_PATH} (persona_adapter.pt) changed during training",

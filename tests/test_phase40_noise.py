@@ -3168,3 +3168,28 @@ def test_in01_the_report_has_no_double_blank_line(monkeypatch, tmp_path):
     }
     print(f"\nIN01 double blank lines per report: {counts}")
     assert counts == {"measured": 0, "mixed": 0}
+
+
+def test_in02_a_stray_file_in_the_csv_directory_never_costs_the_trained_seed(
+    monkeypatch, tmp_path, capsys
+):
+    """IN-02: a stray file (a Finder .DS_Store) in the in-process csv directory once made
+    train_adapter's rmdir raise AFTER training. The directory is now kept and named, the seed
+    finishes whole, and the leftover stays in place for the dirty checks to see."""
+    rig = _run_fakes(monkeypatch, _tmp_rig(monkeypatch, tmp_path, seeds=(1337,)))
+    train = teach_persona.train_arm
+
+    def finder(arm, **kw):
+        out = train(arm, **kw)
+        (out["paths"]["csv"].parent / ".DS_Store").write_bytes(b"x")
+        return out
+
+    monkeypatch.setattr(teach_persona, "train_arm", finder)
+    assert phase40_noise.run(**_run_kw(rig)) == [1337]
+    out = capsys.readouterr().out
+    for group in phase40_prereg.GROUPS:
+        kept = phase40_noise.arm_paths(group, 1337, rehearsal=True)["csv"].parent
+        assert sorted(p.name for p in kept.iterdir()) == [".DS_Store"]
+        assert f"CSV DIR KEPT {kept}" in out
+    assert [x["event"] for x in phase36_ledger.read_ledger(rig.ledger)] == ["start", "end"]
+    print(f"\nIN02 {[line for line in out.splitlines() if 'CSV DIR KEPT' in line]}")
