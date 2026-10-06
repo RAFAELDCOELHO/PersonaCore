@@ -3150,3 +3150,21 @@ def test_wr04_every_module_is_imported_before_preflight_takes_the_digests(tmp_pa
     assert sorted(tmp_path.iterdir()) == []  # preflight wrote nothing
     assert phase40_noise._import_modules() is None
     assert [m for m in names if m not in sys.modules] == []
+
+
+def test_in01_the_report_has_no_double_blank_line(monkeypatch, tmp_path):
+    """IN-01: no ``\\n\\n\\n`` in a rendered report: D-13 with every seed measured (the empty
+    not-measured list), a re-run seed's dropped attempt (_attempt_lines after its table) and a
+    seed left dropped."""
+    measured_rig = _rerun_rig(monkeypatch, tmp_path / "measured")
+    measured = json.loads(json.dumps(_build(measured_rig), sort_keys=True))
+    assert measured["d13"]["reading"]["not_measured"] == []
+    assert measured["seeds"]["dropped_attempts"]
+    mixed, _rig = _report_record(monkeypatch, tmp_path / "mixed")
+    assert mixed["seeds"]["dropped_seed_outputs"] and mixed["d13"]["reading"]["not_measured"]
+    counts = {
+        name: phase40_noise.render_report(record).count("\n\n\n")
+        for name, record in (("measured", measured), ("mixed", mixed))
+    }
+    print(f"\nIN01 double blank lines per report: {counts}")
+    assert counts == {"measured": 0, "mixed": 0}

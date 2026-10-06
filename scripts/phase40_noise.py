@@ -1536,7 +1536,7 @@ def _attempt_lines(attempt, launch_git_sha):
             f"`{d['launch_git_sha']}`, declared change {d['head_change_declared']}, approved "
             f"{d['approved']}"
         )
-    return [*lines, ""]
+    return lines if lines[-1] == "" else [*lines, ""]  # IN-01: one blank line, never two
 
 
 def _disclosure_lines(seed, disclosure):
@@ -1920,7 +1920,7 @@ def render_report(record):
                 "seed is kept: ruling c"
                 for nm in reading["not_measured"]
             ),
-            "",
+            *([""] if reading["not_measured"] else []),  # IN-01: one blank line, never two
             *_table(
                 (
                     "seed",
