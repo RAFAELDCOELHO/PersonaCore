@@ -24,6 +24,7 @@ Torch-free at import only: preflight, run and emit load torch (every torch-impor
 the pre-registration are imported inside the functions that need them).
 """
 
+import collections.abc
 import datetime
 import gc
 import hashlib
@@ -910,3 +911,158 @@ def preflight(*, root=None, ledger_path=None, heartbeat_path=None, device=None, 
         "rehearsal_disclosure": disclosure,
         "dropped_attempts": dropped_attempts,
     }
+
+
+# =================================================================================================
+# The run: one ledger attempt per seed, each seed a whole unit (D-15)
+# =================================================================================================
+
+
+def run(
+    *,
+    root=None,
+    ledger_path=None,
+    heartbeat_path=None,
+    device=None,
+    seeds=None,
+    rehearsal_identity=None,
+):
+    """THE run (D-15): preflight, then per pending seed in SEEDS order require_launch, ONE start
+    line, train full, train M2, A2 full, A2 M2, D-13 last (if approved; ruling c), the write-once
+    seed record, the end line naming it. A crash inside a seed leaves an open start (reconcile ->
+    lost). No in-run timer and no second rule: the committed stop is require_launch's."""
+    import torch
+
+    prereg = _prereg()
+    root = pathlib.Path(root) if root is not None else pathlib.Path(_ROOT)
+    pf = preflight(
+        root=root,
+        ledger_path=ledger_path,
+        heartbeat_path=heartbeat_path,
+        device=device,
+        seeds=seeds,
+    )
+    heartbeat_path = heartbeat_path or phase36_ledger.HEARTBEAT_PATH
+    rehearsal = not _is_real(root)
+    if rehearsal:  # 38-REVIEW DR-02: refused BEFORE the first start line
+        _prove(
+            rehearsal_identity is not None,
+            "a rehearsal root records its identity: pass rehearsal_identity (a tmp path)",
+        )
+        _kept_identity(rehearsal_identity, seeds=seeds)
+    else:
+        _prove(rehearsal_identity is None, "the real root records no rehearsal identity")
+    whole = []
+    for i, seed in enumerate(pf["pending"]):
+        phase36_ledger.require_launch(FRONT, ledger_path=ledger_path)
+        rid = prereg.run_id(seed)
+        phase36_ledger.append("start", run_id=rid, phase=40, front=FRONT, ledger_path=ledger_path)
+        if rehearsal and i == 0:  # after the first start line, before the first training call
+            record_rehearsal(rehearsal_identity, seeds=seeds)
+        state = {"point": rid, "stage": "start", "shape": None, "draw_index": None}
+        # B1: the thread's first beat waits a full period: beat once now.
+        phase25_run.beat(heartbeat_path, **state)
+        stop, thread = phase25_run.start_heartbeat(heartbeat_path, state)
+        started_utc = _now()
+        try:
+            trained = {}
+            for group in prereg.GROUPS:
+                state.update(stage=f"train_{group}")
+                trained[group] = train_adapter(group, seed, root=root, rehearsal=rehearsal)
+            adapters = {
+                group: arm_paths(group, seed, rehearsal=rehearsal)["adapter"]
+                for group in prereg.GROUPS
+            }
+            a2 = {}
+            for group in prereg.GROUPS:
+                state.update(stage=f"a2_{group}")
+                a2[group] = score_a2(group, seed, adapters[group], root=root, device=pf["device"])
+            d13 = None
+            if prereg.D13_INCLUDED:
+                state.update(stage="d13")
+                # Ruling c: every exception of THIS call (SystemExit included: the prereg's
+                # refusal type; never KeyboardInterrupt) and every non-conforming return becomes
+                # d13_not_measured, and the seed finishes. Nothing after it may fail on the return.
+                try:
+                    raw = d13_scores(
+                        adapters["m2"], root / prereg.a2_record("m2", seed), pf["device"], state
+                    )
+                except (Exception, SystemExit) as exc:
+                    _release()
+                    d13 = prereg.d13_not_measured("exception", f"{type(exc).__name__}: {exc}")
+                else:
+                    defect = None
+                    if (
+                        not isinstance(raw, collections.abc.Mapping)
+                        or type(raw.get("measured")) is not bool
+                    ):
+                        defect = "no bool 'measured'"
+                    elif not raw["measured"] and not (
+                        raw.get("failure_kind") in prereg.D13_FAILURE_KINDS
+                        and isinstance(raw.get("reason"), str)
+                        and raw["reason"].strip()
+                    ):
+                        defect = "measured False without a D13_FAILURE_KINDS failure_kind + reason"
+                    else:
+                        try:
+                            json.dumps(raw, sort_keys=True)  # atomic_write_json's options
+                        except (TypeError, ValueError) as exc:
+                            defect = f"not JSON-serialisable ({type(exc).__name__}: {exc})"
+                    d13 = raw
+                    if defect is not None:
+                        d13 = prereg.d13_not_measured(
+                            "malformed_reading",
+                            f"d13_scores returned a {type(raw).__name__}: {defect}",
+                        )
+                if not d13["measured"]:
+                    print(
+                        f"D13 NOT_MEASURED {seed} {d13['failure_kind']}: {d13['reason']}",
+                        flush=True,
+                    )
+            finished_utc = _now()
+            end_sha = git_sha()
+            blob = {
+                "front": FRONT,
+                "phase": 40,
+                "seed": seed,
+                "run_id": rid,
+                "rehearsal": rehearsal,
+                "groups": {g: {**trained[g], "a2": a2[g]} for g in prereg.GROUPS},
+                "d13": d13,
+                "approval": prereg.approval_block(),
+                "rehearsal_disclosure": pf["rehearsal_disclosure"],
+                "dropped_attempts": pf["dropped_attempts"].get(seed, []),
+                "provenance": {
+                    "run": {
+                        "git_sha_at_launch": pf["launch_git_sha"],
+                        "git_sha_at_end": end_sha,
+                        "head_moved_during_run": end_sha != pf["launch_git_sha"],
+                        "device": pf["device"],
+                        "torch_version": torch.__version__,
+                        "started_utc": started_utc,
+                        "finished_utc": finished_utc,
+                    },
+                    "module_sha256_at_launch": pf["launch_modules"],
+                },
+            }
+            _write_once(root / prereg.seed_record(seed), blob)
+            state.update(stage="done")
+        finally:
+            stop.set()
+            thread.join()
+        phase36_ledger.append(
+            "end",
+            run_id=rid,
+            phase=40,
+            front=FRONT,
+            record=prereg.seed_record(seed),
+            ledger_path=ledger_path,
+        )
+        hours = (
+            datetime.datetime.fromisoformat(finished_utc)
+            - datetime.datetime.fromisoformat(started_utc)
+        ).total_seconds() / 3600
+        print(f"SEED {seed} WHOLE {hours:.4f}", flush=True)
+        whole.append(seed)
+    print(f"RUN DONE whole={whole}", flush=True)
+    return whole

@@ -37,6 +37,7 @@ import phase14_factset  # noqa: E402  (scripts/ is not a package)
 import phase14_recall  # noqa: E402  (same)
 import phase18_extraction  # noqa: E402  (same)
 import phase19_erasure  # noqa: E402  (same; never aliased)
+import phase25_run  # noqa: E402  (same)
 import phase35_prereg  # noqa: E402  (same)
 import phase36_caps  # noqa: E402  (same)
 import phase36_ledger  # noqa: E402  (same)
@@ -714,9 +715,20 @@ def _raise(message):
     return planted
 
 
-def _launch(rig):
-    """The launch every refusal row goes through."""
-    return phase40_noise.preflight(**rig.kw)
+def _launch(rig, monkeypatch):
+    """The launch every refusal row goes through: run(), whose preflight refuses before the first
+    start line; a training or scoring call would mean it did not."""
+    calls = []
+    monkeypatch.setattr(phase40_noise, "train_adapter", lambda *a, **k: calls.append(a))
+    monkeypatch.setattr(phase40_noise, "score_a2", lambda *a, **k: calls.append(a))
+    monkeypatch.setattr(phase40_noise, "d13_scores", lambda *a, **k: calls.append(a))
+    kw = dict(rig.kw)
+    if "root" in kw:
+        kw["rehearsal_identity"] = rig.identity
+    try:
+        return phase40_noise.run(**kw)
+    finally:
+        assert calls == []
 
 
 def _plant(path, data=b"planted"):
@@ -847,7 +859,7 @@ def test_preflight_refusals(monkeypatch, tmp_path, plant):
     match = plant(rig, monkeypatch)
     ledger_before = _lines(rig.ledger)
     with pytest.raises(SystemExit, match=match):
-        _launch(rig)
+        _launch(rig, monkeypatch)
     assert _lines(rig.ledger) == ledger_before
     assert not rig.heartbeat.exists()
 
@@ -871,7 +883,7 @@ def test_preflight_refuses_a_missing_run_input(monkeypatch, tmp_path, which):
         missing = phase40_noise.comparators()[which]
         missing.unlink()
     with pytest.raises(SystemExit, match=re.escape(f"{missing} is missing")):
-        _launch(rig)
+        _launch(rig, monkeypatch)
     assert not rig.ledger.exists() and not rig.heartbeat.exists()
 
 
@@ -899,7 +911,7 @@ def test_preflight_refuses_an_existing_output_of_a_pending_seed(monkeypatch, tmp
     rig = _tmp_rig(monkeypatch, tmp_path)
     path = _plant(_pending_outputs(group, 2024, rig.root, rehearsal=True)[key])
     with pytest.raises(SystemExit, match=re.escape(f"{path} exists")):
-        _launch(rig)
+        _launch(rig, monkeypatch)
     assert not rig.ledger.exists() and not rig.heartbeat.exists()
 
 
@@ -1387,3 +1399,395 @@ def test_preflight_rerun_needs_the_dropped_manifest(monkeypatch, tmp_path):
     outcomes = phase40_prereg.seed_outcomes(lines, (1337, 2024, 1338))
     assert phase40_noise.rerun_seeds(lines, outcomes, root=rig.root) == frozenset()
     assert phase40_noise.preflight(**rig.kw)["pending"] == (1338,)
+
+
+# =================================================================================================
+# (10) Plan 06: run — one ledger attempt per seed, whole seeds, stop, crash, relaunch, D-13.
+# =================================================================================================
+
+
+def _measured(**changes):
+    """A REAL prereg.d13_block measured block (interfaces item (6))."""
+    n = phase19_erasure.N_TARGET_QUESTIONS
+    args = {
+        "curve": {"8": 0.5},
+        "gate_rank": 1,
+        "a2_rank": 1,
+        "committed_ranks": [1] * n,
+        "minted_ranks": [1] * n,
+    }
+    return phase40_prereg.d13_block(**{**args, **changes})
+
+
+def _run_fakes(monkeypatch, rig, *, d13=None, fail=None):
+    """The real train_adapter / score_a2 over fake teach_persona and A2 pins, wrapped to log the
+    call order; d13_scores faked (``d13(seed)`` -> its return, default a measured block); the
+    ledger calls, the seed-record write and the heartbeat threads logged too."""
+    monkeypatch.setattr(phase40_prereg, "D13_INCLUDED", True)
+    monkeypatch.setattr(phase40_noise, "_release", lambda: None)
+    rig.log, rig.threads, rig.trained = [], [], []
+    monkeypatch.setattr(teach_persona, "train_arm", _fake_train(rig.trained))
+
+    def fake_a2(arm, device, **kw):
+        if fail is not None:
+            fail(kw["record_path"])
+        shutil.copyfile(_COMMITTED_A2, kw["record_path"])
+
+    monkeypatch.setattr(phase19_erasure, "run_erasure_arm", fake_a2)
+    train, score = phase40_noise.train_adapter, phase40_noise.score_a2
+
+    def logged_train(group, seed, **kw):
+        rig.log.append(("train", group, seed))
+        return train(group, seed, **kw)
+
+    def logged_score(group, seed, adapter_path, **kw):
+        rig.log.append(("a2", group, seed))
+        return score(group, seed, adapter_path, **kw)
+
+    def fake_d13(adapter_path, a2_record_path, device, state):
+        seed = int(pathlib.Path(adapter_path).stem.split("seed")[1].split("_")[0])
+        rig.log.append(("d13", pathlib.Path(adapter_path), pathlib.Path(a2_record_path)))
+        return (d13 or (lambda s: _measured()))(seed)
+
+    monkeypatch.setattr(phase40_noise, "train_adapter", logged_train)
+    monkeypatch.setattr(phase40_noise, "score_a2", logged_score)
+    monkeypatch.setattr(phase40_noise, "d13_scores", fake_d13)
+    require, append, write = (
+        phase36_ledger.require_launch,
+        phase36_ledger.append,
+        phase40_noise._write_once,
+    )
+    rig.launches = 0
+
+    def logged_require(front, **kw):
+        rig.launches += 1
+        if rig.launches > 1:  # preflight's own call is not logged
+            rig.log.append(("require_launch",))
+        return require(front, **kw)
+
+    def logged_append(event, **kw):
+        rig.log.append((event, kw["run_id"]))
+        return append(event, **kw)
+
+    def logged_write(path, blob):
+        rig.log.append(("record", pathlib.Path(path).name))
+        return write(path, blob)
+
+    monkeypatch.setattr(phase36_ledger, "require_launch", logged_require)
+    monkeypatch.setattr(phase36_ledger, "append", logged_append)
+    monkeypatch.setattr(phase40_noise, "_write_once", logged_write)
+    start = phase25_run.start_heartbeat
+
+    def logged_start(path, state):
+        pair = start(path, state)
+        rig.threads.append(pair)
+        return pair
+
+    monkeypatch.setattr(phase25_run, "start_heartbeat", logged_start)
+    return rig
+
+
+def _run_kw(rig):
+    return {**rig.kw, "rehearsal_identity": rig.identity}
+
+
+def _record(rig, seed):
+    return json.loads((rig.root / phase40_prereg.seed_record(seed)).read_text(encoding="utf-8"))
+
+
+def _threads_stopped(rig):
+    assert rig.threads and all(s.is_set() and not t.is_alive() for s, t in rig.threads)
+
+
+def test_run_order_per_seed(monkeypatch, tmp_path):
+    rig = _run_fakes(monkeypatch, _tmp_rig(monkeypatch, tmp_path))
+    assert phase40_noise.run(**_run_kw(rig)) == [1337, 2024]
+    expected = []
+    for seed in (1337, 2024):
+        rid = phase40_prereg.run_id(seed)
+        m2 = phase40_noise.arm_paths("m2", seed, rehearsal=True)["adapter"]
+        expected += [
+            ("require_launch",),
+            ("start", rid),
+            ("train", "full", seed),
+            ("train", "m2", seed),
+            ("a2", "full", seed),
+            ("a2", "m2", seed),
+            ("d13", m2, rig.root / phase40_prereg.a2_record("m2", seed)),
+            ("record", pathlib.Path(phase40_prereg.seed_record(seed)).name),
+            ("end", rid),
+        ]
+    assert rig.log == expected
+    _threads_stopped(rig)
+    identity = json.loads(rig.identity.read_text(encoding="utf-8"))
+    assert identity["seeds"] == [1337, 2024] and identity["git_sha"] == "h1"
+
+
+def test_run_without_d13(monkeypatch, tmp_path):
+    rig = _run_fakes(monkeypatch, _tmp_rig(monkeypatch, tmp_path, seeds=(1337,)))
+    monkeypatch.setattr(phase40_prereg, "D13_INCLUDED", False)
+    phase40_noise.run(**_run_kw(rig))
+    assert [e for e in rig.log if e[0] == "d13"] == []
+    assert _record(rig, 1337)["d13"] is None
+
+
+def test_whole_seed_ledger_lines(monkeypatch, tmp_path):
+    rig = _run_fakes(monkeypatch, _tmp_rig(monkeypatch, tmp_path))
+    phase40_noise.run(**_run_kw(rig))
+    lines = phase36_ledger.read_ledger(rig.ledger)
+    assert [(x["event"], x["run_id"], x["record"]) for x in lines] == [
+        (event, phase40_prereg.run_id(seed), record)
+        for seed in (1337, 2024)
+        for event, record in (("start", None), ("end", phase40_prereg.seed_record(seed)))
+    ]
+    assert phase40_prereg.seed_outcomes(lines, (1337, 2024)) == {1337: "whole", 2024: "whole"}
+    beats = [json.loads(t)["point"] for t in _lines(rig.heartbeat)]
+    assert {phase40_prereg.run_id(s) for s in (1337, 2024)} <= set(beats)
+
+
+def test_stop_before_a_seed_writes_nothing_for_it(monkeypatch, tmp_path):
+    rig = _run_fakes(monkeypatch, _tmp_rig(monkeypatch, tmp_path))
+    require = phase36_ledger.require_launch
+
+    def stop_second(front, **kw):
+        if rig.launches == 2:  # preflight, seed 1337, then this: before seed 2024
+            raise SystemExit("[phase36_ledger] planted D-13 stop")
+        return require(front, **kw)
+
+    monkeypatch.setattr(phase36_ledger, "require_launch", stop_second)
+    with pytest.raises(SystemExit, match="planted D-13 stop"):
+        phase40_noise.run(**_run_kw(rig))
+    lines = phase36_ledger.read_ledger(rig.ledger)
+    assert [(x["event"], x["run_id"]) for x in lines] == [
+        ("start", phase40_prereg.run_id(1337)),
+        ("end", phase40_prereg.run_id(1337)),
+    ]
+    assert phase40_noise.partial_outputs(2024, root=rig.root) == []
+    assert not (rig.root / phase40_prereg.seed_record(2024)).exists()
+    assert phase40_prereg.seed_outcomes(lines, (1337, 2024)) == {1337: "whole", 2024: "not_run"}
+
+
+@pytest.mark.parametrize("rerun", [False, True])
+def test_crash_mid_seed_is_dropped_after_reconcile(monkeypatch, tmp_path, rerun):
+    seeds = (1337, 2024, 1338)
+    crash = {"on": True}
+
+    def fail(record_path):
+        if (
+            crash["on"]
+            and record_path.name == pathlib.Path(phase40_prereg.a2_record("m2", 2024)).name
+        ):
+            raise RuntimeError("planted crash in the m2 A2 pass")
+
+    rig = _run_fakes(monkeypatch, _tmp_rig(monkeypatch, tmp_path, seeds=seeds), fail=fail)
+    with pytest.raises(RuntimeError, match="planted crash"):
+        phase40_noise.run(**_run_kw(rig))
+    _threads_stopped(rig)
+    rid = phase40_prereg.run_id(2024)
+    lines = phase36_ledger.read_ledger(rig.ledger)
+    assert (lines[-1]["event"], lines[-1]["run_id"]) == ("start", rid)
+    assert set(phase36_ledger.open_runs(lines)) == {rid}
+    (lost,) = phase36_ledger.reconcile(ledger_path=rig.ledger, heartbeat_path=rig.heartbeat)
+    assert (lost["event"], lost["run_id"]) == ("lost", rid)
+    lines = phase36_ledger.read_ledger(rig.ledger)
+    assert phase40_prereg.seed_outcomes(lines, seeds) == {
+        1337: "whole",
+        2024: "dropped",
+        1338: "not_run",
+    }
+    crash["on"] = False
+    crashed = phase40_noise.partial_outputs(2024, root=rig.root)
+    assert crashed and not (rig.root / phase40_prereg.a2_record("m2", 2024)).exists()
+
+    # The relaunch runs only the not_run seed; 2024's partial outputs stay in place.
+    monkeypatch.setattr(phase40_prereg, "DROPPED_SEED_RERUN", rerun)
+    rig.log.clear()
+    assert phase40_noise.run(**_run_kw(rig)) == [1338]
+    assert {e[2] for e in rig.log if e[0] == "train"} == {1338}
+    assert phase40_noise.partial_outputs(2024, root=rig.root) == crashed
+    if not rerun:
+        with pytest.raises(SystemExit, match="DROPPED_SEED_RERUN"):
+            _drop(rig, cause_note="planted crash")
+        return
+
+    manifest = _drop(rig, cause_note="planted crash in the m2 A2 pass")
+    rel_dir = phase40_prereg.dropped_attempt_dir(2024, _lost_utc(rig, 2024))
+    assert phase40_noise.partial_outputs(2024, root=rig.root) == []
+    assert len(manifest["kept"]) == len(crashed)
+    arm = phase40_noise.arm_name("full", 2024, rehearsal=True)
+    replants = (
+        phase40_noise.arm_paths("full", 2024, rehearsal=True)["adapter"],
+        rig.root / phase40_prereg.a2_record("full", 2024),
+        phase40_noise.arm_paths("full", 2024, rehearsal=True)["csv"],
+        rig.root / "data" / phase40_noise.CSV_DIR / arm / "run.csv",
+    )
+    for path in replants:
+        _plant(path)
+        rig.log.clear()
+        with pytest.raises(SystemExit, match=re.escape(f"{path} exists")):
+            phase40_noise.run(**_run_kw(rig))
+        assert rig.log == []
+        path.unlink()
+        if path.name == "run.csv":
+            path.parent.rmdir()
+    assert phase40_noise.run(**_run_kw(rig)) == [2024]
+    lines = phase36_ledger.read_ledger(rig.ledger)
+    assert [x["event"] for x in lines if x["run_id"] == rid] == ["start", "lost", "start", "end"]
+    assert phase40_prereg.seed_outcomes(lines, seeds) == dict.fromkeys(seeds, "whole")
+    assert _record(rig, 2024)["dropped_attempts"] == [_attempt_entry(rig.root, rel_dir)]
+
+
+def test_run_with_no_arguments_resolves_the_real_defaults(monkeypatch, tmp_path):
+    rig = _run_fakes(monkeypatch, _real_root_rig(monkeypatch, tmp_path))
+    assert phase40_noise.run() == list(phase40_prereg.SEEDS)
+    lines = phase36_ledger.read_ledger(rig.ledger)
+    assert [(x["event"], x["run_id"]) for x in lines] == [
+        (event, phase40_prereg.run_id(seed))
+        for seed in phase40_prereg.SEEDS
+        for event in ("start", "end")
+    ]
+    beats = {json.loads(t)["point"] for t in _lines(rig.heartbeat)}
+    assert {phase40_prereg.run_id(s) for s in phase40_prereg.SEEDS} <= beats
+    for seed in phase40_prereg.SEEDS:
+        record = _record(rig, seed)
+        assert record["provenance"]["run"]["device"] == "mps"
+        assert record["rehearsal"] is False
+        assert record["rehearsal_disclosure"]["commits"] == []
+        assert record["groups"]["full"]["arm"] == phase40_noise.arm_name("full", seed)
+
+
+def test_seed_record_schema(monkeypatch, tmp_path):
+    rig = _run_fakes(monkeypatch, _tmp_rig(monkeypatch, tmp_path, seeds=(1337,)))
+    phase40_noise.run(**_run_kw(rig))
+    record = _record(rig, 1337)
+    run = record["provenance"]["run"]
+    assert set(run) == set(phase40_noise.RUN_PROVENANCE_KEYS)  # sort_keys on disk
+    assert run["device"] == "cpu" and run["torch_version"] == torch.__version__
+    assert run["git_sha_at_launch"] == run["git_sha_at_end"] == "h1"
+    assert run["head_moved_during_run"] is False
+    started, finished = (
+        phase40_noise.datetime.datetime.fromisoformat(run[k])
+        for k in ("started_utc", "finished_utc")
+    )
+    assert started <= finished
+    assert record["provenance"]["module_sha256_at_launch"] == phase40_noise.module_sha256()
+    for group in phase40_prereg.GROUPS:
+        block = record["groups"][group]
+        adapter = phase40_noise.arm_paths(group, 1337, rehearsal=True)["adapter"]
+        assert block["adapter_sha256"] == phase40_noise._sha256(adapter)
+        assert block["a2"]["record"] == phase40_prereg.a2_record(group, 1337)
+        assert block["a2"]["record_sha256"] == phase40_noise._sha256(
+            rig.root / phase40_prereg.a2_record(group, 1337)
+        )
+        assert {"csv", "csv_sha256", "train", "checkpoint"} <= set(block)
+    assert record["approval"] == phase40_prereg.approval_block()
+    assert record["rehearsal_disclosure"] == {"this_is_the_rehearsal": True}
+    assert record["dropped_attempts"] == []
+    assert record["d13"] == _measured()
+    assert (record["seed"], record["run_id"]) == (1337, phase40_prereg.run_id(1337))
+    assert (record["front"], record["phase"], record["rehearsal"]) == ("E2", 40, True)
+    with pytest.raises(SystemExit, match="write-once"):
+        phase40_noise._write_once(rig.root / phase40_prereg.seed_record(1337), record)
+
+
+def _d13_raise_runtime(seed):
+    raise RuntimeError("planted")
+
+
+def _d13_raise_systemexit(seed):
+    raise SystemExit("[phase40_prereg] planted")
+
+
+@pytest.mark.parametrize(
+    ("fake", "kind", "expected"),
+    [
+        (_d13_raise_runtime, "exception", "RuntimeError: planted"),
+        (_d13_raise_systemexit, "exception", "SystemExit: [phase40_prereg] planted"),
+        (lambda s: _measured(gate_rank=2), "gate_mismatch", None),
+        (lambda s: _measured(committed_ranks=[1, 1, 1]), "malformed_reading", None),
+        (lambda s: {"faked": True}, "malformed_reading", "measured"),
+        (lambda s: {**_measured(), "anchor_curve": object()}, "malformed_reading", "JSON"),
+    ],
+    ids=["runtime", "systemexit", "gate_mismatch", "malformed_block", "no_measured", "non_json"],
+)
+def test_d13_failure_is_not_a_crash_the_seed_stays_whole(
+    monkeypatch, tmp_path, capsys, fake, kind, expected
+):
+    rig = _tmp_rig(monkeypatch, tmp_path)
+    rig = _run_fakes(monkeypatch, rig, d13=lambda s: _measured() if s == 1337 else fake(s))
+    assert phase40_noise.run(**_run_kw(rig)) == [1337, 2024]
+    lines = phase36_ledger.read_ledger(rig.ledger)
+    assert [x["event"] for x in lines] == ["start", "end", "start", "end"]
+    assert phase40_prereg.seed_outcomes(lines, (1337, 2024)) == {1337: "whole", 2024: "whole"}
+    assert _record(rig, 1337)["d13"] == _measured()
+    d13 = _record(rig, 2024)["d13"]
+    assert d13["measured"] is False and d13["failure_kind"] == kind
+    if kind == "exception":
+        assert d13 == phase40_prereg.d13_not_measured("exception", expected)
+    elif expected is None:
+        assert d13 == fake(2024)
+    else:
+        assert expected in d13["reason"]
+        assert d13 == phase40_prereg.d13_not_measured("malformed_reading", d13["reason"])
+    assert f"D13 NOT_MEASURED 2024 {kind}" in capsys.readouterr().out
+
+
+def test_d13_keyboard_interrupt_is_still_a_crash(monkeypatch, tmp_path):
+    def interrupt(seed):
+        if seed == 2024:
+            raise KeyboardInterrupt
+        return _measured()
+
+    rig = _run_fakes(monkeypatch, _tmp_rig(monkeypatch, tmp_path), d13=interrupt)
+    with pytest.raises(KeyboardInterrupt):
+        phase40_noise.run(**_run_kw(rig))
+    _threads_stopped(rig)
+    lines = phase36_ledger.read_ledger(rig.ledger)
+    assert set(phase36_ledger.open_runs(lines)) == {phase40_prereg.run_id(2024)}
+    assert not (rig.root / phase40_prereg.seed_record(2024)).exists()
+
+
+def test_head_moving_mid_run_is_recorded(monkeypatch, tmp_path):
+    rig = _run_fakes(monkeypatch, _tmp_rig(monkeypatch, tmp_path))
+    first = rig.root / phase40_prereg.seed_record(1337)
+    monkeypatch.setattr(phase40_noise, "git_sha", lambda: "h2" if first.exists() else "h1")
+    phase40_noise.run(**_run_kw(rig))
+    early, late = _record(rig, 1337)["provenance"]["run"], _record(rig, 2024)["provenance"]["run"]
+    assert (early["git_sha_at_end"], early["head_moved_during_run"]) == ("h1", False)
+    assert (late["git_sha_at_launch"], late["git_sha_at_end"]) == ("h1", "h2")
+    assert late["head_moved_during_run"] is True
+
+
+def _ledger_uses(source):
+    calls, reads = set(), set()
+    tree = ast.parse(source)
+    called = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+            func = node.func
+            if isinstance(func.value, ast.Name) and func.value.id == "phase36_ledger":
+                calls.add(func.attr)
+                called.add(id(func))
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Attribute)
+            and isinstance(node.value, ast.Name)
+            and node.value.id == "phase36_ledger"
+            and id(node) not in called
+        ):
+            reads.add(node.attr)
+    return calls, reads
+
+
+def test_ast_ledger_calls_are_the_allowed_set():
+    allowed = {"run_id", "read_ledger", "open_runs", "require_launch", "append"}
+    source = (_SCRIPTS / "phase40_noise.py").read_text(encoding="utf-8")
+    calls, reads = _ledger_uses(source)
+    assert calls and calls <= allowed
+    assert {"require_launch", "append", "read_ledger", "open_runs"} <= calls
+    assert reads <= {"HEARTBEAT_PATH", "LEDGER_PATH", "_ROOT"}
+    planted = (
+        source
+        + "\n\ndef planted():\n    phase36_ledger.reconcile()\n    phase36_ledger.rule('E2')\n"
+    )
+    assert _ledger_uses(planted)[0] - allowed == {"reconcile", "rule"}
