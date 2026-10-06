@@ -240,9 +240,32 @@ Item d was not asked again (R-1..R-4 were ruled at 40-01). The quotes live in `C
 | h | "Confirmo: taxa do M2 menos taxa do completo, o mesmo sinal do v3.0." | `d12_rereading` | D-12 sign (m2 - full, v3.0's) — confirmed. |
 | i | "Confirmo: as previsões do D-07 são lidas como descrição; uma diferença é um achado, não uma falha." | `predictions` | D-07 predictions — confirmed (descriptive; a mismatch is a finding). |
 
-On c: "portão diferente" is implemented as the D-13 anchor gate, `gate_rank != a2_rank` (the committed |R| rank against the A2 record's exposure rank). That is the only gate in D-13. The driver must catch every exception raised by its D-13 scoring, including the prereg's `SystemExit`, and record it as `d13_not_measured("exception", reason)`.
+### Clarifications c and f (2026-10-06)
 
-Open question on f: his words end "cada um com meu approved", but the record_layout value (unchanged) says "after Rafael's approved". This section does not settle whether that means one approved per commit step or one approved for the whole sequence. The driver plans quote his words.
+After the first round, two points were left open: the gate named in c, and what "cada um com meu approved" means in f. Rafael's answer is pasted text (proposto pelo Claude (claude.ai), adotado por Rafael), copied byte for byte:
+
+```
+1. Sim. "Portão diferente" é o portão da âncora do D-13 (o rank no |R| = 8 commitado contra o rank de exposição do próprio registro do A2). É o único portão do D-13, e uma diferença fica gravada como gate_mismatch sem derrubar a semente.
+
+2. Três approved, não um por commit:
+- o primeiro cobre o livro-caixa e todos os registros de semente (com os registros do A2 que eles nomeiam), mostrados juntos num checkpoint só. Os commits continuam separados: livro-caixa primeiro, depois um por semente.
+- o segundo cobre o registro do piso.
+- o terceiro cobre o relatório.
+Escreva isso no record_layout. Depois me mostre o diff e o sha256 novo do pré-registro, e eu respondo "reviewed".
+```
+
+- **c, answer 1:** he confirmed the implementation in 541da56. The D-13 anchor gate, `gate_rank != a2_rank`, is the only gate, and a mismatch is recorded as `gate_mismatch` without dropping the seed. It is quoted in `run_order`'s derivation as `clarified by Rafael 2026-10-06 (c, answer 1): "..."`.
+- **f, answer 2:** three approved, not one per commit.
+  - The first covers the ledger and every seed record, with the A2 records each one names, shown together in one checkpoint. The commits stay separate: the ledger first, then one commit per seed.
+  - The second covers the noise-floor record.
+  - The third covers the report.
+  - `record_layout`'s value now carries an `approvals` tuple with these three steps, and its `commits` key reads "none during the run; afterwards, under three approved from Rafael (not one per commit), in the order of approvals".
+  - The derivation quotes the whole answer as `clarified by Rafael 2026-10-06 (f, answer 2): "..."`. The quote keeps its line breaks and is not normalized.
+- **Where the bytes live:** both answers are stored byte for byte in `CLARIFICATIONS`, and the reply file equals `'1. ' + c + '\n\n2. ' + f + '\n'`.
+- **Tests:** `test_clarifications_are_pinned_byte_for_byte` pins each answer by its sha256 and checks that each has exactly one home. `test_record_layout_three_approvals` checks the three steps.
+- **Commit:** 391e1c0.
+
+The open question on f from the first round is settled by answer 2.
 
 ---
 
