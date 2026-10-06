@@ -1204,11 +1204,15 @@ def _left_dropped(seed, lines, *, root):
                 "kept_verified": True,
             }
         )
+    in_place = partial_outputs(seed, root=root)
+    record = root / prereg.seed_record(seed)
+    if (
+        record.exists()
+    ):  # IN-05: a finished seed reconciled lost by mistake (WR-01) keeps its record
+        in_place.append((prereg.seed_record(seed), record))
     return {
         "manifests": manifests,
-        "in_place": [
-            {"from": rel, "sha256": _sha256(path)} for rel, path in partial_outputs(seed, root=root)
-        ],
+        "in_place": [{"from": rel, "sha256": _sha256(path)} for rel, path in sorted(in_place)],
     }
 
 

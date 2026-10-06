@@ -3227,3 +3227,17 @@ def test_in04_a_wrong_nll_count_is_a_malformed_reading_not_an_exception(monkeypa
         "n_nlls": expected,
     }
     print(f"\nIN04 {out}")
+
+
+def test_in05_a_dropped_seeds_own_record_is_listed_in_place(monkeypatch, tmp_path):
+    """IN-05: in the WR-01 state (a finished seed reconciled lost: dropped WITH its record), the
+    noise-floor record names results/phase40_seed<k>.json among the seed's in-place outputs."""
+    rig = _build_rig(monkeypatch, tmp_path)
+    _whole(rig, 1337)
+    _ledger(rig.ledger, ("start", 2024), ("lost", 2024))
+    _plant(_new_adapter("full", 2024), b"finished full adapter")
+    stranded = _plant(rig.root / phase40_prereg.seed_record(2024), b'{"seed": 2024}')
+    in_place = _build(rig)["seeds"]["dropped_seed_outputs"][2024]["in_place"]
+    entry = {"from": phase40_prereg.seed_record(2024), "sha256": phase40_noise._sha256(stranded)}
+    assert entry in in_place and len(in_place) == 2
+    print(f"\nIN05 in_place {in_place}")
