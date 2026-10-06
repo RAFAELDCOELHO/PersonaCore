@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  PHASE 40 (NOISE-01) — the E2 noise-floor agent: `phase40_noise.py run` trains the full and M2
+  adapters and runs the pinned A2 pass on each (D-13 last, when approved) for every seed of
+  phase40_prereg.SEEDS, ONE v6.0 ledger attempt per seed under require_launch("E2"), beats on
+  data/v6_mps_heartbeat.jsonl. A copy of com.personacore.phase37.r1b.plist: the same caffeinate
+  -dims wrapper, venv python, working directory and environment; its own log pair.
+  Rafael copies it to ~/Library/LaunchAgents, then `launchctl bootstrap` and `launchctl kickstart`,
+  only after his "approved" and a passing `phase40_noise.py preflight`; `launchctl bootout` once
+  the run has finished.
+
+  IT DOES NOT START ITSELF. RunAtLoad is false and KeepAlive is false: loading starts nothing; the
+  run begins only on `launchctl kickstart` and ends for good when the driver exits.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.personacore.phase40.e2</string>
+
+  <!-- KEEPALIVE IS FALSE: a crashed seed's re-run is a new attempt, which R-3 allows only after
+       Rafael's "approved" and a root-cause note — never a supervisor's restart. -->
+  <key>KeepAlive</key>
+  <false/>
+
+  <key>RunAtLoad</key>
+  <false/>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/caffeinate</string>
+    <string>-dims</string>
+    <string>/Users/juliorcoelho/PersonaCore/.venv/bin/python</string>
+    <string>/Users/juliorcoelho/PersonaCore/scripts/phase40_noise.py</string>
+    <string>run</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/juliorcoelho/PersonaCore</string>
+
+  <key>StandardOutPath</key>
+  <string>/Users/juliorcoelho/PersonaCore/logs/phase40_e2.out</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/juliorcoelho/PersonaCore/logs/phase40_e2.err</string>
+
+  <key>ProcessType</key>
+  <string>Interactive</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <!-- D-44: any pytest run during the E2 run skips the MPS legs loudly instead of contending. -->
+    <key>PERSONACORE_SWEEP_ACTIVE</key>
+    <string>1</string>
+    <key>PATH</key>
+    <string>/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>PYTHONUNBUFFERED</key>
+    <string>1</string>
+  </dict>
+</dict>
+</plist>

@@ -27,6 +27,7 @@ the pre-registration are imported inside the functions that need them).
 import datetime
 import gc
 import hashlib
+import json
 import pathlib
 import shutil
 import sys
@@ -311,3 +312,125 @@ def train_adapter(group, seed, *, root, rehearsal=False):
             for k in ("final_train_loss", "ppl_adapter_on", "ppl_adapter_off", "scored_targets")
         },
     }
+
+
+# =================================================================================================
+# The A2 wrapper, the D-07 comparison and the D-13 scorer
+# =================================================================================================
+
+
+def score_a2(group, seed, adapter_path, *, root, device):
+    """NOISE-01 / D-09: the pinned A2 pass (``phase19_erasure.run_erasure_arm`` at
+    ``phase40_prereg.A2_LABEL``, parity asserted by the pin) on one adapter, into the write-once
+    record ``root``/``phase40_prereg.a2_record(group, seed)``. The dialogue PPL is that record's."""
+    import phase19_erasure as pin  # torch at import: lazy
+
+    prereg = _prereg()
+    rel = prereg.a2_record(group, seed)
+    record = pathlib.Path(root) / rel
+    _prove(not record.exists(), f"{record} exists: the A2 records are write-once")
+    pin.run_erasure_arm(prereg.A2_LABEL, device, adapter_path=adapter_path, record_path=record)
+    _release()
+    return {"group": group, "seed": seed, "record": rel, "record_sha256": _sha256(record)}
+
+
+def adapter_identity(new_path, committed_path):
+    """D-07 (amended): two adapters compared tensor by tensor (torch.equal, per-key max abs diff)
+    plus the key set and every non-tensor top-level key. Never the file digest: torch.save writes
+    the file name into the archive, so identical adapters under two names differ by it."""
+    import torch
+
+    from personacore.checkpoint import load_adapter
+
+    a, b = load_adapter(new_path), load_adapter(committed_path)
+    ta, tb = a["adapter"], b["adapter"]
+    keys_equal = sorted(ta) == sorted(tb)
+    n_equal = 0
+    max_abs_diff = {}
+    for key in sorted(set(ta) & set(tb)):
+        x, y = ta[key].cpu(), tb[key].cpu()
+        same_shape = x.shape == y.shape
+        n_equal += same_shape and x.dtype == y.dtype and torch.equal(x, y)
+        max_abs_diff[key] = (
+            float((x.float() - y.float()).abs().max()) if same_shape and x.numel() else None
+        )
+    n_tensors = len(set(ta) | set(tb))
+    metadata_keys = sorted((set(a) | set(b)) - {"adapter"})
+    metadata_equal = all(a.get(k) == b.get(k) for k in metadata_keys)
+    return {
+        "keys_equal": keys_equal,
+        "n_tensors": n_tensors,
+        "n_equal": n_equal,
+        "tensors_identical": keys_equal and n_equal == n_tensors and metadata_equal,
+        "metadata_keys": metadata_keys,
+        "metadata_equal": metadata_equal,
+        "max_abs_diff": max_abs_diff,
+        "comparison": "torch.equal per tensor + metadata; never the file sha256 (D-07 amended)",
+        "criterion": False,
+    }
+
+
+def d13_scores(adapter_path, a2_record_path, device, state):
+    """D-13 on one M2 adapter, only when Rafael approved it: the anchor curve, the anchor gate
+    against the A2 record's exposure rank, and R_q over the pet_name questions, through the
+    imported Phase 38 / 39 instruments. Returns ``phase40_prereg.d13_block`` (a measured block or
+    the d13_not_measured block it returns, ruling c) plus ``n_nlls``. It catches nothing: run()
+    owns ruling c's catch (plan 06)."""
+    prereg = _prereg()
+    _prove(prereg.D13_INCLUDED, "D-13 was not approved: d13_scores never runs")
+    import phase14_recall  # torch at import: lazy
+    import phase18_extraction  # same
+    import phase19_erasure as pin  # same
+    import phase35_prereg
+    import phase38_prereg
+    import phase38_rank
+    import phase39_ctx
+    import phase39_prereg
+
+    slot = pin.TARGET_SLOT
+    plan = phase38_rank.scoring_plan(slots=(slot,))[slot]
+    taught = plan["taught"]
+    a2 = json.loads(pathlib.Path(a2_record_path).read_text(encoding="utf-8"))
+    a2_rank = next((row["rank"] for row in a2["exposure"] if row["slot"] == slot), None)
+    refs = phase18_extraction.reference_set_for(slot)
+    minted_members = phase39_prereg.minted_members(slot)
+    entries = [e for e in phase35_prereg.a2_corpus_entries() if e["slot"] == slot]
+    model, _cfg, tok, _forbid, _artifact = phase14_recall.load_adapted_model(
+        device, adapter_path=adapter_path
+    )
+    try:
+        anchor = phase38_rank.score_values(
+            model, tok, device, slot, [taught] + plan["minted"], state
+        )
+        curve = phase38_rank.curve_for(taught, anchor[0], plan["minted"], anchor[1:], plan["sizes"])
+        gate_nll = dict(zip(refs, phase38_rank.score_values(model, tok, device, slot, refs, state)))
+        gate_rank = phase38_prereg.rank_in_prefix(
+            gate_nll, taught, [r for r in refs if r != taught]
+        )
+        n_nlls = len(anchor) + len(gate_nll)
+        committed_ranks, minted_ranks = [], []
+        for entry in entries:
+            rows = phase39_ctx.score_question(
+                model, tok, device, entry, refs, taught=taught, state=state
+            )
+            minted = phase39_ctx.score_question(
+                model, tok, device, entry, minted_members, taught=taught, state=state
+            )
+            n_nlls += len(rows) + len(minted)
+            committed_ranks.append(phase39_ctx.rank_rows(rows, taught))
+            minted_ranks.append(phase39_ctx.rank_rows({taught: rows[taught], **minted}, taught))
+    finally:
+        model = None
+        _release()
+    _prove(
+        n_nlls == prereg.D13_NLLS_PER_ADAPTER,
+        f"D-13 scored {n_nlls} NLLs, not D13_NLLS_PER_ADAPTER = {prereg.D13_NLLS_PER_ADAPTER}",
+    )
+    block = prereg.d13_block(
+        curve=curve,
+        gate_rank=gate_rank,
+        a2_rank=a2_rank,
+        committed_ranks=committed_ranks,
+        minted_ranks=minted_ranks,
+    )
+    return {**block, "n_nlls": n_nlls}

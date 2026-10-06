@@ -7,11 +7,18 @@ dirty check against the repository: `_repo_rig` stubs it and stands every gitign
 a tmp file, so the file runs on CPU CI where checkpoints/ and data/ are empty.
 """
 
+import ast
+import inspect
+import json
 import pathlib
+import plistlib
+import shutil
 import subprocess
 import sys
+import textwrap
 
 import pytest
+import torch
 
 _ROOT = pathlib.Path(__file__).resolve().parent.parent
 _SCRIPTS = _ROOT / "scripts"
@@ -26,12 +33,18 @@ if _TESTS not in sys.path:
 
 import phase14_factset  # noqa: E402  (scripts/ is not a package)
 import phase14_recall  # noqa: E402  (same)
+import phase18_extraction  # noqa: E402  (same)
 import phase19_erasure  # noqa: E402  (same; never aliased)
+import phase35_prereg  # noqa: E402  (same)
 import phase38_prereg  # noqa: E402  (same)
+import phase38_rank  # noqa: E402  (same)
+import phase39_ctx  # noqa: E402  (same)
+import phase39_prereg  # noqa: E402  (same)
 import phase40_noise  # noqa: E402  (same; never aliased — _untested_functions counts by name)
 import phase40_prereg  # noqa: E402  (same; frozen: import only)
 import teach_persona  # noqa: E402  (same)
 
+from personacore.checkpoint import ADAPTER_SCHEMA_VERSION  # noqa: E402
 from test_phase29_prereg import _git  # noqa: E402
 
 # Every input file the run reads, as the (module, constant) its reader takes it from.
@@ -343,3 +356,259 @@ def test_train_adapter_refuses_an_m2_spec_with_changed_settings(monkeypatch, tmp
     with pytest.raises(SystemExit, match="second_person"):
         phase40_noise.train_adapter("m2", 1337, root=root)
     assert calls == []
+
+
+# =================================================================================================
+# (4) The A2 wrapper around the pinned scorer.
+# =================================================================================================
+
+_COMMITTED_A2 = phase19_erasure.arm_record_path("retrain")
+
+
+@pytest.mark.parametrize("group", ["full", "m2"])
+def test_score_a2_calls_the_pin_with_the_record_path(monkeypatch, tmp_path, group):
+    root = _repo_rig(monkeypatch, tmp_path)
+    calls = []
+
+    def fake(arm, device, **kw):
+        calls.append((arm, device, kw))
+        shutil.copyfile(_COMMITTED_A2, kw["record_path"])
+
+    monkeypatch.setattr(phase19_erasure, "run_erasure_arm", fake)
+    adapter = root / "checkpoints" / "an_adapter.pt"
+    out = phase40_noise.score_a2(group, 1338, adapter, root=root, device="cpu")
+    record = root / phase40_prereg.a2_record(group, 1338)
+    assert calls == [
+        (phase40_prereg.A2_LABEL, "cpu", {"adapter_path": adapter, "record_path": record})
+    ]
+    assert out == {
+        "group": group,
+        "seed": 1338,
+        "record": phase40_prereg.a2_record(group, 1338),
+        "record_sha256": phase40_noise._sha256(record),
+    }
+    assert out["record_sha256"] == phase40_noise._sha256(_COMMITTED_A2)
+    with pytest.raises(SystemExit, match="exists"):
+        phase40_noise.score_a2(group, 1338, adapter, root=root, device="cpu")
+    assert len(calls) == 1
+
+
+# =================================================================================================
+# (5) D-07: tensor-wise identity, never the file digest.
+# =================================================================================================
+
+
+def _artifact(**changes):
+    artifact = {
+        "schema_version": ADAPTER_SCHEMA_VERSION,
+        "adapter": {
+            "blocks.0.attn.lora_A": torch.arange(6, dtype=torch.float32).reshape(2, 3),
+            "blocks.0.attn.lora_B": torch.ones(3, 2),
+            "blocks.1.mlp.lora_A": torch.full((2, 2), 0.25),
+        },
+        "lora_config": {"rank": 2, "alpha": 4.0},
+        "base_fingerprint": "abc123",
+    }
+    artifact.update(changes)
+    return artifact
+
+
+def test_adapter_identity_tensor_wise(tmp_path):
+    a, b = tmp_path / "phase40_e2_full_seed1337_adapter.pt", tmp_path / "persona_adapter.pt"
+    torch.save(_artifact(), a)
+    torch.save(_artifact(), b)
+    # The stem effect: identical tensors under two file names differ by sha256.
+    assert phase40_noise._sha256(a) != phase40_noise._sha256(b)
+    same = phase40_noise.adapter_identity(a, b)
+    assert same["tensors_identical"] is True and same["metadata_equal"] is True
+    assert same["keys_equal"] is True and same["n_equal"] == same["n_tensors"] == 3
+    assert set(same["max_abs_diff"].values()) == {0.0}
+    assert same["metadata_keys"] == ["base_fingerprint", "lora_config", "schema_version"]
+    assert same["criterion"] is False
+
+    ulp = _artifact()
+    t = ulp["adapter"]["blocks.0.attn.lora_B"]
+    t[0, 0] = torch.nextafter(t[0, 0], torch.tensor(2.0))
+    c = tmp_path / "ulp.pt"
+    torch.save(ulp, c)
+    off = phase40_noise.adapter_identity(c, b)
+    assert off["tensors_identical"] is False and off["n_equal"] == 2
+    assert off["max_abs_diff"]["blocks.0.attn.lora_B"] > 0
+    assert off["metadata_equal"] is True
+
+    d = tmp_path / "config.pt"
+    torch.save(_artifact(lora_config={"rank": 2, "alpha": 8.0}), d)
+    config = phase40_noise.adapter_identity(d, b)
+    assert config["metadata_equal"] is False and config["tensors_identical"] is False
+    assert config["n_equal"] == 3
+
+    missing = _artifact()
+    del missing["adapter"]["blocks.1.mlp.lora_A"]
+    e = tmp_path / "missing.pt"
+    torch.save(missing, e)
+    gone = phase40_noise.adapter_identity(e, b)
+    assert gone["keys_equal"] is False and gone["tensors_identical"] is False
+
+
+def _digest_names(source):
+    """Name ids and attribute names in adapter_identity's body (the docstring is a Constant)."""
+    (fn,) = [
+        n
+        for n in ast.walk(ast.parse(source))
+        if isinstance(n, ast.FunctionDef) and n.name == "adapter_identity"
+    ]
+    names = [n.id for n in ast.walk(fn) if isinstance(n, ast.Name)]
+    names += [n.attr for n in ast.walk(fn) if isinstance(n, ast.Attribute)]
+    names += [a.name for n in ast.walk(fn) if isinstance(n, ast.Import) for a in n.names]
+    assert names, "meta-guard: the scan collected nothing"
+    return [x for x in names if "sha256" in x or "hashlib" in x]
+
+
+def test_adapter_identity_ast_has_no_file_digest():
+    source = textwrap.dedent(inspect.getsource(phase40_noise.adapter_identity))
+    assert _digest_names(source) == []
+    planted = source + "    hashlib.sha256(b'')\n"
+    assert _digest_names(planted) == ["hashlib", "sha256"]
+
+
+def test_comparators_resolve_from_modules():
+    found = phase40_noise.comparators()
+    assert tuple(found) == (
+        "m2_seed1337",
+        "full_seed1337",
+        "full_seed2024",
+        "dialogue_floor_seed1337",
+    )
+    floor = [
+        teach_persona.arm_outputs(
+            f"{phase19_erasure.DIALOGUE_FLOOR_ARM}_seed{s}",
+            prefix=phase19_erasure.RETRAIN_PREFIX,
+        )["adapter"]
+        for s in phase19_erasure.DIALOGUE_NOISE_FLOOR_SEEDS
+    ]
+    assert found["m2_seed1337"] == phase38_rank.m2_adapter_path()
+    assert found["full_seed1337"] == phase14_recall.ADAPTER_PATH
+    assert phase19_erasure.DIALOGUE_NOISE_FLOOR_SEEDS == (1337, 2024)
+    assert [found["dialogue_floor_seed1337"], found["full_seed2024"]] == floor
+
+
+# =================================================================================================
+# (6) D-13: the conditional scorer, through the imported instruments only.
+# =================================================================================================
+
+
+def _d13_rig(monkeypatch, tmp_path, *, a2_rank):
+    """Fakes for the model load and the two scoring instruments; the taught value scores lowest
+    everywhere, so every measured rank is 1. Returns the call log and the A2 record path."""
+    monkeypatch.setattr(phase40_prereg, "D13_INCLUDED", True)
+    monkeypatch.setattr(
+        phase40_prereg, "D13_NLLS_PER_ADAPTER", phase40_prereg.d13_nlls_per_adapter()
+    )
+    slot = phase19_erasure.TARGET_SLOT
+    taught = next(f.value for f in phase14_factset.LOCKED_FACTS if f.slot == slot)
+    log = {"loads": [], "values": [], "questions": []}
+
+    def load(device, adapter_path=None):
+        log["loads"].append((device, adapter_path))
+        return ("model", None, "tok", "forbid", "artifact")
+
+    def score_values(model, tok, device, slot_, values, state):
+        log["values"].append((slot_, list(values)))
+        return [0.0 if v == taught else 1.0 + i for i, v in enumerate(values)]
+
+    def score_question(model, tok, device, entry, candidates, *, taught, state):
+        log["questions"].append((entry, list(candidates)))
+        return {c: {"nll_mean": 0.0 if c == taught else 1.0 + i} for i, c in enumerate(candidates)}
+
+    monkeypatch.setattr(phase14_recall, "load_adapted_model", load)
+    monkeypatch.setattr(phase38_rank, "score_values", score_values)
+    monkeypatch.setattr(phase39_ctx, "score_question", score_question)
+    record = json.loads(_COMMITTED_A2.read_text(encoding="utf-8"))
+    for row in record["exposure"]:
+        if row["slot"] == slot:
+            row["rank"] = a2_rank
+    path = tmp_path / "a2.json"
+    path.write_text(json.dumps(record), encoding="utf-8")
+    return log, path, slot, taught
+
+
+def test_d13_scores_counts_and_wiring(monkeypatch, tmp_path):
+    log, path, slot, taught = _d13_rig(monkeypatch, tmp_path, a2_rank=1)
+    out = phase40_noise.d13_scores("adapter.pt", path, "cpu", {})
+    plan = phase38_rank.scoring_plan(slots=(slot,))[slot]
+    refs = phase18_extraction.reference_set_for(slot)
+    entries = [e for e in phase35_prereg.a2_corpus_entries() if e["slot"] == slot]
+    assert log["loads"] == [("cpu", "adapter.pt")]
+    assert log["values"] == [(slot, [taught] + plan["minted"]), (slot, list(refs))]
+    minted = phase39_prereg.minted_members(slot)
+    assert log["questions"] == [q for e in entries for q in ((e, list(refs)), (e, list(minted)))]
+    n = len(plan["minted"]) + 1 + len(refs) + len(entries) * (len(refs) + len(minted))
+    assert n == phase40_prereg.D13_NLLS_PER_ADAPTER == out["n_nlls"]
+    anchor = [0.0] + [2.0 + i for i in range(len(plan["minted"]))]
+    expected = phase40_prereg.d13_block(
+        curve=phase38_rank.curve_for(taught, 0.0, plan["minted"], anchor[1:], plan["sizes"]),
+        gate_rank=1,
+        a2_rank=1,
+        committed_ranks=[1] * len(entries),
+        minted_ranks=[1] * len(entries),
+    )
+    assert expected["measured"] is True
+    assert out == {**expected, "n_nlls": n}
+
+
+def test_d13_scores_returns_the_gate_mismatch_block(monkeypatch, tmp_path):
+    # The committed A2 record's pet_name exposure rank is 2; the fake ranks the taught value 1.
+    log, path, slot, _taught = _d13_rig(monkeypatch, tmp_path, a2_rank=2)
+    out = phase40_noise.d13_scores("adapter.pt", path, "cpu", {})
+    assert out["measured"] is False and out["failure_kind"] == "gate_mismatch"
+    assert out["n_nlls"] == phase40_prereg.D13_NLLS_PER_ADAPTER
+    assert {k: v for k, v in out.items() if k != "n_nlls"} == phase40_prereg.d13_not_measured(
+        "gate_mismatch", out["reason"]
+    )
+
+
+def test_d13_scores_refuses_when_not_approved(monkeypatch, tmp_path):
+    log, path, _slot, _taught = _d13_rig(monkeypatch, tmp_path, a2_rank=1)
+    monkeypatch.setattr(phase40_prereg, "D13_INCLUDED", False)
+    with pytest.raises(SystemExit, match="D-13"):
+        phase40_noise.d13_scores("adapter.pt", path, "cpu", {})
+    assert log == {"loads": [], "values": [], "questions": []}
+
+
+# =================================================================================================
+# (7) The LaunchAgent.
+# =================================================================================================
+
+_PLIST = _ROOT / "artifacts" / "com.personacore.phase40.e2.plist"
+_R1B_PLIST = _ROOT / "artifacts" / "com.personacore.phase37.r1b.plist"
+
+
+def test_plist_mirrors_the_r1b_agent():
+    ours = plistlib.loads(_PLIST.read_bytes())
+    r1b = plistlib.loads(_R1B_PLIST.read_bytes())
+    assert ours["Label"] == "com.personacore.phase40.e2"
+    args = r1b["ProgramArguments"]
+    assert ours["ProgramArguments"] == [
+        "/usr/bin/caffeinate",
+        "-dims",
+        args[2],
+        args[3].replace("scripts/phase37_r1b.py", "scripts/phase40_noise.py"),
+        "run",
+    ]
+    assert args[2].endswith("/.venv/bin/python") and args[3].endswith("scripts/phase37_r1b.py")
+    assert ours["RunAtLoad"] is False and ours["KeepAlive"] is False
+    assert ours["StandardOutPath"] == r1b["StandardOutPath"].replace(
+        "logs/phase37_r1b.out", "logs/phase40_e2.out"
+    )
+    assert ours["StandardErrorPath"] == r1b["StandardErrorPath"].replace(
+        "logs/phase37_r1b.err", "logs/phase40_e2.err"
+    )
+    assert ours["StandardOutPath"].endswith("logs/phase40_e2.out")
+    assert ours["StandardErrorPath"].endswith("logs/phase40_e2.err")
+    assert ours["EnvironmentVariables"]["PERSONACORE_SWEEP_ACTIVE"] == "1"
+    assert ours["ProcessType"] == "Interactive"
+    changed = {"Label", "ProgramArguments", "StandardOutPath", "StandardErrorPath"}
+    assert set(ours) == set(r1b)
+    assert {k: v for k, v in ours.items() if k not in changed} == {
+        k: v for k, v in r1b.items() if k not in changed
+    }
