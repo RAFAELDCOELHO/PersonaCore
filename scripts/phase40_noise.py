@@ -826,10 +826,17 @@ def preflight(*, root=None, ledger_path=None, heartbeat_path=None, device=None, 
         )
     lines = phase36_ledger.read_ledger(ledger_path)
     still = set(phase36_ledger.open_runs(lines)) & {prereg.run_id(s) for s in prereg.SEEDS}
+    for seed in prereg.SEEDS:  # WR-01: a reconcile here would make the seed unrecoverable
+        _prove(
+            prereg.run_id(seed) not in still or not (root / prereg.seed_record(seed)).exists(),
+            f"{prereg.run_id(seed)} is open and {prereg.seed_record(seed)} exists: crash rule (i) "
+            "— append its end line by command (40-09 Task 4 step 2 (i)), NEVER reconcile (a lost "
+            "line makes this finished seed unrecoverable)",
+        )
     _prove(
         not still,
-        f"the ledger holds an open attempt for {', '.join(sorted(still))}: end it, or once the run "
-        "is dead phase36_ledger.py reconcile first",
+        f"the ledger holds an open attempt for {', '.join(sorted(still))} with no seed record: "
+        "once the run is dead, phase36_ledger.py reconcile first",
     )
     outcomes = prereg.seed_outcomes(lines, chosen)
     rerun = rerun_seeds(lines, outcomes, root=root)

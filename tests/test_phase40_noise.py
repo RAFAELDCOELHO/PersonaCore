@@ -2991,3 +2991,51 @@ def test_driver_binds_no_slot_name(tmp_path):
     assert _slot_census_failures([("scripts/phase40_noise.py", source)]) == []
     planted = _planted(tmp_path, source, source + "\n\nE2_S = 3\n", "slot.py")
     assert _slot_census_failures([("scripts/phase40_noise.py", planted)])
+
+
+# =================================================================================================
+# (13) Plan 09 Task 1: the review fixes (40-REVIEW-2 WR-01..WR-04, IN-01..IN-06).
+# =================================================================================================
+
+
+def test_wr01_crash_between_seed_record_and_end_line_names_rule_i_never_reconcile(
+    monkeypatch, tmp_path
+):
+    """WR-01 / IN-06: a kill after seed 2024's record and before its end line. preflight names
+    crash rule (i) (append the end line by command, NEVER reconcile); the rule-(i) recovery then
+    relaunches only the not_run seed and every seed is whole."""
+    seeds = (1337, 2024, 1338)
+    rig = _run_fakes(monkeypatch, _tmp_rig(monkeypatch, tmp_path, seeds=seeds))
+    append = phase36_ledger.append
+
+    def killed(event, **kw):
+        if event == "end" and kw["run_id"] == phase40_prereg.run_id(2024):
+            raise KeyboardInterrupt("planted kill between the seed record and the end line")
+        return append(event, **kw)
+
+    monkeypatch.setattr(phase36_ledger, "append", killed)
+    with pytest.raises(KeyboardInterrupt):
+        phase40_noise.run(**_run_kw(rig))
+    monkeypatch.setattr(phase36_ledger, "append", append)
+    _threads_stopped(rig)
+    rid = phase40_prereg.run_id(2024)
+    assert set(phase36_ledger.open_runs(phase36_ledger.read_ledger(rig.ledger))) == {rid}
+    assert (rig.root / phase40_prereg.seed_record(2024)).exists()
+    with pytest.raises(SystemExit, match=r"crash rule \(i\).*NEVER reconcile") as refused:
+        phase40_noise.preflight(**rig.kw)
+    assert "seed2024" in str(refused.value) and "seed1337" not in str(refused.value)
+    print(f"\nWR01 preflight refusal: {refused.value}")
+    # Rule (i): the end line by command, then the relaunch runs only the not_run seed.
+    phase36_ledger.append(
+        "end",
+        run_id=rid,
+        phase=40,
+        front="E2",
+        record=phase40_prereg.seed_record(2024),
+        ledger_path=rig.ledger,
+    )
+    rig.log.clear()
+    assert phase40_noise.run(**_run_kw(rig)) == [1338]
+    outcomes = phase40_prereg.seed_outcomes(phase36_ledger.read_ledger(rig.ledger), seeds)
+    assert outcomes == dict.fromkeys(seeds, "whole")
+    print(f"WR01 after rule (i) and the relaunch: {outcomes}")
