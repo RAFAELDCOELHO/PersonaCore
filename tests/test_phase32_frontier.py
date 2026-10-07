@@ -649,6 +649,9 @@ def test_v4_bytes_unchanged_since_the_v4_tag():
         # Dated continuation, 2026-09-29: the post-v5.0 k* extension adds results/erasure_kstar_*.
         # None existed at v4.0 (asserted below), so the exclusion cannot hide a v4.0 record.
         ":(exclude)results/erasure_kstar_*",
+        # Dated continuation, 2026-10-07: the v6.0 records of Phases 40-49 add results/phase4N_*.
+        # None existed at v4.0 (asserted below), so the exclusion cannot hide a v4.0 record.
+        ":(exclude)results/phase4[0-9]_*",
     ]
     assert subprocess.run(argv, cwd=_ROOT).returncode == 0
     at_v4 = subprocess.run(
@@ -659,6 +662,8 @@ def test_v4_bytes_unchanged_since_the_v4_tag():
         check=True,
     ).stdout.split()
     assert not [path for path in at_v4 if "erasure_kstar" in path], "a v4.0 record is excluded"
+    v6 = tuple(f"results/phase4{d}_" for d in range(10))
+    assert not [path for path in at_v4 if path.startswith(v6)], "a v4.0 record is excluded"
     # NATURAL RED: phase24_token_budget.json was re-emitted in Phase 30, so the check sees changes.
     red = ["git", "diff", "--quiet", "v4.0", "HEAD", "--", "results/phase24_token_budget.json"]
     assert subprocess.run(red, cwd=_ROOT).returncode == 1
