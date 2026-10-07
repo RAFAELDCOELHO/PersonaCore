@@ -649,3 +649,93 @@ Seed 1339: The CPU rehearsal ran seeds [1337, 2024] on this prereg before the MP
 
 - emit: device cpu, head at write `c14dfa4f7d36e9dc0048483fa2627700e567206f`, written 2026-10-07T16:02:18.494885+00:00
 - modules changed since launch: none
+
+## Dated continuation — 2026-10-07: post-hoc readings and the seed 2025 attempts
+
+The published floor (0.3481481481481482, group m2) is above the (b) margin of 0.2962962962962963 (8/27), which was not amended. The retrain itself, against the full adapter of the same seed, exceeds that margin in 3 of 5 seeds (2024, 1338, 1339) and stays below it in 1337 (7/27) and 2025 (6/27).
+
+Added after the report was rendered from the committed record; nothing above this section changed. The four post-hoc readings (a-d) are computed from the committed records only. The sections on the seed 2025 attempts and on the diagnostic reports cite the ledger, the kept files under data/phase40_dropped/ (not tracked) and the macOS diagnostic reports (outside the repository).
+
+### Post-hoc a: largest same-seed M2 - full difference over the seven non-target slots (d12)
+
+| seed | largest abs(m2 - full) | slot | above 8/27 |
+|---|---|---|---|
+| 1337 | 7/27 | house_number | False |
+| 2024 | 14/27 | hometown | True |
+| 1338 | 11/27 | hometown | True |
+| 2025 | 6/27 | birth_year | False |
+| 1339 | 12/27 | birth_year | True |
+
+### Post-hoc b: counts per slot and seed (n/27)
+
+| group | slot | 1337 | 2024 | 1338 | 2025 | 1339 |
+|---|---|---|---|---|---|---|
+| full | cat_name | 27 | 27 | 27 | 27 | 27 |
+| full | street | 27 | 27 | 27 | 27 | 27 |
+| full | sibling_name | 27 | 27 | 27 | 27 | 27 |
+| full | person_name | 26 | 27 | 26 | 26 | 26 |
+| full | house_number | 24 | 23 | 22 | 20 | 22 |
+| full | birth_year | 18 | 16 | 23 | 19 | 24 |
+| full | hometown | 21 | 22 | 14 | 11 | 8 |
+| full | pet_name | 27 | 26 | 27 | 25 | 27 |
+| m2 | cat_name | 27 | 27 | 27 | 27 | 27 |
+| m2 | street | 27 | 27 | 27 | 27 | 27 |
+| m2 | sibling_name | 27 | 27 | 27 | 27 | 27 |
+| m2 | person_name | 26 | 26 | 25 | 26 | 25 |
+| m2 | house_number | 17 | 23 | 24 | 21 | 23 |
+| m2 | birth_year | 18 | 18 | 20 | 25 | 12 |
+| m2 | hometown | 18 | 8 | 25 | 16 | 14 |
+| m2 | pet_name | 0 | 0 | 0 | 0 | 0 |
+
+The variation concentrates in hometown, birth_year and house_number; person_name moves by 1/27 within each group, pet_name (the target) in the full group by 2/27, and cat_name, street and sibling_name do not move.
+
+### Post-hoc c: the five-seed gap floor beside the two-seed value
+
+gap_noise_floor 0.08406970366097503 (max 0.18498404632362409, 5 seeds, 10 pairs) beside the v3.0/v4.0 value 0.005214448168350039: ratio 16.12. That value was a single pair (1337-2024); among the ten five-seed pairs it is the second smallest (the smallest is 2025-1339, 0.003070641864658441).
+
+### Post-hoc d: D-13 on the five M2 seeds beside the committed k78 readings (pet_name)
+
+| reading | anchor rank at 512 | R_q n1, committed list | R_q n1, minted list |
+|---|---|---|---|
+| Phase 40 M2 seed 1337 | 32 | 0/27 | 11/27 |
+| Phase 40 M2 seed 2024 | 41 | 0/27 | 10/27 |
+| Phase 40 M2 seed 1338 | 41 | 0/27 | 9/27 |
+| Phase 40 M2 seed 2025 | 23 | 1/27 | 11/27 |
+| Phase 40 M2 seed 1339 | 15 | 1/27 | 12/27 |
+| k78, E5 (results/phase38_rank.json) | 16 | — | — |
+| k78, E6 (results/phase39_ctx.json) | — | 5/27 | 25/27 |
+| M2, E6 (results/phase39_ctx.json) | — | 0/27 | 11/27 |
+
+Both directions, with equal weight. At the 512 anchor, k78's 16 lies inside the seeds' range 15-41. On R_q, k78 lies outside the seeds' range on both lists: 5/27 against 0-1/27 on the committed list and 25/27 against 9-12/27 on the minted list. Limits: k78 is one ablated adapter (seed 1337), one arm, |R| = 8, and no criterion is attached. E6's M2 row equals D-13's seed 1337 row on both lists (0/27 and 11/27). The 512-anchor ranks come from each seed record's d13.anchor_curve, which the report's D-13 table does not show. Sources: E5 readings.k78.pet_name.curve.512.rank; E6 readings.<arm>.pet_name.rank.n1 and readings.<arm>.pet_name.rank.minted.n1.
+
+### Seed 2025: three attempts (ledger/v6_mps_ledger.jsonl)
+
+| attempt | ledger lines | seconds | hours |
+|---|---|---|---|
+| 1 | start 02:55:09Z / lost 12:00:44Z | 14276.36896 | 3.9657 |
+| 2 | start 13:54:22Z / lost 13:57:38Z | 120.011158 | 0.0333 |
+| 3 | start 14:06:17Z / end 15:38:36Z | 5538.186597 | 1.5384 |
+
+Hours lost to the two dropped attempts: 14396.380118 s = 3.999 h.
+
+- Attempt 1 was lost when the WindowServer watchdog ended the GUI session at 03:53 local under memory pressure (the link is the likely reading, not a measured one); see `dropped_attempts` in results/phase40_seed2025.json.
+- Attempt 2 was lost to an operator error: a waiter matched the previous launch's `RUN DONE` in the appended log, and the `launchctl bootout` that followed ended the live driver; see the same `dropped_attempts`.
+
+### Attempt 1 vs attempt 2 adapters (outside the driver, read-only)
+
+phase40_noise.adapter_identity on the kept files, run by hand after the third attempt: full and m2 each tensors_identical True, 72/72 tensors equal, max abs diff 0.0. The four files:
+
+- `data/phase40_dropped/v6_40_E2_seed2025_2026-10-07T120044.878240+0000/checkpoints/phase40_e2_full_seed2025_adapter.pt` sha256 `70463d72d04130e86a70de2c7e51f1d726cc4afb052dc59f1d5f616d04a44551`
+- `data/phase40_dropped/v6_40_E2_seed2025_2026-10-07T120044.878240+0000/checkpoints/phase40_e2_m2_seed2025_adapter.pt` sha256 `0a1028cef875f10ab4b6eab950b53cabcfbdab22eba91a8d8e01bd9dfdbfd90d`
+- `data/phase40_dropped/v6_40_E2_seed2025_2026-10-07T135738.625037+0000/checkpoints/phase40_e2_full_seed2025_adapter.pt` sha256 `70463d72d04130e86a70de2c7e51f1d726cc4afb052dc59f1d5f616d04a44551`
+- `data/phase40_dropped/v6_40_E2_seed2025_2026-10-07T135738.625037+0000/checkpoints/phase40_e2_m2_seed2025_adapter.pt` sha256 `0a1028cef875f10ab4b6eab950b53cabcfbdab22eba91a8d8e01bd9dfdbfd90d`
+
+It also follows from the two comparisons emit recorded (the whole attempt against each dropped one, identical in both groups).
+
+### Diagnostic reports during the E2 relaunches
+
+Two reports fell in the third 2025 attempt's window, both `Event: disk writes` with `Action taken: none`, neither a memory event: `disk writes_2026-10-07-112351_MacBook-Pro-de-Julio-5.diag` (com.apple.SystemStats.Daily.IO) and `Python_2026-10-07-120555_MacBook-Pro-de-Julio-5.diag` (the E2 driver). One more fell in the seed 1339 relaunch window, `Notion_2026-10-07-101102_MacBook-Pro-de-Julio-5.diag`, also `Event: disk writes` with `Action taken: none`. No JetsamEvent fell in any relaunch window.
+
+### Status of these readings
+
+These readings are post hoc, not pre-registered. No threshold and no verdict changes. How condition (b) is read against 0.348 is left to the Phase 41 pre-registration.
