@@ -1382,8 +1382,18 @@ def _whole(path, *units):
 
 
 def _launch(rig, monkeypatch, **extra):
-    """Every refusal row goes through preflight, which writes nothing."""
-    return phase41_erasure.preflight(**{**rig.kw, **extra})
+    """Every refusal row goes through run(): preflight refuses before the first start line; a
+    smoke, gap or training call would mean it did not."""
+    calls = []
+    for name in ("ordering_smoke", "measure_control_gap", "train_calibration_adapter"):
+        monkeypatch.setattr(phase41_erasure, name, lambda *a, _n=name, **k: calls.append(_n))
+    kw = {**rig.kw, **extra}
+    if rig.identity is not None:
+        kw["rehearsal_identity"] = rig.identity
+    try:
+        return phase41_erasure.run(**kw)
+    finally:
+        assert calls == []
 
 
 def test_run_inputs_are_module_constants(monkeypatch):
@@ -1842,3 +1852,588 @@ def test_rehearsal_identity_and_disclosure(monkeypatch, tmp_path):
     ]
     assert moved["changed"] == {d.DRIVER_FILE: True, d.PREREG_FILE: False}
     assert moved["driver_changed"] is True and "1 commit" in moved["statement"]
+
+
+# =================================================================================================
+# (7) Plan 41-08: run stage 1 — the D-02 / D-05 smoke, one ledger attempt per prep unit, the band
+# and calibration records (pin, trainer and orderings faked; the driver's own code runs).
+# =================================================================================================
+
+_CAL_ERASED = _ROOT / "results" / "phase19_arm_cal-erased.json"
+_SMOKE_SECONDS = 7.0
+
+
+def _checked(real, fake):
+    """``fake`` behind the real function's signature: a call the real one would refuse fails."""
+    import inspect
+
+    signature = inspect.signature(real)
+
+    def wrapper(*args, **kwargs):
+        signature.bind(*args, **kwargs)
+        return fake(*args, **kwargs)
+
+    return wrapper
+
+
+def _smoke_fakes(monkeypatch, log, *, seconds=_SMOKE_SECONDS, stop=False):
+    import phase14_recall
+
+    def load(device, adapter_path=None):
+        log.append(("load", pathlib.Path(adapter_path).name))
+        return "model", "cfg", "tok", "forbid", "artifact"
+
+    def ordering(model, tok, device, artifact, *, slot, value, variant, calibration, unit, root):
+        log.append(("smoke", unit, slot, value, variant, calibration))
+        if stop:
+            phase41_erasure.stop_for_rafael(unit, "d02_inequality", {"planted": True}, root=root)
+        points = phase41_prereg.rerank_points(variant, calibration=calibration)
+        return {
+            "ordered": (),
+            "rankings": [
+                {
+                    "at": p,
+                    "scores": [],
+                    "d02": phase41_prereg.d02_check(1.5, 1.5),
+                    "forward_seconds": 0.25,
+                    "forward_backward_seconds": 1.0,
+                }
+                for p in points
+            ],
+            "rerank_at": points,
+            "seconds": seconds,
+            "variant": variant,
+        }
+
+    monkeypatch.setattr(
+        phase14_recall, "load_adapted_model", _checked(phase14_recall.load_adapted_model, load)
+    )
+    monkeypatch.setattr(
+        phase41_erasure,
+        "model_gradient_ordering",
+        _checked(phase41_erasure.model_gradient_ordering, ordering),
+    )
+
+
+def _run_fakes(monkeypatch, rig, *, gap_stop=False):
+    """The driver's run / run_prep_unit / ordering_smoke / train_calibration_adapter / cal_erase
+    run for real; the model load, the gradient ordering, the gap reading, teach_persona's trainer,
+    D-11, both calibration orderings and the pin's arm are faked behind their real signatures.
+    Every step, ledger call and write-once record is logged in order."""
+    import shutil
+
+    import phase19_erasure
+    import phase25_run
+    import phase36_ledger
+    import teach_persona
+
+    d = phase41_erasure
+    log = rig.log = []
+    rig.threads, rig.trained, rig.preflights = [], [], []
+    index = tuple(phase19_erasure.component_index())
+    _smoke_fakes(monkeypatch, log)
+    monkeypatch.setattr(teach_persona, "train_arm", _fake_trainer(rig.trained))
+
+    def gap(seed, device):
+        log.append(("gap", seed, device))
+        committed = _noise_floor()["per_seed"][str(seed)]["full"]["dialogue_gap"]["gap"]
+        out = {
+            "dialogue_ppl": {"adapter_on": 5.0, "adapter_off": 4.0, "n_targets": 7},
+            **phase41_prereg.control_gap_check(committed, committed, device=device),
+        }
+        return {**out, "equal": False, "stop": True} if gap_stop else out
+
+    def identity(new_adapter):
+        log.append(("d11", pathlib.Path(new_adapter).name))
+        return {"tensors_identical": False, "planted": "d11"}
+
+    def greedy(model, tok, device, forbid, artifact, fact):
+        log.append(("calibration", "greedy", fact.id))
+        return {
+            "ordered": index,
+            "k": 7,
+            "stopped": True,
+            "applied": index[:7],
+            "curve": [{"k": 1, "rank": 1}],
+        }
+
+    def gradient(model, tok, device, artifact, fact, *, variant, unit, root):
+        log.append(("calibration", "gradient", fact.id, variant))
+        ordered = index[::-1]
+        ranking = {
+            "at": 0,
+            "scores": [[list(a), -float(i)] for i, a in enumerate(ordered)],
+            "d02": phase41_prereg.d02_check(2.0, 2.0),
+            "forward_seconds": 0.25,
+            "forward_backward_seconds": 1.0,
+        }
+        return {
+            "ordering": {
+                "ordered": ordered,
+                "rankings": [ranking],
+                "rerank_at": (0,),
+                "seconds": 3.0,
+                "variant": variant,
+            },
+            "k": 9,
+            "stopped": True,
+            "applied": ordered[:9],
+        }
+
+    def arm(name, device, **kw):
+        log.append(("cal_erase", name, pathlib.Path(kw["record_path"]).name))
+        shutil.copyfile(_CAL_ERASED, kw["record_path"])
+
+    for name, fake in (
+        ("measure_control_gap", gap),
+        ("calibration_identity", identity),
+        ("greedy_calibration", greedy),
+        ("gradient_calibration", gradient),
+    ):
+        monkeypatch.setattr(d, name, _checked(getattr(d, name), fake))
+    monkeypatch.setattr(
+        phase19_erasure, "run_erasure_arm", _checked(phase19_erasure.run_erasure_arm, arm)
+    )
+    train, preflight, write = d.train_calibration_adapter, d.preflight, d._write_once
+
+    def logged_train(seed, **kw):
+        log.append(("train", seed))
+        return train(seed, **kw)
+
+    def logged_preflight(**kw):
+        rig.preflights.append(kw)
+        return preflight(**kw)
+
+    def logged_write(path, blob):
+        log.append(("record", pathlib.Path(path).name))
+        return write(path, blob)
+
+    monkeypatch.setattr(d, "train_calibration_adapter", _checked(train, logged_train))
+    monkeypatch.setattr(d, "preflight", logged_preflight)
+    monkeypatch.setattr(d, "_write_once", logged_write)
+    require, append = phase36_ledger.require_launch, phase36_ledger.append
+    rig.launches = 0
+
+    def logged_require(front, **kw):
+        rig.launches += 1
+        if rig.launches > 1:  # preflight's own call is not logged
+            log.append(("require_launch",))
+        return require(front, **kw)
+
+    def logged_append(event, **kw):
+        log.append((event, kw["run_id"]))
+        return append(event, **kw)
+
+    monkeypatch.setattr(phase36_ledger, "require_launch", logged_require)
+    monkeypatch.setattr(phase36_ledger, "append", logged_append)
+    start = phase25_run.start_heartbeat
+
+    def logged_start(path, state):
+        pair = start(path, state)
+        rig.threads.append(pair)
+        return pair
+
+    monkeypatch.setattr(phase25_run, "start_heartbeat", logged_start)
+    return rig
+
+
+def _run(rig, **extra):
+    kw = {**rig.kw, **extra}
+    if rig.identity is not None:
+        kw["rehearsal_identity"] = rig.identity
+    return phase41_erasure.run(**kw)
+
+
+def _expected_stage1(rig, units, *, device="cpu", smoke=True):
+    import phase19_erasure
+
+    fact = phase19_erasure.select_calibration_fact()
+    full = pathlib.Path(rig.adapters[str(phase41_prereg.SEEDS[0])]["full"]["path"]).name
+    target = phase41_prereg.TARGETS[0]
+    rehearsal = rig.identity is not None
+    expected = []
+    for unit in units:
+        _, o, s = phase41_prereg.unit_key(unit)
+        rid = phase41_prereg.run_id(unit)
+        adapter = phase41_erasure.arm_paths(s, rehearsal=rehearsal)["adapter"].name
+        expected += [("require_launch",), ("start", rid)]
+        if smoke and unit == phase41_prereg.PREP_UNITS[0]:
+            value = phase41_erasure.target_fact(target).value
+            expected += [
+                ("load", full),
+                ("smoke", unit, target, value, "adaptive", False),
+                ("record", "variant.json"),
+            ]
+        expected += [
+            ("gap", s, device),
+            ("record", pathlib.Path(phase41_prereg.band_record(s, o)).name),
+        ]
+        if unit == next(u for u in phase41_prereg.PREP_UNITS if u.endswith(f"seed{s}")):
+            expected.append(("train", s))
+        expected += [("d11", adapter), ("load", adapter)]
+        if o == "greedy":
+            expected.append(("calibration", o, fact.id))
+        else:
+            expected.append(("calibration", o, fact.id, "adaptive"))
+        expected += [
+            ("cal_erase", "cal-erased", f"cal_erased_{o}_seed{s}.json"),
+            ("record", pathlib.Path(phase41_prereg.calibration_record(o, s)).name),
+            ("end", rid),
+        ]
+    return expected
+
+
+def _threads_stopped(rig):
+    assert rig.threads and all(s.is_set() and not t.is_alive() for s, t in rig.threads)
+
+
+def _json(path):
+    return json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
+
+
+_PRICE = phase41_prereg.ENTRIES["e1_unit_prices"]["value"]["e1_ordering_seconds"]
+
+
+@pytest.mark.parametrize(
+    ("cpu", "mps", "variant", "decided_by"),
+    [
+        (10.0, 20.0, "adaptive", "mps_smoke"),
+        (2 * _PRICE, 20.0, "static", "cpu_rehearsal"),
+        (10.0, 2 * _PRICE, "static", "mps_smoke"),
+    ],
+)
+def test_ordering_smoke_fixes_the_variant(monkeypatch, tmp_path, cpu, mps, variant, decided_by):
+    rig = _e1_rig(monkeypatch, tmp_path, real=True)
+    log = []
+    _smoke_fakes(monkeypatch, log, seconds=mps)
+    unit = phase41_prereg.PREP_UNITS[0]
+    kw = {"root": rig.root, "device": "mps", "cpu_seconds": cpu, "unit": unit}
+    with pytest.raises(SystemExit, match="real root"):
+        phase41_erasure.ordering_smoke(**kw, identity_path=tmp_path / "identity.json")
+    blob = phase41_erasure.ordering_smoke(**kw, identity_path=None)
+    points = phase41_prereg.rerank_points("adaptive", calibration=False)
+    expected = {
+        "variant": phase41_prereg.alternative_variant(cpu, mps),
+        "variant_decided_by": decided_by,
+        "cpu_seconds": cpu,
+        "mps_seconds": mps,
+        "d02": [phase41_prereg.d02_check(1.5, 1.5)] * len(points),
+        "timings": [
+            {"at": p, "forward_seconds": 0.25, "forward_backward_seconds": 1.0, "ratio": 4.0}
+            for p in points
+        ],
+        "rehearsal": False,
+        "ordering_bound": _PRICE,
+    }
+    assert expected["variant"] == variant
+    path = rig.root / "data" / phase41_erasure.WORK_DIR / "variant.json"
+    assert _json(path) == expected == blob
+    assert log == [
+        ("load", pathlib.Path(rig.adapters["1337"]["full"]["path"]).name),
+        (
+            "smoke",
+            unit,
+            phase41_prereg.TARGETS[0],
+            phase41_erasure.target_fact(phase41_prereg.TARGETS[0]).value,
+            "adaptive",
+            False,
+        ),
+    ]
+    with pytest.raises(SystemExit, match="write-once"):
+        phase41_erasure.ordering_smoke(**kw, identity_path=None)
+    assert phase41_erasure._variant(rig.root) == variant
+
+
+def test_ordering_smoke_on_a_rehearsal_root(monkeypatch, tmp_path):
+    rig = _e1_rig(monkeypatch, tmp_path)
+    log = []
+    _smoke_fakes(monkeypatch, log, seconds=_PRICE / 2)
+    unit = phase41_prereg.PREP_UNITS[0]
+    kw = {"root": rig.root, "device": "cpu", "cpu_seconds": None, "unit": unit}
+    with pytest.raises(SystemExit, match="identity"):
+        phase41_erasure.ordering_smoke(**kw, identity_path=None)
+    assert log == []
+    phase41_erasure.record_rehearsal(rig.identity, units=phase41_prereg.PREP_UNITS)
+    blob = phase41_erasure.ordering_smoke(**kw, identity_path=rig.identity)
+    assert blob["rehearsal"] is True and blob["variant_decided_by"] == "cpu_rehearsal"
+    assert blob["cpu_seconds"] == blob["mps_seconds"] == _PRICE / 2
+    assert blob["variant"] == "adaptive"
+    identity = _json(rig.identity)
+    assert identity["cpu_ordering_seconds"] == _PRICE / 2
+    assert identity["cpu_timings"] == blob["timings"]
+    assert phase41_erasure.rehearsal_identity_path() != rig.identity  # never the default path
+    assert not phase41_erasure.rehearsal_identity_path().exists() or (
+        phase41_erasure.rehearsal_identity_path().resolve() != rig.identity.resolve()
+    )
+
+
+def test_ordering_smoke_d02_stop_writes_no_variant(monkeypatch, tmp_path):
+    rig = _e1_rig(monkeypatch, tmp_path, real=True)
+    _smoke_fakes(monkeypatch, [], stop=True)
+    unit = phase41_prereg.PREP_UNITS[0]
+    with pytest.raises(SystemExit, match=f"STOP FOR RAFAEL d02_inequality {unit}"):
+        phase41_erasure.ordering_smoke(
+            root=rig.root, device="mps", cpu_seconds=1.0, unit=unit, identity_path=None
+        )
+    assert not (rig.root / "data" / phase41_erasure.WORK_DIR / "variant.json").exists()
+    (stop,) = (rig.root / "data" / phase41_erasure.WORK_DIR / "stops").iterdir()
+    assert _json(stop)["kind"] == "d02_inequality"
+    with pytest.raises(SystemExit, match="variant.json is missing"):
+        phase41_erasure._variant(rig.root)
+
+
+def test_run_stage1_order_and_records(monkeypatch, tmp_path, capsys):
+    import phase36_ledger
+
+    rig = _run_fakes(monkeypatch, _e1_rig(monkeypatch, tmp_path))
+    prep = phase41_prereg.PREP_UNITS
+    assert _run(rig) == {"stage": 1, "whole": list(prep)}
+    assert rig.log == _expected_stage1(rig, prep)
+    _threads_stopped(rig)
+    lines = phase36_ledger.read_ledger(rig.ledger)
+    assert [(x["event"], x["run_id"], x["record"]) for x in lines] == [
+        (event, phase41_prereg.run_id(unit), record)
+        for unit in prep
+        for event, record in (("start", None), ("end", phase41_prereg.unit_record(unit)))
+    ]
+    assert phase41_prereg.unit_outcomes(lines, prep) == dict.fromkeys(prep, "whole")
+    beats = {json.loads(t)["point"] for t in _lines(rig.heartbeat)}
+    assert {phase41_prereg.run_id(u) for u in prep} <= beats
+    identity = _json(rig.identity)
+    assert identity["units"] == list(prep) and identity["git_sha"] == "h1"
+    assert identity["cpu_ordering_seconds"] == _SMOKE_SECONDS
+    out = capsys.readouterr().out.splitlines()
+    assert "STAGE 1 DONE" in out and f"RUN DONE whole={list(prep)}" in out
+    # The trainer ran once per seed, never for a seed's second prep unit.
+    assert [c["seed"] for c in rig.trained] == list(phase41_prereg.SEEDS)
+
+
+def test_band_record_contract(monkeypatch, tmp_path):
+    rig = _run_fakes(monkeypatch, _e1_rig(monkeypatch, tmp_path))
+    _run(rig)
+    for unit in phase41_prereg.PREP_UNITS:
+        _, o, s = phase41_prereg.unit_key(unit)
+        band = _json(rig.root / phase41_prereg.band_record(s, o))
+        committed = _noise_floor()["per_seed"][str(s)]["full"]["dialogue_gap"]["gap"]
+        assert (band["seed"], band["ordering"], band["unit"]) == (s, o, unit)
+        assert band["control_gap"] == band["committed_gap"] == committed
+        assert band["equal"] is True and band["device"] == "cpu" and band["rehearsal"] is True
+        assert band["dialogue_ppl"] == {"adapter_on": 5.0, "adapter_off": 4.0, "n_targets": 7}
+        assert band["rehearsal_disclosure"] == {"this_is_the_rehearsal": True}
+        assert set(band["provenance"]) == {"measurement"}
+        assert set(band["provenance"]["measurement"]) == {"utc", "device", "git_sha"}
+        assert band["provenance"]["measurement"]["git_sha"] == "h1"
+        assert s in phase41_prereg.SEEDS and isinstance(o, str)
+
+
+def test_calibration_record_contract(monkeypatch, tmp_path):
+    import phase19_erasure
+    import torch
+
+    rig = _run_fakes(monkeypatch, _e1_rig(monkeypatch, tmp_path))
+    _run(rig)
+    index = [list(a) for a in phase19_erasure.component_index()]
+    fact = phase19_erasure.select_calibration_fact()
+    draws = _json(_CAL_ERASED)["draws"]
+    first = {}
+    for unit in phase41_prereg.PREP_UNITS:
+        _, o, s = phase41_prereg.unit_key(unit)
+        record = _json(rig.root / phase41_prereg.calibration_record(o, s))
+        assert "target" not in record
+        assert (record["ordering"], record["seed"], record["unit"]) == (o, s, unit)
+        assert (record["family"], record["corpus"]) == ("A2", phase41_prereg.CALIBRATION_CORPUS)
+        assert record["fact_id"] == fact.id and record["draws"] == draws
+        applied = record["applied_ordering"]
+        assert len(applied) == len(index) and sorted(applied) == sorted(index)
+        if o == "greedy":
+            assert applied == index and record["d06_order"] == index
+            assert (record["k"], record["stopped"]) == (7, True)
+            assert record["variant"] is None and record["variant_decided_by"] is None
+        else:
+            assert applied == index[::-1] and record["d06_order"] == index[::-1]
+            assert (record["k"], record["stopped"]) == (9, True)
+            assert record["variant"] == "adaptive"
+            assert record["variant_decided_by"] == "cpu_rehearsal"
+            assert record["ordering_detail"]["rankings"][0]["at"] == 0
+        assert isinstance(record["ordering_seconds"], float) and record["ordering_seconds"] >= 0
+        adapter = phase41_erasure.arm_paths(s, rehearsal=True)["adapter"]
+        assert record["adapter"] == {
+            "path": adapter.relative_to(rig.root).as_posix(),
+            "sha256": phase41_erasure._sha256(adapter),
+        }
+        first.setdefault(s, record["adapter"])
+        assert record["adapter"] == first[s]
+        assert record["d11_identity"] == {"tensors_identical": False, "planted": "d11"}
+        raw = rig.root / "data" / phase41_erasure.WORK_DIR / f"cal_erased_{o}_seed{s}.json"
+        assert record["cal_erased_record"] == {
+            "path": raw.relative_to(rig.root).as_posix(),
+            "sha256": phase41_erasure._sha256(raw),
+        }
+        run = record["provenance"]["run"]
+        assert set(run) == set(phase41_erasure.RUN_PROVENANCE_KEYS)
+        assert run["device"] == "cpu" and run["torch_version"] == torch.__version__
+        assert run["git_sha_at_launch"] == run["git_sha_at_end"] == "h1"
+        assert run["head_moved_during_run"] is False
+        assert run["started_utc"] <= run["finished_utc"]
+        assert record["provenance"]["module_sha256_at_launch"] == phase41_erasure.module_sha256()
+        assert record["rehearsal"] is True
+        assert record["rehearsal_disclosure"] == {"this_is_the_rehearsal": True}
+        with pytest.raises(SystemExit, match="write-once"):
+            phase41_erasure._write_once(rig.root / phase41_prereg.calibration_record(o, s), {})
+
+
+def test_stage1_records_fill_the_floors_and_bands(monkeypatch, tmp_path):
+    import shutil
+
+    import phase35_prereg
+
+    rig = _run_fakes(monkeypatch, _e1_rig(monkeypatch, tmp_path))
+    _run(rig)
+    for rel in (phase41_prereg.CALIBRATION_CORPUS, phase41_prereg.NOISE_FLOOR_RECORD):
+        (rig.root / rel).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(_ROOT / rel, rig.root / rel)
+    monkeypatch.setattr(phase35_prereg, "_REPO_ROOT", rig.root)
+    floors = phase35_prereg.fill("e1_condition_a_floors", **phase41_prereg.floors_fill_inputs())
+    assert set(floors) == set(phase41_prereg.floors_fill_inputs()["floors"])
+    for row in floors.values():
+        assert row["calibration_questions"] > 0
+    bands = phase35_prereg.fill("e1_condition_c_band_inputs", **phase41_prereg.band_fill_inputs())
+    assert set(bands) == set(phase41_prereg.band_fill_inputs()["band_inputs"])
+
+
+def test_control_gap_mismatch_stops(monkeypatch, tmp_path):
+    import phase36_ledger
+
+    rig = _run_fakes(monkeypatch, _e1_rig(monkeypatch, tmp_path), gap_stop=True)
+    prep = phase41_prereg.PREP_UNITS
+    with pytest.raises(SystemExit, match=f"STOP FOR RAFAEL control_gap_mismatch {prep[0]}"):
+        _run(rig)
+    _threads_stopped(rig)
+    _, o, s = phase41_prereg.unit_key(prep[0])
+    assert not (rig.root / phase41_prereg.band_record(s, o)).exists()
+    assert ("train", s) not in rig.log
+    (stop,) = (rig.root / "data" / phase41_erasure.WORK_DIR / "stops").iterdir()
+    assert _json(stop)["kind"] == "control_gap_mismatch"
+    assert _json(stop)["evidence"]["stop"] is True
+    assert (rig.root / "data" / phase41_erasure.WORK_DIR / "variant.json").exists()
+    rid = phase41_prereg.run_id(prep[0])
+    lines = phase36_ledger.read_ledger(rig.ledger)
+    assert [(x["event"], x["run_id"]) for x in lines] == [("start", rid)]
+    (lost,) = phase36_ledger.reconcile(ledger_path=rig.ledger, heartbeat_path=rig.heartbeat)
+    assert (lost["event"], lost["run_id"]) == ("lost", rid)
+    lines = phase36_ledger.read_ledger(rig.ledger)
+    assert phase41_prereg.unit_outcomes(lines, prep)[prep[0]] == "dropped"
+    # The relaunch: the seed's second prep unit is refused, the other seed runs; no second smoke.
+    rig = _run_fakes(monkeypatch, rig)
+    with pytest.raises(SystemExit, match="first prep unit"):
+        _run(rig)
+    assert _run(rig, units=prep[2:]) == {"stage": 1, "whole": list(prep[2:])}
+    assert rig.log == _expected_stage1(rig, prep[2:], smoke=False)
+
+
+def test_second_prep_unit_reuses_the_seed_adapter(monkeypatch, tmp_path):
+    prep = phase41_prereg.PREP_UNITS
+    rig = _run_fakes(monkeypatch, _e1_rig(monkeypatch, tmp_path))
+    assert _run(rig, units=prep[:1])["whole"] == list(prep[:1])
+    rig.log.clear()
+    assert _run(rig, units=prep[1:2])["whole"] == list(prep[1:2])
+    assert not [e for e in rig.log if e[0] == "train"]
+    first, second = (_json(rig.root / phase41_prereg.unit_record(u))["adapter"] for u in prep[:2])
+    assert first == second
+    # A changed adapter between the two prep units of a seed refuses.
+    other = _run_fakes(monkeypatch, _e1_rig(monkeypatch, tmp_path / "other"))
+    _run(other, units=prep[:1])
+    adapter = phase41_erasure.arm_paths(1337, rehearsal=True)["adapter"]
+    adapter.write_bytes(adapter.read_bytes() + b"x")
+    with pytest.raises(SystemExit, match="sha256"):
+        _run(other, units=prep[1:2])
+    assert not (other.root / phase41_prereg.unit_record(prep[1])).exists()
+
+
+def test_run_with_no_arguments_resolves_the_real_defaults(monkeypatch, tmp_path, capsys):
+    import inspect
+
+    import phase36_ledger
+
+    assert all(
+        p.default is None for p in inspect.signature(phase41_erasure.run).parameters.values()
+    )
+    rig = _run_fakes(monkeypatch, _e1_rig(monkeypatch, tmp_path, real=True))
+    prep = phase41_prereg.PREP_UNITS
+    assert phase41_erasure.run() == {"stage": 1, "whole": list(prep)}
+    (call,) = rig.preflights
+    assert call == {
+        "root": phase41_erasure._ROOT,
+        "ledger_path": None,
+        "heartbeat_path": None,
+        "device": None,
+        "units": None,
+    }
+    assert call["root"] == rig.root
+    assert rig.log == _expected_stage1(rig, prep, device="mps")
+    lines = phase36_ledger.read_ledger(None)
+    assert rig.ledger.exists()
+    assert [(x["event"], x["run_id"]) for x in lines] == [
+        (event, phase41_prereg.run_id(u)) for u in prep for event in ("start", "end")
+    ]
+    beats = {json.loads(t)["point"] for t in _lines(rig.heartbeat)}
+    assert {phase41_prereg.run_id(u) for u in prep} <= beats
+    variant = _json(rig.root / "data" / phase41_erasure.WORK_DIR / "variant.json")
+    assert (variant["cpu_seconds"], variant["mps_seconds"]) == (100.0, _SMOKE_SECONDS)
+    assert variant["rehearsal"] is False and variant["variant_decided_by"] == "mps_smoke"
+    for unit in prep:
+        _, o, s = phase41_prereg.unit_key(unit)
+        for rel in (phase41_prereg.unit_record(unit), phase41_prereg.band_record(s, o)):
+            record = _json(rig.root / rel)
+            assert record["rehearsal"] is False
+            assert record["rehearsal_disclosure"]["commits"] == []
+        record = _json(rig.root / phase41_prereg.unit_record(unit))
+        assert record["provenance"]["run"]["device"] == "mps"
+        assert record["adapter"]["path"].startswith("checkpoints/phase41_e1_calibration_seed")
+    assert "STAGE 1 DONE" in capsys.readouterr().out.splitlines()
+
+
+def test_run_stage_gates(monkeypatch, tmp_path, capsys):
+    prep = phase41_prereg.PREP_UNITS
+    real = _e1_rig(monkeypatch, tmp_path / "real", real=True)
+    _whole(None, *prep)
+    before = _lines(real.ledger)
+    assert phase41_erasure.run() == {"stage": "STAGE 1 DONE", "whole": []}
+    assert "STAGE 1 DONE" in capsys.readouterr().out.splitlines()
+    assert _lines(real.ledger) == before and not real.heartbeat.exists()
+    rehearsal = _e1_rig(monkeypatch, tmp_path / "rehearsal")
+    _whole(rehearsal.ledger, *prep)
+    before = _lines(rehearsal.ledger)
+    with pytest.raises(SystemExit, match="41-09"):
+        _launch(rehearsal, monkeypatch)
+    assert _lines(rehearsal.ledger) == before and not rehearsal.heartbeat.exists()
+    # The rehearsal identity rule is checked before the first start line.
+    fresh = _e1_rig(monkeypatch, tmp_path / "fresh")
+    with pytest.raises(SystemExit, match="rehearsal_identity"):
+        phase41_erasure.run(**fresh.kw)
+    assert not fresh.ledger.exists()
+
+
+def test_crash_between_the_record_and_the_end_line_is_never_reconciled(monkeypatch, tmp_path):
+    import phase36_ledger
+
+    rig = _run_fakes(monkeypatch, _e1_rig(monkeypatch, tmp_path))
+    prep = phase41_prereg.PREP_UNITS
+    append = phase36_ledger.append
+
+    def crash_at_end(event, **kw):
+        if event == "end":
+            raise RuntimeError("planted crash before the end line")
+        return append(event, **kw)
+
+    monkeypatch.setattr(phase36_ledger, "append", crash_at_end)
+    with pytest.raises(RuntimeError, match="planted crash"):
+        _run(rig, units=prep[:1])
+    _threads_stopped(rig)
+    assert (rig.root / phase41_prereg.unit_record(prep[0])).exists()
+    lines = phase36_ledger.read_ledger(rig.ledger)
+    assert [x["event"] for x in lines] == ["start"]
+    monkeypatch.setattr(phase36_ledger, "append", append)
+    with pytest.raises(SystemExit, match="NEVER reconcile"):
+        phase41_erasure.preflight(**rig.kw)
+    assert phase36_ledger.read_ledger(rig.ledger) == lines

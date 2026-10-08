@@ -1265,3 +1265,326 @@ def preflight(*, root=None, ledger_path=None, heartbeat_path=None, device=None, 
         "variant": variant,
         "rehearsal_disclosure": disclosure,
     }
+
+
+# =================================================================================================
+# The D-02 / D-05 launch-gate smoke: the alternative ordering's variant, fixed before any gradient
+# calibration (ENTRIES["alternative_variant"], ["d02_equality"]).
+# =================================================================================================
+
+
+def _variant_record(root):
+    path = _variant_path(root)
+    _prove(
+        path.exists(),
+        f"{path} is missing: the D-05 smoke fixes the variant before any gradient calibration",
+    )
+    return _load(path)
+
+
+def _variant(root):
+    """The frozen variant of the alternative ordering, as the smoke wrote it."""
+    return _variant_record(root)["variant"]
+
+
+def ordering_smoke(*, root, device, cpu_seconds, unit, identity_path):
+    """D-02 / D-05, the FIRST step of the first prep attempt: the adaptive cell ordering of
+    TARGETS[0] on SEEDS[0]'s intact Phase 40 full adapter, every gradient's d02_check inside
+    (a difference stops for Rafael before any record); then the variant by the frozen
+    ``alternative_variant``, written write-once to variant.json. A rehearsal root (``identity_path``
+    required) uses its own CPU seconds for both and records them into the identity it was given;
+    the real root (``identity_path`` None) reads ``cpu_seconds`` from the rehearsal (IN-02:
+    ``variant_decided_by`` names the measurement that decided)."""
+    import phase14_recall as recall  # torch at import: lazy
+
+    prereg = _prereg()
+    root = pathlib.Path(root)
+    rehearsal = not _is_real(root)
+    if rehearsal:
+        _prove(identity_path is not None, "a rehearsal root's smoke records into its identity")
+    else:
+        _prove(identity_path is None, "the real root's smoke reads the rehearsal identity only")
+    path = _variant_path(root)
+    _prove(not path.exists(), f"{path} exists: write-once (the variant is fixed once)")
+    seed, target = prereg.SEEDS[0], prereg.TARGETS[0]
+    model, _cfg, tok, _forbid, artifact = recall.load_adapted_model(
+        device, adapter_path=_REPO / phase40_adapter(seed, "full")["path"]
+    )
+    ordering = model_gradient_ordering(
+        model,
+        tok,
+        device,
+        artifact,
+        slot=target,
+        value=target_fact(target).value,
+        variant=prereg.ADAPTIVE,
+        calibration=False,
+        unit=unit,
+        root=root,
+    )
+    del model
+    _release()
+    seconds = ordering["seconds"]
+    timings = [
+        {
+            "at": r["at"],
+            "forward_seconds": r["forward_seconds"],
+            "forward_backward_seconds": r["forward_backward_seconds"],
+            "ratio": r["forward_backward_seconds"] / r["forward_seconds"],
+        }
+        for r in ordering["rankings"]
+    ]
+    if rehearsal:
+        cpu_seconds = seconds
+        record_rehearsal_seconds(identity_path, seconds, timings)
+    blob = {
+        "variant": prereg.alternative_variant(cpu_seconds, seconds),
+        "variant_decided_by": (
+            "cpu_rehearsal"
+            if rehearsal or not prereg.ordering_cost_fits(cpu_seconds)
+            else "mps_smoke"
+        ),
+        "cpu_seconds": cpu_seconds,
+        "mps_seconds": seconds,
+        "d02": [r["d02"] for r in ordering["rankings"]],
+        "timings": timings,
+        "rehearsal": rehearsal,
+        "ordering_bound": prereg.ENTRIES["e1_unit_prices"]["value"]["e1_ordering_seconds"],
+    }
+    _write_once(path, blob)
+    print(
+        f"VARIANT {blob['variant']} decided_by={blob['variant_decided_by']} "
+        f"cpu_s={cpu_seconds:.2f} mps_s={seconds:.2f}",
+        flush=True,
+    )
+    return blob
+
+
+# =================================================================================================
+# Stage 1: one ledger attempt per prep unit (D-22, ENTRIES["prep_order"], ["record_layout"])
+# =================================================================================================
+
+
+def _run_provenance(pf, started_utc):
+    import torch
+
+    end_sha = git_sha()
+    return {
+        "git_sha_at_launch": pf["launch_git_sha"],
+        "git_sha_at_end": end_sha,
+        "head_moved_during_run": end_sha != pf["launch_git_sha"],
+        "device": pf["device"],
+        "torch_version": torch.__version__,
+        "started_utc": started_utc,
+        "finished_utc": _now(),
+    }
+
+
+def run_prep_unit(unit, *, pf, started_utc, state, smoke, cpu_seconds, identity_path):
+    """One prep unit inside its ledger attempt: [the smoke], the D-13 control gap on the intact
+    full adapter (a mismatch on mps stops for Rafael), the band record, the seed's calibration
+    adapter (trained by its first prep unit, digest-checked by the second), D-11, the calibration
+    ordering on ``select_calibration_fact()``, cal-erased, then the calibration record. Returns
+    the calibration record's path (the end line names it)."""
+    import phase14_recall as recall  # torch at import: lazy
+    import phase19_erasure as pin  # same
+    import teach_persona as tp  # same
+
+    prereg = _prereg()
+    kind, ordering, seed = prereg.unit_key(unit)
+    _prove(kind == "prep", f"{unit} is not a prep unit")
+    root, device = pf["root"], pf["device"]
+    rehearsal = not _is_real(root)
+    if smoke:
+        state.update(stage="smoke")
+        ordering_smoke(
+            root=root,
+            device=device,
+            cpu_seconds=cpu_seconds,
+            unit=unit,
+            identity_path=identity_path,
+        )
+    state.update(stage="control_gap")
+    gap = measure_control_gap(seed, device)
+    if gap["stop"]:
+        stop_for_rafael(unit, "control_gap_mismatch", gap, root=root)
+    _write_once(
+        root / prereg.band_record(seed, ordering),
+        {
+            "front": FRONT,
+            "phase": 41,
+            "unit": unit,
+            "seed": seed,
+            "ordering": ordering,
+            "control_gap": gap["measured"],
+            "committed_gap": gap["committed"],
+            "equal": gap["equal"],
+            "device": device,
+            "rehearsal": rehearsal,
+            "dialogue_ppl": gap["dialogue_ppl"],
+            "rehearsal_disclosure": pf["rehearsal_disclosure"],
+            "provenance": {
+                "measurement": {"utc": _now(), "device": device, "git_sha": pf["launch_git_sha"]}
+            },
+        },
+    )
+    state.update(stage="calibration_adapter")
+    adapter = arm_paths(seed, rehearsal=rehearsal)["adapter"]
+    first = _seed_first_prep_unit(seed)
+    if unit == first:
+        training = train_calibration_adapter(seed, root=root, rehearsal=rehearsal)
+        adapter_sha256 = training["adapter_sha256"]
+    else:
+        training = None
+        trained = _load(root / prereg.unit_record(first))["adapter"]
+        adapter_sha256 = _sha256(adapter)
+        _prove(
+            adapter_sha256 == trained["sha256"],
+            f"{adapter} sha256 {adapter_sha256} is not the one {prereg.unit_record(first)} "
+            f"recorded ({trained['sha256']}): the seed's calibration adapter changed between its "
+            "prep units (ENTRIES['prep_order'])",
+        )
+    identity = calibration_identity(adapter)
+    state.update(stage="calibration")
+    model, _cfg, tok, forbid, artifact = recall.load_adapted_model(device, adapter_path=adapter)
+    fact = pin.select_calibration_fact()
+    variant = decided_by = None
+    started = time.perf_counter()
+    if ordering == "greedy":
+        cal = greedy_calibration(model, tok, device, forbid, artifact, fact)
+        full, d06, detail = cal["ordered"], cal["ordered"], {"curve": cal["curve"]}
+    else:
+        chosen = _variant_record(root)
+        variant, decided_by = chosen["variant"], chosen["variant_decided_by"]
+        cal = gradient_calibration(
+            model, tok, device, artifact, fact, variant=variant, unit=unit, root=root
+        )
+        detail = cal["ordering"]
+        full = detail["ordered"]
+        d06 = [address for address, _ in detail["rankings"][0]["scores"]]
+    ordering_seconds = time.perf_counter() - started
+    del model
+    _release()
+    _prove(
+        sorted(map(tuple, full)) == sorted(pin.component_index()),
+        f"{unit}: the applied ordering is not a full permutation of the component index (D-04)",
+    )
+    _prove(list(cal["applied"]) == list(full[: cal["k"]]), f"{unit}: applied is not ordered[:k]")
+    state.update(stage="cal_erase")
+    erased = cal_erase(ordering, seed, adapter, cal["applied"], root=root, device=device)
+    rel = prereg.calibration_record(ordering, seed)
+    _write_once(
+        root / rel,
+        {
+            "front": FRONT,
+            "phase": 41,
+            "unit": unit,
+            "run_id": prereg.run_id(unit),
+            "ordering": ordering,
+            "seed": seed,
+            "family": "A2",
+            "corpus": prereg.CALIBRATION_CORPUS,
+            "fact_id": fact.id,
+            "draws": _load(root / erased["record"])["draws"],
+            "applied_ordering": [list(a) for a in full],
+            "k": cal["k"],
+            "stopped": cal["stopped"],
+            "ordering_detail": detail,
+            "ordering_seconds": ordering_seconds,
+            "d06_order": [list(a) for a in d06],
+            "variant": variant,
+            "variant_decided_by": decided_by,
+            "adapter": {"path": _rel(adapter, tp._REPO_ROOT), "sha256": adapter_sha256},
+            "training": training,
+            "d11_identity": identity,
+            "cal_erased_record": {"path": erased["record"], "sha256": erased["record_sha256"]},
+            "rehearsal": rehearsal,
+            "rehearsal_disclosure": pf["rehearsal_disclosure"],
+            "provenance": {
+                "run": _run_provenance(pf, started_utc),
+                "module_sha256_at_launch": pf["launch_modules"],
+            },
+        },
+    )
+    return rel
+
+
+# =================================================================================================
+# The run: one ledger attempt per unit (D-22, D-24)
+# =================================================================================================
+
+
+def run(
+    *,
+    root=None,
+    ledger_path=None,
+    heartbeat_path=None,
+    device=None,
+    units=None,
+    rehearsal_identity=None,
+):
+    """THE run: preflight, then per pending unit require_launch, ONE start line, the unit, its
+    record, the end line naming it. Stage 1 runs the pending prep units (the first one starts
+    with the D-02 / D-05 smoke while variant.json is absent) and stops; stage 2 (the cells) is
+    plan 41-09's run_cell. A crash or a STOP inside a unit leaves an open start (reconcile ->
+    lost)."""
+    prereg = _prereg()
+    root = pathlib.Path(root) if root is not None else pathlib.Path(_ROOT)
+    pf = preflight(
+        root=root,
+        ledger_path=ledger_path,
+        heartbeat_path=heartbeat_path,
+        device=device,
+        units=units,
+    )
+    if pf["stage"] == STAGE_1_DONE:
+        return {"stage": STAGE_1_DONE, "whole": []}
+    _prove(pf["stage"] == 1, "stage 2 (the cells) is plan 41-09's run_cell: not wired yet")
+    heartbeat_path = heartbeat_path or phase36_ledger.HEARTBEAT_PATH
+    rehearsal = not _is_real(root)
+    if rehearsal:  # 38-REVIEW DR-02: refused BEFORE the first start line
+        _prove(
+            rehearsal_identity is not None,
+            "a rehearsal root records its identity: pass rehearsal_identity (a tmp path)",
+        )
+        _kept_identity(rehearsal_identity)
+        cpu_seconds = None
+    else:
+        _prove(rehearsal_identity is None, "the real root records no rehearsal identity")
+        cpu_seconds = _load(rehearsal_identity_path())["cpu_ordering_seconds"]
+    whole = []
+    for i, unit in enumerate(pf["pending"]):
+        phase36_ledger.require_launch(FRONT, ledger_path=ledger_path)
+        rid = prereg.run_id(unit)
+        phase36_ledger.append("start", run_id=rid, phase=41, front=FRONT, ledger_path=ledger_path)
+        if rehearsal and i == 0:  # after the first start line, before the first measurement
+            record_rehearsal(rehearsal_identity, units=pf["pending"])
+        state = {"point": rid, "stage": "start", "shape": None, "draw_index": None}
+        # B1: the thread's first beat waits a full period: beat once now.
+        phase25_run.beat(heartbeat_path, **state)
+        stop, thread = phase25_run.start_heartbeat(heartbeat_path, state)
+        started_utc = _now()
+        try:
+            record = run_prep_unit(
+                unit,
+                pf=pf,
+                started_utc=started_utc,
+                state=state,
+                smoke=unit == prereg.PREP_UNITS[0] and not _variant_path(root).exists(),
+                cpu_seconds=cpu_seconds,
+                identity_path=rehearsal_identity,
+            )
+            state.update(stage="done")
+        finally:
+            stop.set()
+            thread.join()
+        phase36_ledger.append(
+            "end", run_id=rid, phase=41, front=FRONT, record=record, ledger_path=ledger_path
+        )
+        print(f"UNIT {unit} WHOLE", flush=True)
+        whole.append(unit)
+    outcomes = prereg.unit_outcomes(phase36_ledger.read_ledger(ledger_path), prereg.PREP_UNITS)
+    if all(v == "whole" for v in outcomes.values()):
+        print(STAGE_1_DONE, flush=True)
+    print(f"RUN DONE whole={whole}", flush=True)
+    return {"stage": pf["stage"], "whole": whole}
