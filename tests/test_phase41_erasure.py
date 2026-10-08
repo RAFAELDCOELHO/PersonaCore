@@ -844,6 +844,37 @@ def test_cal_erase_writes_under_data_only(monkeypatch, tmp_path):
         phase41_erasure.cal_erase("random", 2024, adapter, components, root=tmp_path, device="cpu")
 
 
+def test_cal_erase_supplies_the_calibration_value_to_the_scorer(monkeypatch, tmp_path):
+    """41-11 rehearsal finding: run_erasure_arm scores against LOCKED_FACTS + SOFT_TIER_FACTS,
+    which hold no calibration fact, so over the calibration corpus it raised "no value was
+    supplied for fact 'cal_person_varek'". cal_erase extends SOFT_TIER_FACTS with
+    select_calibration_fact() for that one call (phase19_run.cal_score's seam), then restores it,
+    on a raise too."""
+    import phase14_factset
+    import phase19_erasure
+
+    fact = phase19_erasure.select_calibration_fact()
+    original = phase14_factset.SOFT_TIER_FACTS
+    assert fact not in original and fact not in phase14_factset.LOCKED_FACTS
+    seen = []
+
+    def fake(arm, device, **kw):
+        seen.append(phase14_factset.SOFT_TIER_FACTS)
+        if len(seen) == 2:
+            raise RuntimeError("planted")
+        kw["record_path"].write_text("{}", encoding="utf-8")
+
+    monkeypatch.setattr(phase19_erasure, "run_erasure_arm", fake)
+    adapter = tmp_path / "cal_adapter.pt"
+    phase41_erasure.cal_erase("greedy", 1337, adapter, [], root=tmp_path, device="cpu")
+    assert seen == [original + (fact,)]
+    assert phase14_factset.SOFT_TIER_FACTS is original
+    with pytest.raises(RuntimeError, match="planted"):
+        phase41_erasure.cal_erase("greedy", 2024, adapter, [], root=tmp_path, device="cpu")
+    assert seen[1] == original + (fact,)
+    assert phase14_factset.SOFT_TIER_FACTS is original
+
+
 # =================================================================================================
 # (4) Plan 41-07: the control gap, the cell orderings, the K = 16 reader, the K = 48
 # confirmation, the M1 export and the D-13 wrapper. The pin's scorers and loaders are faked.

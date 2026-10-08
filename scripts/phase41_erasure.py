@@ -585,7 +585,11 @@ def gradient_calibration(model, tok, device, artifact, fact, *, variant, unit, r
 def cal_erase(ordering, seed, adapter_path, components, *, root, device):
     """D-10: the cal-erased arm over the calibration corpus at the applied prefix, through the
     pin's ``run_erasure_arm``, into the raw write-once record under ``root``/data/phase41_e1/
-    (never results/phase41_*: the floors are filled from it later)."""
+    (never results/phase41_*: the floors are filled from it later). The pin scores against
+    LOCKED_FACTS + SOFT_TIER_FACTS, which hold no calibration fact, so SOFT_TIER_FACTS is extended
+    with ``select_calibration_fact()`` for this one call and restored after
+    (``phase19_run.cal_score``'s seam; 41-11 rehearsal finding)."""
+    import phase14_factset
     import phase19_erasure as pin  # torch at import: lazy
 
     prereg = _prereg()
@@ -595,14 +599,19 @@ def cal_erase(ordering, seed, adapter_path, components, *, root, device):
     record = root / "data" / WORK_DIR / f"cal_erased_{ordering}_seed{seed}.json"
     _prove(not record.exists(), f"{record} exists: the cal-erased records are write-once")
     record.parent.mkdir(parents=True, exist_ok=True)
-    pin.run_erasure_arm(
-        "cal-erased",
-        device,
-        corpus_path=pin.CALIBRATION_CORPUS_PATH,
-        adapter_path=adapter_path,
-        components=list(components),
-        record_path=record,
-    )
+    original = phase14_factset.SOFT_TIER_FACTS
+    phase14_factset.SOFT_TIER_FACTS = original + (pin.select_calibration_fact(),)
+    try:
+        pin.run_erasure_arm(
+            "cal-erased",
+            device,
+            corpus_path=pin.CALIBRATION_CORPUS_PATH,
+            adapter_path=adapter_path,
+            components=list(components),
+            record_path=record,
+        )
+    finally:
+        phase14_factset.SOFT_TIER_FACTS = original
     _release()
     return {"record": _rel(record, root), "record_sha256": _sha256(record)}
 
