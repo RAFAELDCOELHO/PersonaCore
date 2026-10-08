@@ -1510,6 +1510,201 @@ def run_prep_unit(unit, *, pf, started_utc, state, smoke, cpu_seconds, identity_
 
 
 # =================================================================================================
+# Stage 2: one cell (ERASE-07, D-09, D-20, D-26, D-27) — the pre-registered grid read in order, the
+# stop proved equal to Phase 35's e1_stop on the same readings.
+# =================================================================================================
+
+
+def _ordering_path(root, unit):
+    """D-04 / D-24: where a cell's full ordering is written before its first read."""
+    return pathlib.Path(root) / "data" / WORK_DIR / "orderings" / f"{unit}.json"
+
+
+def _m1_path(root, unit, checkpoint):
+    """D-20: the M1-ablated adapter of a pet_name cell at its stop."""
+    return pathlib.Path(root) / "data" / WORK_DIR / "m1" / f"{unit}_k{checkpoint:03d}_adapter.pt"
+
+
+def run_cell(unit, *, root, device, state):
+    """One cell inside its ledger attempt: the seed's intact Phase 40 full adapter, the cell's
+    ordering (written write-once before any read), then per GRID checkpoint in order ordering[:c]
+    ablated, the K = read_k read and its write-once record, the K = confirm_k confirmation exactly
+    when the target's pooled count is 0, and ``driver_stop`` after each checkpoint (any non-None
+    value stops). The stop is proved equal to ``phase35_prereg.e1_stop``; a judged pet_name stop
+    exports M1 and scores D-13 (a failure is recorded, the cell stays whole). Returns the cell
+    blob; run() writes the cell record."""
+    import phase14_recall as recall  # torch at import: lazy
+    import phase19_erasure as pin  # same
+    import phase35_prereg
+
+    from personacore.lora import load_adapter_weights
+
+    prereg = _prereg()
+    kind, target, ordering, seed = prereg.unit_key(unit)
+    _prove(kind == "cell", f"{unit} is not a cell")
+    root = pathlib.Path(root)
+    grid = prereg.E1_CHECKPOINT_GRID
+    adapter = phase40_adapter(seed, "full")
+    model, _cfg, tok, forbid, artifact = recall.load_adapted_model(
+        device, adapter_path=_REPO / adapter["path"]
+    )
+    snapshot = pin.ablate_components(artifact, [])
+    variant = None if ordering == "greedy" else _variant(root)
+    state.update(stage="ordering")
+    started = time.perf_counter()
+    detail = cell_ordering(
+        model,
+        tok,
+        device,
+        forbid,
+        snapshot,
+        target=target,
+        ordering=ordering,
+        variant=variant,
+        unit=unit,
+        root=root,
+    )
+    ordering_seconds = time.perf_counter() - started
+    ordered = tuple(tuple(a) for a in detail["ordered"])
+    _prove(
+        sorted(ordered) == sorted(pin.component_index()),
+        f"{unit}: the ordering is not a full permutation of the component index (D-04)",
+    )
+    applied = json.loads(json.dumps(detail))
+    _write_once(
+        _ordering_path(root, unit),
+        {
+            "unit": unit,
+            "variant": variant,
+            "ordering": applied,
+            "ordering_seconds": ordering_seconds,
+        },
+    )
+    reads, rows, confirmations, stop = [], [], [], None
+    for checkpoint in grid["checkpoints"]:
+        state.update(stage=f"k16_{checkpoint}")
+        components = list(ordered[:checkpoint])
+        load_adapter_weights(model, pin.ablate_components(snapshot, components))
+        k16 = k16_read(model, tok, device, forbid, target=target)
+        n, q = prereg.k16_target_count(k16["draws"], target)
+        rel16 = prereg.k16_record(target, ordering, seed, checkpoint)
+        _write_once(
+            root / rel16,
+            {
+                "unit": unit,
+                "checkpoint": checkpoint,
+                "components": [list(a) for a in components],
+                "k": k16["k"],
+                "draws": k16["draws"],
+                "exposure": k16["exposure"],
+                "target_count": [n, q],
+                "slot_counts": prereg.k16_slot_counts(k16["draws"]),
+                "device": device,
+            },
+        )
+        k16_zero, k48 = n == 0, None
+        if k16_zero:
+            state.update(stage=f"k48_{checkpoint}")
+            started_utc, began = _now(), time.perf_counter()
+            k48 = k48_confirm(
+                target, ordering, seed, checkpoint, components, root=root, device=device
+            )
+            seconds = time.perf_counter() - began
+            confirmations.append(
+                {
+                    "checkpoint": checkpoint,
+                    "k48_zero": k48["target_zero"],
+                    "record": k48["record"],
+                    "started_utc": started_utc,
+                    "finished_utc": _now(),
+                    "seconds": seconds,
+                }
+            )
+        k48_zero = None if k48 is None else k48["target_zero"]
+        reads.append((checkpoint, k16_zero, k48_zero))
+        rows.append(
+            {
+                "checkpoint": checkpoint,
+                "k16_zero": k16_zero,
+                "k48_zero": k48_zero,
+                "target_count": [n, q],
+                "rank": k16["exposure"]["rank"],  # ERASE-10: recorded, never read by the stop
+                "k16_record": rel16,
+                "k16_sha256": _sha256(root / rel16),
+                "k48_record": None if k48 is None else k48["record"],
+                "k48_sha256": None if k48 is None else k48["record_sha256"],
+            }
+        )
+        stop = prereg.driver_stop(reads)
+        if stop is not None:
+            break
+    del model
+    _release()
+    e1 = phase35_prereg.e1_stop(grid=grid, readings=prereg.stop_readings(reads))
+    _prove(
+        e1["stop"] == stop, f"{unit}: the driver's stop {stop!r} is not e1_stop's {e1['stop']!r}"
+    )
+    failures = prereg.confirmation_failures(confirmations, reads)
+    _prove(not failures, f"{unit}: the K = confirm_k confirmations fail: {failures}")
+    m1 = d13 = None
+    if e1["judged"] and target == pin.TARGET_SLOT:
+        state.update(stage="d13")
+        exported = export_m1(snapshot, list(ordered[:stop]), _m1_path(root, unit, stop))
+        m1 = {"path": _rel(exported["path"], root), "sha256": exported["sha256"]}
+        d13 = d13_at_stop(
+            exported["path"], root / prereg.k48_record(target, ordering, seed, stop), device, state
+        )
+        if not d13["measured"]:
+            print(f"D13 NOT_MEASURED {unit} {d13['failure_kind']}: {d13['reason']}", flush=True)
+    print(f"CELL {unit} stop={stop} confirmations={len(confirmations)}", flush=True)
+    return {
+        "unit": unit,
+        "target": target,
+        "ordering": ordering,
+        "seed": seed,
+        "variant": variant,
+        "adapter": adapter,
+        "applied_ordering": applied,
+        "ordering_record": _rel(_ordering_path(root, unit), root),
+        "ordering_seconds": ordering_seconds,
+        "reads": rows,
+        "confirmations": confirmations,
+        "confirmation_hours": prereg.confirmation_hours(confirmations),
+        "stop": stop,
+        "judged": e1["judged"],
+        "e1_stop": dict(e1),
+        "not_reached_sentence": None if e1["judged"] else prereg.not_reached_sentence(),
+        "m1": m1,
+        "d13": d13,
+    }
+
+
+def write_cell(unit, *, pf, started_utc, state):
+    """run_cell inside its attempt, then the cell record write-once (provenance.run, the rehearsal
+    disclosure). Returns the record's path (the end line names it)."""
+    prereg = _prereg()
+    root = pf["root"]
+    blob = run_cell(unit, root=root, device=pf["device"], state=state)
+    rel = prereg.unit_record(unit)
+    _write_once(
+        root / rel,
+        {
+            "front": FRONT,
+            "phase": 41,
+            "run_id": prereg.run_id(unit),
+            **blob,
+            "rehearsal": not _is_real(root),
+            "rehearsal_disclosure": pf["rehearsal_disclosure"],
+            "provenance": {
+                "run": _run_provenance(pf, started_utc),
+                "module_sha256_at_launch": pf["launch_modules"],
+            },
+        },
+    )
+    return rel
+
+
+# =================================================================================================
 # The run: one ledger attempt per unit (D-22, D-24)
 # =================================================================================================
 
@@ -1525,9 +1720,8 @@ def run(
 ):
     """THE run: preflight, then per pending unit require_launch, ONE start line, the unit, its
     record, the end line naming it. Stage 1 runs the pending prep units (the first one starts
-    with the D-02 / D-05 smoke while variant.json is absent) and stops; stage 2 (the cells) is
-    plan 41-09's run_cell. A crash or a STOP inside a unit leaves an open start (reconcile ->
-    lost)."""
+    with the D-02 / D-05 smoke while variant.json is absent) and stops; stage 2 runs the pending
+    cells (run_cell). A crash or a STOP inside a unit leaves an open start (reconcile -> lost)."""
     prereg = _prereg()
     root = pathlib.Path(root) if root is not None else pathlib.Path(_ROOT)
     pf = preflight(
@@ -1539,7 +1733,6 @@ def run(
     )
     if pf["stage"] == STAGE_1_DONE:
         return {"stage": STAGE_1_DONE, "whole": []}
-    _prove(pf["stage"] == 1, "stage 2 (the cells) is plan 41-09's run_cell: not wired yet")
     heartbeat_path = heartbeat_path or phase36_ledger.HEARTBEAT_PATH
     rehearsal = not _is_real(root)
     if rehearsal:  # 38-REVIEW DR-02: refused BEFORE the first start line
@@ -1565,15 +1758,18 @@ def run(
         stop, thread = phase25_run.start_heartbeat(heartbeat_path, state)
         started_utc = _now()
         try:
-            record = run_prep_unit(
-                unit,
-                pf=pf,
-                started_utc=started_utc,
-                state=state,
-                smoke=unit == prereg.PREP_UNITS[0] and not _variant_path(root).exists(),
-                cpu_seconds=cpu_seconds,
-                identity_path=rehearsal_identity,
-            )
+            if unit in prereg.CELL_UNITS:
+                record = write_cell(unit, pf=pf, started_utc=started_utc, state=state)
+            else:
+                record = run_prep_unit(
+                    unit,
+                    pf=pf,
+                    started_utc=started_utc,
+                    state=state,
+                    smoke=unit == prereg.PREP_UNITS[0] and not _variant_path(root).exists(),
+                    cpu_seconds=cpu_seconds,
+                    identity_path=rehearsal_identity,
+                )
             state.update(stage="done")
         finally:
             stop.set()
@@ -1584,7 +1780,7 @@ def run(
         print(f"UNIT {unit} WHOLE", flush=True)
         whole.append(unit)
     outcomes = prereg.unit_outcomes(phase36_ledger.read_ledger(ledger_path), prereg.PREP_UNITS)
-    if all(v == "whole" for v in outcomes.values()):
+    if pf["stage"] == 1 and all(v == "whole" for v in outcomes.values()):
         print(STAGE_1_DONE, flush=True)
     print(f"RUN DONE whole={whole}", flush=True)
     return {"stage": pf["stage"], "whole": whole}

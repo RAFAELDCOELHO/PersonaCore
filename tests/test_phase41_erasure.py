@@ -2401,12 +2401,6 @@ def test_run_stage_gates(monkeypatch, tmp_path, capsys):
     assert phase41_erasure.run() == {"stage": "STAGE 1 DONE", "whole": []}
     assert "STAGE 1 DONE" in capsys.readouterr().out.splitlines()
     assert _lines(real.ledger) == before and not real.heartbeat.exists()
-    rehearsal = _e1_rig(monkeypatch, tmp_path / "rehearsal")
-    _whole(rehearsal.ledger, *prep)
-    before = _lines(rehearsal.ledger)
-    with pytest.raises(SystemExit, match="41-09"):
-        _launch(rehearsal, monkeypatch)
-    assert _lines(rehearsal.ledger) == before and not rehearsal.heartbeat.exists()
     # The rehearsal identity rule is checked before the first start line.
     fresh = _e1_rig(monkeypatch, tmp_path / "fresh")
     with pytest.raises(SystemExit, match="rehearsal_identity"):
@@ -2437,3 +2431,376 @@ def test_crash_between_the_record_and_the_end_line_is_never_reconciled(monkeypat
     with pytest.raises(SystemExit, match="NEVER reconcile"):
         phase41_erasure.preflight(**rig.kw)
     assert phase36_ledger.read_ledger(rig.ledger) == lines
+
+
+# =================================================================================================
+# (8) Plan 41-09: run_cell — the grid loop, the K = 16 records, the K = 48 confirmations, the stop
+# proved against Phase 35's e1_stop, D-13 at the pet_name stop (D-20), the cell record.
+# =================================================================================================
+
+_GRID = phase41_prereg.E1_CHECKPOINT_GRID["checkpoints"]
+_READ_K = phase41_prereg.E1_CHECKPOINT_GRID["read_k"]
+
+
+def _a2_reads():
+    """The committed Phase 40 full A2 draws of seed 1337 cut to read_k completions (every target
+    answers some of its questions there), loaded once."""
+    if not hasattr(_a2_reads, "draws"):
+        record = _json(_ROOT / "results" / "phase40_a2_full_seed1337.json")
+        _a2_reads.draws = [
+            {**d, "completions": d["completions"][:_READ_K], "stopped": d["stopped"][:_READ_K]}
+            for d in record["draws"]
+        ]
+    return _a2_reads.draws
+
+
+def _k16_draws(target, zero):
+    """A K = read_k read; ``zero`` blanks the target's completions so its pooled count is 0."""
+    draws = _a2_reads()
+    if zero:
+        return [{**d, "completions": [""] * _READ_K} if d["slot"] == target else d for d in draws]
+    return draws
+
+
+def _cell_fakes(monkeypatch, rig, script, *, d13=None, crash_at=None):
+    """The model load, the pin's ablation, load_adapter_weights, the cell ordering, the K = 16 read,
+    the K = 48 confirmation, the M1 export and D-13 faked behind their real signatures. ``script``
+    maps each checkpoint to ``(k16_zero, k48_zero or None, rank)``; the read fake asserts the
+    ordering file exists and reads the checkpoint from the weights loaded just before it."""
+    import phase14_recall
+    import phase19_erasure
+
+    from personacore import lora
+
+    d = phase41_erasure
+    index = tuple(phase19_erasure.component_index())
+    log = rig.cell_log = []
+    rig.index = index
+
+    def load(device, adapter_path=None):
+        log.append(("load", pathlib.Path(adapter_path).name, device))
+        return "model", "cfg", "tok", "forbid", {"ablated": []}
+
+    def ablate(adapter, components):
+        return {"ablated": [tuple(c) for c in components]}
+
+    def weights(model, artifact):
+        log.append(("weights", tuple(artifact["ablated"])))
+
+    def ordering(model, tok, device, forbid, artifact, *, target, ordering, variant, unit, root):
+        assert artifact == {"ablated": []}  # the snapshot, never an ablated adapter
+        log.append(("ordering", unit, ordering, variant))
+        rig.unit = unit
+        if ordering == "greedy":
+            return {"ordered": index, "k": 3, "stopped": True, "curve": [{"k": 1, "rank": 1}]}
+        return {
+            "ordered": index[::-1],
+            "rankings": [{"at": 0, "scores": [], "d02": None}],
+            "rerank_at": (0,),
+            "seconds": 1.0,
+            "variant": variant,
+        }
+
+    def read(model, tok, device, forbid, *, target):
+        assert phase41_erasure._ordering_path(rig.root, rig.unit).exists()
+        loaded = next(e[1] for e in reversed(log) if e[0] == "weights")
+        c = len(loaded)
+        if crash_at == c:
+            raise RuntimeError(f"planted crash at checkpoint {c}")
+        k16_zero, _k48, rank = script[c]
+        log.append(("k16", c))
+        return {
+            "draws": _k16_draws(target, k16_zero),
+            "k": _READ_K,
+            "exposure": {"rank": rank, "at": c},
+        }
+
+    def confirm(target, ordering, seed, checkpoint, components, *, root, device):
+        log.append(("k48", checkpoint, tuple(components)))
+        rel = phase41_prereg.k48_record(target, ordering, seed, checkpoint)
+        path = _plant(pathlib.Path(root) / rel, f"k48 {checkpoint}".encode())
+        return {
+            "record": rel,
+            "record_sha256": d._sha256(path),
+            "target_zero": script[checkpoint][1],
+        }
+
+    def export(artifact, components, path):
+        log.append(("m1", len(components), pathlib.Path(path).name))
+        path = _plant(path, b"m1")
+        return {"path": path, "sha256": d._sha256(path)}
+
+    def scored(m1_path, k48_record_path, device, state):
+        log.append(("d13", pathlib.Path(m1_path).name, pathlib.Path(k48_record_path).name))
+        return d13 if d13 is not None else {"measured": True, "planted": "d13"}
+
+    monkeypatch.setattr(
+        phase14_recall, "load_adapted_model", _checked(phase14_recall.load_adapted_model, load)
+    )
+    monkeypatch.setattr(
+        phase19_erasure, "ablate_components", _checked(phase19_erasure.ablate_components, ablate)
+    )
+    monkeypatch.setattr(lora, "load_adapter_weights", _checked(lora.load_adapter_weights, weights))
+    for name, fake in (
+        ("cell_ordering", ordering),
+        ("k16_read", read),
+        ("k48_confirm", confirm),
+        ("export_m1", export),
+        ("d13_at_stop", scored),
+    ):
+        monkeypatch.setattr(d, name, _checked(getattr(d, name), fake))
+    return rig
+
+
+def _plant_variant(root, variant="adaptive"):
+    _plant(phase41_erasure._variant_path(root), json.dumps({"variant": variant}).encode())
+
+
+def _cell(rig, unit):
+    return phase41_erasure.run_cell(unit, root=rig.root, device="cpu", state={})
+
+
+def _reads(blob):
+    return [(r["checkpoint"], r["k16_zero"], r["k48_zero"]) for r in blob["reads"]]
+
+
+_NEVER_ZERO = {c: (False, None, 5) for c in _GRID}
+_NEVER_CONFIRMED = {c: (True, False, 5) for c in _GRID}
+
+
+@pytest.mark.parametrize(
+    ("script", "stop", "n_reads", "n_confirmations"),
+    [
+        ({_GRID[0]: (True, True, 5)}, _GRID[0], 1, 1),
+        (
+            {_GRID[0]: (False, None, 5), _GRID[1]: (True, False, 5), _GRID[2]: (True, True, 5)},
+            _GRID[2],
+            3,
+            2,
+        ),
+        (_NEVER_CONFIRMED, "NOT_REACHED", len(_GRID), len(_GRID)),
+        (_NEVER_ZERO, "NOT_REACHED", len(_GRID), 0),
+    ],
+    ids=["zero_at_first", "confirmed_after_a_failed_one", "never_confirmed", "never_zero"],
+)
+def test_cell_loop_matches_e1_stop(monkeypatch, tmp_path, script, stop, n_reads, n_confirmations):
+    import phase35_prereg
+
+    rig = _cell_fakes(monkeypatch, _e1_rig(monkeypatch, tmp_path), script)
+    unit = phase41_prereg.cell_unit("street", "greedy", 1337)
+    blob = _cell(rig, unit)
+    reads = _reads(blob)
+    assert [c for c, *_ in reads] == list(_GRID[:n_reads])
+    assert [e[1] for e in rig.cell_log if e[0] == "k16"] == list(_GRID[:n_reads])
+    k48 = [e for e in rig.cell_log if e[0] == "k48"]
+    assert len(k48) == len(blob["confirmations"]) == n_confirmations
+    # A confirmation runs exactly when the K = read_k target count is 0, at that prefix.
+    assert [e[1] for e in k48] == [c for c, zero, _ in reads if zero]
+    assert all(e[2] == rig.index[: e[1]] for e in k48)
+    assert blob["stop"] == stop == phase41_prereg.driver_stop(reads)
+    e1 = phase35_prereg.e1_stop(
+        grid=phase41_prereg.E1_CHECKPOINT_GRID, readings=phase41_prereg.stop_readings(reads)
+    )
+    assert blob["e1_stop"] == dict(e1) and e1["stop"] == stop
+    assert blob["judged"] is (stop != phase35_prereg.NOT_REACHED)
+    assert phase41_prereg.confirmation_failures(blob["confirmations"], reads) == []
+    assert (blob["unit"], blob["target"], blob["ordering"], blob["seed"]) == (
+        unit,
+        "street",
+        "greedy",
+        1337,
+    )
+    assert blob["adapter"] == rig.adapters["1337"]["full"]
+    assert blob["variant"] is None
+    assert [e for e in rig.cell_log if e[0] == "load"] == [
+        ("load", pathlib.Path(rig.adapters["1337"]["full"]["path"]).name, "cpu")
+    ]
+
+
+def test_rank_recorded_at_every_read_checkpoint(monkeypatch, tmp_path):
+    ranks = {c: (False, None, i + 1) for i, c in enumerate(_GRID)}
+    rig = _cell_fakes(monkeypatch, _e1_rig(monkeypatch, tmp_path), ranks)
+    blob = _cell(rig, phase41_prereg.cell_unit("street", "greedy", 1337))
+    assert blob["stop"] == "NOT_REACHED"
+    assert [r["rank"] for r in blob["reads"]] == [ranks[c][2] for c in _GRID]
+    # A rank of 1 at a confirmed zero still stops: the rank never enters the stop.
+    rig = _cell_fakes(monkeypatch, rig, {_GRID[0]: (True, True, 1)})
+    blob = _cell(rig, phase41_prereg.cell_unit("street", "greedy", 2024))
+    assert blob["stop"] == _GRID[0] and blob["reads"][0]["rank"] == 1
+
+
+def test_not_reached_record(monkeypatch, tmp_path):
+    import phase35_prereg
+
+    rig = _cell_fakes(monkeypatch, _e1_rig(monkeypatch, tmp_path), _NEVER_CONFIRMED)
+    blob = _cell(rig, phase41_prereg.cell_unit("pet_name", "greedy", 1337))
+    assert blob["stop"] == phase35_prereg.NOT_REACHED and blob["judged"] is False
+    assert blob["not_reached_sentence"] == phase41_prereg.not_reached_sentence()
+    assert [r["checkpoint"] for r in blob["reads"]] == list(_GRID)
+    for row in blob["reads"]:
+        assert row["target_count"] == [0, 27] and row["k16_zero"] is True
+    # Never PASS or FAIL: no M1 export, no D-13 on a NOT_REACHED pet_name cell.
+    assert blob["d13"] is None and blob["m1"] is None
+    assert not [e for e in rig.cell_log if e[0] in ("m1", "d13")]
+    judged = _cell_fakes(monkeypatch, rig, {_GRID[0]: (True, True, 5)})
+    assert (
+        _cell(judged, phase41_prereg.cell_unit("street", "greedy", 1337))["not_reached_sentence"]
+        is None
+    )
+
+
+def test_confirmations_recorded_with_hours(monkeypatch, tmp_path):
+    script = {**_NEVER_CONFIRMED, _GRID[3]: (True, True, 5)}
+    rig = _cell_fakes(monkeypatch, _e1_rig(monkeypatch, tmp_path), script)
+    unit = phase41_prereg.cell_unit("cat_name", "greedy", 2024)
+    blob = _cell(rig, unit)
+    assert blob["stop"] == _GRID[3] and len(blob["confirmations"]) == 4
+    for item, row in zip(blob["confirmations"], blob["reads"]):
+        assert set(item) == set(phase41_prereg.CONFIRMATION_KEYS)
+        assert item["checkpoint"] == row["checkpoint"]
+        assert (
+            item["record"]
+            == row["k48_record"]
+            == phase41_prereg.k48_record("cat_name", "greedy", 2024, item["checkpoint"])
+        )
+        assert row["k48_sha256"] == phase41_erasure._sha256(rig.root / item["record"])
+        assert item["started_utc"] <= item["finished_utc"]
+        assert isinstance(item["seconds"], float) and item["seconds"] >= 0
+    assert phase41_prereg.confirmation_failures(blob["confirmations"], _reads(blob)) == []
+    assert blob["confirmation_hours"] == phase41_prereg.confirmation_hours(blob["confirmations"])
+
+
+@pytest.mark.parametrize("ordering", phase41_prereg.ORDERINGS)
+def test_ordering_written_before_any_read(monkeypatch, tmp_path, ordering):
+    rig = _cell_fakes(monkeypatch, _e1_rig(monkeypatch, tmp_path), _NEVER_ZERO)
+    _plant_variant(rig.root, "static")
+    unit = phase41_prereg.cell_unit("street", ordering, 1337)
+    blob = _cell(rig, unit)  # the read fake asserts the file exists at every read
+    written = _json(phase41_erasure._ordering_path(rig.root, unit))
+    assert written["ordering"] == blob["applied_ordering"]
+    assert written["unit"] == unit and written["variant"] == blob["variant"]
+    expected = rig.index if ordering == "greedy" else rig.index[::-1]
+    assert blob["applied_ordering"]["ordered"] == [list(a) for a in expected]
+    assert blob["variant"] == (None if ordering == "greedy" else "static")
+    assert isinstance(blob["ordering_seconds"], float) and blob["ordering_seconds"] >= 0
+    assert [e[3] for e in rig.cell_log if e[0] == "ordering"] == [blob["variant"]]
+    # Every read loads ordering[:c] of THAT ordering, never another prefix.
+    loads = [e[1] for e in rig.cell_log if e[0] == "weights"]
+    assert loads == [expected[:c] for c in _GRID]
+
+
+def test_k16_records_are_write_once_and_named(monkeypatch, tmp_path):
+    script = {_GRID[0]: (False, None, 4), _GRID[1]: (True, True, 2)}
+    rig = _cell_fakes(monkeypatch, _e1_rig(monkeypatch, tmp_path), script)
+    unit = phase41_prereg.cell_unit("sibling_name", "greedy", 1337)
+    blob = _cell(rig, unit)
+    for c, row in zip(_GRID, blob["reads"]):
+        rel = phase41_prereg.k16_record("sibling_name", "greedy", 1337, c)
+        record = _json(rig.root / rel)
+        assert row["k16_record"] == rel
+        assert row["k16_sha256"] == phase41_erasure._sha256(rig.root / rel)
+        assert record["unit"] == unit and record["checkpoint"] == c
+        assert record["k"] == _READ_K and record["device"] == "cpu"
+        assert record["components"] == [list(a) for a in rig.index[:c]]
+        assert record["exposure"] == {"rank": script[c][2], "at": c}
+        draws = _k16_draws("sibling_name", script[c][0])
+        assert record["draws"] == draws
+        counts = phase41_prereg.k16_slot_counts(draws)
+        assert record["slot_counts"] == counts and len(counts) == 8
+        assert record["target_count"] == list(
+            phase41_prereg.k16_target_count(draws, "sibling_name")
+        )
+        assert row["target_count"] == record["target_count"]
+        assert all(v["n_questions"] == 27 for v in counts.values())
+    assert not (
+        rig.root / phase41_prereg.k16_record("sibling_name", "greedy", 1337, _GRID[2])
+    ).exists()
+    # An existing K = 16 record refuses: write-once.
+    other = phase41_prereg.cell_unit("sibling_name", "greedy", 2024)
+    _plant(rig.root / phase41_prereg.k16_record("sibling_name", "greedy", 2024, _GRID[0]))
+    with pytest.raises(SystemExit, match="write-once"):
+        _cell(rig, other)
+
+
+def test_pet_name_stop_scores_d13_and_keeps_the_cell_whole(monkeypatch, tmp_path):
+    import phase40_prereg
+
+    script = {_GRID[0]: (False, None, 3), _GRID[1]: (True, True, 2)}
+    rig = _cell_fakes(monkeypatch, _e1_rig(monkeypatch, tmp_path), script)
+    unit = phase41_prereg.cell_unit("pet_name", "greedy", 1337)
+    blob = _cell(rig, unit)
+    stop = _GRID[1]
+    k48 = phase41_prereg.k48_record("pet_name", "greedy", 1337, stop)
+    m1 = f"{unit}_k{stop:03d}_adapter.pt"
+    assert [e for e in rig.cell_log if e[0] in ("m1", "d13")] == [
+        ("m1", stop, m1),
+        ("d13", m1, pathlib.Path(k48).name),
+    ]
+    path = rig.root / "data" / phase41_erasure.WORK_DIR / "m1" / m1
+    assert blob["m1"] == {
+        "path": path.relative_to(rig.root).as_posix(),
+        "sha256": phase41_erasure._sha256(path),
+    }
+    assert blob["d13"] == {"measured": True, "planted": "d13"}
+    # A D-13 not measured is recorded and the cell stays whole.
+    missed = {**phase40_prereg.d13_not_measured("exception", "RuntimeError: boom"), "n_nlls": None}
+    rig = _cell_fakes(monkeypatch, rig, script, d13=missed)
+    blob = _cell(rig, phase41_prereg.cell_unit("pet_name", "greedy", 2024))
+    assert blob["stop"] == stop and blob["d13"] == missed and blob["d13"]["measured"] is False
+    # A non-pet_name cell never exports M1 nor scores D-13.
+    rig = _cell_fakes(monkeypatch, rig, script)
+    blob = _cell(rig, phase41_prereg.cell_unit("street", "greedy", 1337))
+    assert blob["stop"] == stop and blob["d13"] is None and blob["m1"] is None
+    assert not [e for e in rig.cell_log if e[0] in ("m1", "d13")]
+
+
+def _stage2_rig(monkeypatch, tmp_path, script, **kw):
+    """A rig whose four prep units are whole and whose variant is fixed: preflight is at stage 2."""
+    rig = _cell_fakes(monkeypatch, _e1_rig(monkeypatch, tmp_path, **kw), script)
+    ledger = rig.ledger if rig.identity is not None else None
+    _whole(ledger, *phase41_prereg.PREP_UNITS)
+    _plant_variant(rig.root)
+    return rig
+
+
+def test_run_stage2_writes_one_cell_record_per_attempt(monkeypatch, tmp_path, capsys):
+    import phase36_ledger
+    import torch
+
+    rig = _stage2_rig(monkeypatch, tmp_path, {_GRID[0]: (True, True, 5)})
+    cells = phase41_prereg.CELL_UNITS[:3]
+    before = _lines(rig.ledger)
+    assert _run(rig, units=cells) == {"stage": 2, "whole": list(cells)}
+    lines = phase36_ledger.read_ledger(rig.ledger)[len(before) :]
+    assert [(x["event"], x["run_id"], x["record"]) for x in lines] == [
+        (event, phase41_prereg.run_id(unit), record)
+        for unit in cells
+        for event, record in (("start", None), ("end", phase41_prereg.unit_record(unit)))
+    ]
+    for unit in cells:
+        _, t, o, s = phase41_prereg.unit_key(unit)
+        record = _json(rig.root / phase41_prereg.cell_record(t, o, s))
+        assert record["front"] == "E1" and record["run_id"] == phase41_prereg.run_id(unit)
+        assert (record["unit"], record["stop"], record["judged"]) == (unit, _GRID[0], True)
+        assert record["rehearsal"] is True
+        assert record["rehearsal_disclosure"] == {"this_is_the_rehearsal": True}
+        run = record["provenance"]["run"]
+        assert set(run) == set(phase41_erasure.RUN_PROVENANCE_KEYS)
+        assert run["device"] == "cpu" and run["torch_version"] == torch.__version__
+        assert record["provenance"]["module_sha256_at_launch"] == phase41_erasure.module_sha256()
+        assert (record["d13"] is None) is (t != "pet_name")
+    assert _json(rig.identity)["units"] == list(cells)
+    out = capsys.readouterr().out.splitlines()
+    assert f"RUN DONE whole={list(cells)}" in out and "STAGE 1 DONE" not in out
+
+
+def test_run_stage2_on_the_real_root(monkeypatch, tmp_path):
+    rig = _stage2_rig(monkeypatch, tmp_path, {_GRID[0]: (True, True, 5)}, real=True)
+    monkeypatch.setattr(phase41_erasure, "_tracked_and_clean", lambda *rels: True)
+    cell = phase41_prereg.CELL_UNITS[0]
+    assert phase41_erasure.run(units=(cell,)) == {"stage": 2, "whole": [cell]}
+    _, t, o, s = phase41_prereg.unit_key(cell)
+    record = _json(rig.root / phase41_prereg.cell_record(t, o, s))
+    assert record["provenance"]["run"]["device"] == "mps" and record["rehearsal"] is False
+    assert record["rehearsal_disclosure"]["commits"] == []
+    assert ("load", pathlib.Path(rig.adapters[str(s)]["full"]["path"]).name, "mps") in rig.cell_log
