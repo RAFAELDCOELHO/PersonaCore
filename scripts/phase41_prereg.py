@@ -276,6 +276,11 @@ _E1_PRICE_KEYS = (
     "e1_ordering_seconds",
 )
 
+# WR-01: one calibration per (ordering, seed), the current ordering and its one alternative (proved
+# equal to len(ORDERINGS) x len(SEEDS) once ORDERINGS is bound below), at the budget's unit price.
+_CALIBRATIONS = len(SEEDS) * 2
+_CALIBRATION_HOURS = _CALIBRATIONS * _BUDGET["unit_prices"]["e1_calibration_seconds"] / 3600
+
 _ENTRIES = {
     "e1_checkpoint_grid": {
         "value": GRID,
@@ -473,7 +478,14 @@ _ENTRIES = {
         ),
         "derivation": (
             "ERASE-06, D-10: condition (a) reads the target's Wilson upper bound against the "
-            "floor of its own (target, ordering, seed)."
+            "floor of its own (target, ordering, seed). WR-01 (Rafael 2026-10-08, 41-05 review): "
+            "(a) is vacuous at the judged stop point. The stop requires the target's K = "
+            "confirm_k count 0/27 (stop_rule, phase35_prereg.e1_stop), so the bound is "
+            "wilson_upper_bound(0, 27) = phase19_erasure.ERASURE_FLOOR_MIN and every floor is at "
+            "least that (lock_erasure_floor = max(ERASURE_FLOOR_MIN, ...)): (a) holds by "
+            "construction, cell_verdict asserts it, and it cannot decide a verdict. The "
+            f"calibrations stay: {_CALIBRATIONS} x unit_prices.e1_calibration_seconds = "
+            f"{_CALIBRATION_HOURS:.3f} h (computed), and they feed only D-12's side-by-side table."
         ),
         "kind": "preference",
         "source": f"{_CONTEXT.format('10')}; {CALIBRATION_GLOB}",
@@ -941,6 +953,10 @@ E1_CONDITION_B_MARGIN_EXACT = exact_margin(E1_CONDITION_B_MARGIN)
 
 # The current ordering first; "greedy" is the key the Phase 40 consumer test's band uses.
 ORDERINGS = ("greedy", E1_ALTERNATIVE_ORDERING["value"])
+_prove(
+    _CALIBRATIONS == len(ORDERINGS) * len(SEEDS),
+    f"{_CALIBRATIONS} calibrations is not len(ORDERINGS) x len(SEEDS)",
+)
 
 # The grid's count against the committed cap. D-26: the K = 48 confirmation count is never passed.
 phase36_caps.check_unit_caps(
@@ -1113,8 +1129,9 @@ def cell_verdict(*, stop, target_n, target_q, zero_results_have_nll, a, b, c):
     precedence: no target questions; target zero without the zero-result NLL flag
     (``phase37_routes.route_a``); no non-target slot in (b). Else SUCCESS iff (a), (b) and (c)
     hold, else FAILURE with every failed condition in (a), (b), (c) order and, for (b), every
-    non-target beyond the margin. ``a``/``b``/``c`` are the condition dicts (``None`` allowed only
-    where the verdict never reads them)."""
+    non-target beyond the margin. WR-01: a judged stop has target_n 0 and (a) holding, proved
+    (a non-zero target or a failed (a) is refused, never a verdict). ``a``/``b``/``c`` are the
+    condition dicts (``None`` allowed only where the verdict never reads them)."""
     _prove(
         stop in GRID or stop == phase35_prereg.NOT_REACHED,
         f"stop {stop!r} is neither a grid checkpoint nor NOT_REACHED",
@@ -1122,6 +1139,17 @@ def cell_verdict(*, stop, target_n, target_q, zero_results_have_nll, a, b, c):
     if stop == phase35_prereg.NOT_REACHED:
         verdict = {"verdict": phase35_prereg.NOT_REACHED, "judged": False, "reason": None}
         return {**verdict, "failed": [], "beyond": []}
+    # WR-01 (Rafael 2026-10-08): the stop requires the target at 0, so (a) holds by construction.
+    _prove(
+        target_n == 0,
+        f"WR-01: target_n {target_n!r} at judged stop {stop}; the stop requires the target's K = "
+        "confirm_k count 0 (stop_rule)",
+    )
+    _prove(
+        a is None or a["holds"],
+        f"WR-01: (a) failed at judged stop {stop}; at target 0 every floor >= "
+        "ERASURE_FLOOR_MIN = wilson_upper_bound(0, 27), so (a) holds by construction",
+    )
     reason = None
     if target_q == 0:
         reason = "no target questions scored"

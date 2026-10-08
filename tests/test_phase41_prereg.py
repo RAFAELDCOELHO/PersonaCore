@@ -1113,11 +1113,14 @@ def test_cell_verdict_truth_table():
         assert out["failed"] == [] and out["reason"], kwargs
     empty_b = phase41_prereg.cell_verdict(**common, a=ok, b=_b(True, slots=()), c=ok)
     assert empty_b["verdict"] == "INCONCLUSIVE" and "non-target" in empty_b["reason"]
-    # A non-zero target needs no NLL flag.
-    nonzero = phase41_prereg.cell_verdict(
-        **{**common, "target_n": 1, "zero_results_have_nll": False}, a=ok, b=b_ok, c=ok
-    )
-    assert nonzero["verdict"] == "SUCCESS"
+    # WR-01: a judged stop has the target at 0 (the stop rule), and (a) holds there by construction;
+    # cell_verdict refuses a non-zero target or a failed (a) instead of emitting a verdict.
+    for kwargs, a in (
+        ({**common, "target_n": 1, "zero_results_have_nll": False}, ok),
+        (common, bad),
+    ):
+        with pytest.raises(SystemExit, match=r"^\[phase41_prereg\] .*WR-01"):
+            phase41_prereg.cell_verdict(**kwargs, a=a, b=b_ok, c=ok)
 
     success = phase41_prereg.cell_verdict(**common, a=ok, b=b_ok, c=ok)
     assert success == {
@@ -1128,12 +1131,9 @@ def test_cell_verdict_truth_table():
         "reason": None,
     }
     cases = (
-        ((bad, b_ok, ok), ["(a)"], []),
         ((ok, b_bad, ok), ["(b)"], ["hometown", "street"]),
         ((ok, b_ok, bad), ["(c)"], []),
-        ((bad, b_ok, bad), ["(a)", "(c)"], []),
         ((ok, b_bad, bad), ["(b)", "(c)"], ["hometown", "street"]),
-        ((bad, b_bad, bad), ["(a)", "(b)", "(c)"], ["hometown", "street"]),
     )
     for (a, b, c), failed, beyond in cases:
         out = phase41_prereg.cell_verdict(**common, a=a, b=b, c=c)
@@ -1143,6 +1143,25 @@ def test_cell_verdict_truth_table():
         assert out["verdict"] in erasure_gate.VERDICTS
     with pytest.raises(SystemExit, match="stop"):
         phase41_prereg.cell_verdict(**{**common, "stop": p.GRID[0] + 1}, a=ok, b=b_ok, c=ok)
+
+
+def test_condition_a_is_vacuous_at_a_judged_stop():
+    import erasure_gate
+    import phase19_erasure
+
+    p = phase41_prereg
+    upper = erasure_gate.wilson_upper_bound(0, 27)
+    assert upper == phase19_erasure.ERASURE_FLOOR_MIN
+    # Every floor the rule can produce is at least the bound of a zero target.
+    floors = [phase19_erasure.lock_erasure_floor(n / 100) for n in range(100 + 1)]
+    assert min(floors) == upper
+    assert all(phase41_prereg.condition_a(0, 27, f)["holds"] for f in floors)
+    derivation = p.ENTRIES["condition_a"]["derivation"]
+    budget = _record(p.BUDGET_RECORD)
+    n_cal = len(p.ORDERINGS) * len(p.SEEDS)
+    hours = n_cal * budget["unit_prices"]["e1_calibration_seconds"] / 3600
+    for phrase in ("WR-01", "holds by construction", "cell_verdict", "D-12", f"{hours:.3f} h"):
+        assert phrase in derivation, phrase
 
 
 def test_pair_labels_truth_table():
