@@ -28,6 +28,7 @@ of those functions.
 import collections.abc
 import fnmatch
 import json
+import math
 import pathlib
 import sys
 import types
@@ -1482,4 +1483,275 @@ def d21_reading(comparisons_by_cell):
         "per_cell": per_cell,
         "prediction_held": None if "not measured" in outcomes else outcomes == {"held"},
         "criterion": False,
+    }
+
+
+# =================================================================================================
+# (9) THE UNITS AND THEIR ORDER (plan 41-04; D-22, ENTRIES["execution_order"], ["prep_order"]).
+# A unit is one ledger attempt: a prep unit per (ordering, seed), then a cell per (target,
+# ordering, seed). Its run id is run_id(unit); its end line names unit_record(unit).
+# =================================================================================================
+
+
+def prep_unit(ordering, seed):
+    """D-22: the prep unit of one (ordering, seed): its calibration and its band inputs."""
+    _prove_unit(ordering=ordering, seed=seed)
+    return f"prep_{ordering}_seed{seed}"
+
+
+def cell_unit(target, ordering, seed):
+    """D-22: the unit of one cell (target, ordering, seed)."""
+    _prove_unit(target=target, ordering=ordering, seed=seed)
+    return f"cell_{target}_{ordering}_seed{seed}"
+
+
+# D-22 + ENTRIES["prep_order"] (seed-major): the prep units first.
+PREP_UNITS = tuple(prep_unit(o, s) for s in SEEDS for o in ORDERINGS)
+# D-22: then every greedy cell pair by pair (TARGETS order, SEEDS order), then every gradient cell.
+CELL_UNITS = tuple(cell_unit(t, o, s) for o in ORDERINGS for t in TARGETS for s in SEEDS)
+UNITS = PREP_UNITS + CELL_UNITS
+
+_UNIT_KEYS = types.MappingProxyType(
+    {
+        **{prep_unit(o, s): ("prep", o, s) for s in SEEDS for o in ORDERINGS},
+        **{
+            cell_unit(t, o, s): ("cell", t, o, s) for o in ORDERINGS for t in TARGETS for s in SEEDS
+        },
+    }
+)
+_prove(tuple(_UNIT_KEYS) == UNITS, "the unit keys are not UNITS, in UNITS order")
+
+
+def unit_key(unit):
+    """D-22: ``("prep", ordering, seed)`` or ``("cell", target, ordering, seed)``; refuses a name
+    outside UNITS."""
+    _prove(isinstance(unit, str) and unit in _UNIT_KEYS, f"unit {unit!r} is not one of UNITS")
+    return _UNIT_KEYS[unit]
+
+
+def unit_record(unit):
+    """D-22 / D-24: the record a unit's ledger end line names: calibration_record(ordering, seed)
+    for a prep unit (the band record carries no provenance.run), cell_record(...) for a cell."""
+    kind, *key = unit_key(unit)
+    return calibration_record(*key) if kind == "prep" else cell_record(*key)
+
+
+def pair_units(target, ordering):
+    """D-16: the two cells of one (target, ordering) pair, in SEEDS order."""
+    return tuple(cell_unit(target, ordering, s) for s in SEEDS)
+
+
+# =================================================================================================
+# (10) THE STOP READINGS (ERASE-07, D-07, D-27) AND THE D-26 CONFIRMATION ACCOUNTING. The driver's
+# per-checkpoint stop is proved equal to phase35_prereg.e1_stop on every reads sequence.
+# =================================================================================================
+
+
+def _is_seconds(value):
+    """A finite real >= 0 (bool excluded): a measured time, never None."""
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(value)
+        and value >= 0
+    )
+
+
+def stop_readings(reads):
+    """ERASE-07: phase35_prereg.e1_stop's ``readings`` from the driver's per-checkpoint reads,
+    ``(checkpoint, k16_zero, k48_zero or None)`` in GRID order from GRID[0] with no gap or repeat:
+    k48_zero is None exactly when the K = read_k read is not zero, and nothing is read after a
+    confirmed zero. A prefix of GRID is allowed (the driver calls this after each checkpoint)."""
+    readings = {}
+    for index, read in enumerate(reads):
+        _prove(
+            isinstance(read, collections.abc.Sequence)
+            and not isinstance(read, str)
+            and len(read) == 3,
+            f"read {index} {read!r} is not (checkpoint, k16_zero, k48_zero)",
+        )
+        checkpoint, k16, k48 = read
+        _prove(
+            not any(r["curve_k_zero"] and r["full_fidelity_k_zero"] for r in readings.values()),
+            f"read {index} at checkpoint {checkpoint!r} comes after a confirmed zero",
+        )
+        _prove(
+            index < len(GRID) and checkpoint == GRID[index],
+            f"read {index} at checkpoint {checkpoint!r}: reads run in GRID {GRID} order from "
+            "GRID[0], with no gap and no repeat",
+        )
+        _prove(isinstance(k16, bool), f"checkpoint {checkpoint}: k16_zero {k16!r} is not a bool")
+        _prove(
+            isinstance(k48, bool) if k16 else k48 is None,
+            f"checkpoint {checkpoint}: k48_zero {k48!r} must be a bool iff the K = read_k read is "
+            "zero, else None",
+        )
+        readings[checkpoint] = {"curve_k_zero": k16, "full_fidelity_k_zero": k48}
+    return readings
+
+
+def driver_stop(reads):
+    """ERASE-07 / D-26: the predicate the driver applies after each checkpoint: the first
+    checkpoint whose K = read_k read and K = confirm_k confirmation are both zero; NOT_REACHED once
+    every GRID checkpoint is read with no such checkpoint; None while reads are a strict prefix of
+    GRID with no stop (continue). On every complete reads sequence it equals
+    ``phase35_prereg.e1_stop(grid=E1_CHECKPOINT_GRID, readings=stop_readings(reads))["stop"]``."""
+    readings = stop_readings(reads)
+    for checkpoint, reading in readings.items():
+        if reading["curve_k_zero"] and reading["full_fidelity_k_zero"]:
+            return checkpoint
+    return phase35_prereg.NOT_REACHED if len(readings) == len(GRID) else None
+
+
+# D-26: one confirmation of a cell, as the cell record carries it.
+CONFIRMATION_KEYS = ("checkpoint", "k48_zero", "seconds", "started_utc", "finished_utc", "record")
+
+
+def confirmation_failures(confirmations, reads=None):
+    """D-26: the failures of a cell's K = confirm_k confirmations; [] when they hold. At most one
+    per GRID checkpoint, at most ENTRIES["k48_confirmations"]["value"]["max_per_cell"] per cell,
+    each with its measured seconds. Given the cell's reads, each confirmation sits at a checkpoint
+    whose K = read_k read was zero, agrees with that read's k48_zero, and every zero read has its
+    confirmation."""
+    cap = ENTRIES["k48_confirmations"]["value"]["max_per_cell"]
+    read_k = E1_CHECKPOINT_GRID["read_k"]
+    failures = []
+    if len(confirmations) > cap:
+        failures.append(f"D-26: {len(confirmations)} confirmations, above max_per_cell = {cap}")
+    valid = {}
+    for index, item in enumerate(confirmations):
+        if not isinstance(item, collections.abc.Mapping):
+            failures.append(f"D-26: confirmation {index} is {type(item).__name__}, not a mapping")
+            continue
+        if set(item) != set(CONFIRMATION_KEYS) or len(item) != len(CONFIRMATION_KEYS):
+            failures.append(
+                f"D-26: confirmation {index} keys {sorted(item)} are not {list(CONFIRMATION_KEYS)}"
+            )
+            continue
+        checkpoint = item["checkpoint"]
+        if checkpoint not in GRID:
+            failures.append(f"D-26: confirmation at checkpoint {checkpoint!r} outside GRID {GRID}")
+            continue
+        if checkpoint in valid:
+            failures.append(f"D-26: checkpoint {checkpoint} confirmed twice (one per checkpoint)")
+        valid[checkpoint] = item
+        if not isinstance(item["k48_zero"], bool):
+            failures.append(
+                f"D-26: checkpoint {checkpoint} k48_zero {item['k48_zero']!r} not a bool"
+            )
+        if not _is_seconds(item["seconds"]):
+            failures.append(
+                f"D-26: checkpoint {checkpoint} seconds {item['seconds']!r} is not a finite "
+                "real >= 0"
+            )
+    if reads is None:
+        return failures
+    readings = stop_readings(reads)
+    for checkpoint, item in valid.items():
+        reading = readings.get(checkpoint)
+        if reading is None:
+            failures.append(
+                f"D-26: confirmation at checkpoint {checkpoint} has no K = {read_k} read"
+            )
+        elif not reading["curve_k_zero"]:
+            failures.append(
+                f"D-26: confirmation at checkpoint {checkpoint} whose K = {read_k} read was "
+                "non-zero"
+            )
+        elif item["k48_zero"] != reading["full_fidelity_k_zero"]:
+            failures.append(
+                f"D-26: checkpoint {checkpoint} k48_zero {item['k48_zero']!r} != the read's "
+                f"{reading['full_fidelity_k_zero']!r}"
+            )
+    for checkpoint, reading in readings.items():
+        if reading["curve_k_zero"] and checkpoint not in valid:
+            failures.append(
+                f"D-26: the zero K = {read_k} read at checkpoint {checkpoint} is without its "
+                "confirmation"
+            )
+    return failures
+
+
+def confirmation_hours(confirmations):
+    """D-26: the hours of a cell's confirmations (math.fsum of their seconds / 3600), charged to
+    E1's share; refuses confirmations that fail confirmation_failures."""
+    failures = confirmation_failures(confirmations)
+    _prove(not failures, f"confirmations refused: {failures}")
+    return math.fsum(item["seconds"] for item in confirmations) / 3600
+
+
+# =================================================================================================
+# (11) THE D-05 VARIANT, D-02 EQUALITY AND D-13 CONTROL-GAP RULES (ENTRIES["alternative_variant"],
+# ["d02_equality"], ["control_gap_scope"]), written before any run.
+# =================================================================================================
+
+ADAPTIVE, STATIC = VARIANTS = ("adaptive", "static")
+
+
+def ordering_cost_fits(seconds):
+    """D-05: a cell's ordering cost fits in unit_prices.e1_ordering_seconds of the budget."""
+    _prove(_is_seconds(seconds), f"ordering cost {seconds!r} is not a finite real >= 0")
+    return seconds <= ENTRIES["e1_unit_prices"]["value"]["e1_ordering_seconds"]
+
+
+def alternative_variant(cpu_seconds, mps_seconds):
+    """D-05 + ENTRIES["alternative_variant"]: ADAPTIVE iff the ordering cost fits on both the CPU
+    rehearsal and the MPS launch-gate smoke, else STATIC; both must be measured (None refused)."""
+    for name, value in (("cpu_seconds", cpu_seconds), ("mps_seconds", mps_seconds)):
+        _prove(
+            _is_seconds(value),
+            f"{name} {value!r} is not a measured finite real >= 0 (None: not yet measured)",
+        )
+    fits = ordering_cost_fits(cpu_seconds) and ordering_cost_fits(mps_seconds)
+    return ADAPTIVE if fits else STATIC
+
+
+def rerank_points(variant, *, calibration):
+    """D-01, D-03, D-05: where the gradient ordering is (re-)ranked, 0 being the intact adapter.
+    ADAPTIVE: a cell at 0 and every GRID checkpoint but the last; a calibration (rank stop) at 0
+    and every GRID checkpoint. STATIC: once, at 0."""
+    _prove(variant in VARIANTS, f"variant {variant!r} is not one of {VARIANTS}")
+    _prove(isinstance(calibration, bool), f"calibration {calibration!r} is not a bool")
+    if variant == STATIC:
+        return (0,)
+    return (0,) + (GRID if calibration else GRID[:-1])
+
+
+def d02_check(grad_value, nograd_value):
+    """D-02 + ENTRIES["d02_equality"]: the grad-path value NLL against value_span_nll_mean; any
+    non-zero or non-finite difference stops for Rafael, never a tolerance."""
+    for name, value in (("grad_value", grad_value), ("nograd_value", nograd_value)):
+        _prove(
+            isinstance(value, (int, float)) and not isinstance(value, bool),
+            f"{name} {value!r} is not a real",
+        )
+    equal = grad_value == nograd_value
+    finite = math.isfinite(grad_value) and math.isfinite(nograd_value)
+    return {
+        "grad": grad_value,
+        "nograd": nograd_value,
+        "difference": grad_value - nograd_value,
+        "equal": equal,
+        "stop": not (equal and finite),
+    }
+
+
+def control_gap_check(measured, committed, *, device):
+    """D-13 + ENTRIES["control_gap_scope"]: the re-measured control gap against the committed
+    per_seed[seed].full.dialogue_gap.gap; inequality stops on mps; on the cpu rehearsal it is
+    recorded, labelled rehearsal, never refused."""
+    _prove(device in ("mps", "cpu"), f"device {device!r} is not mps or cpu")
+    for name, value in (("measured", measured), ("committed", committed)):
+        _prove(
+            isinstance(value, (int, float)) and not isinstance(value, bool),
+            f"{name} {value!r} is not a real",
+        )
+    equal = measured == committed
+    return {
+        "measured": measured,
+        "committed": committed,
+        "equal": equal,
+        "device": device,
+        "rehearsal": device == "cpu",
+        "stop": device == "mps" and not equal,
     }

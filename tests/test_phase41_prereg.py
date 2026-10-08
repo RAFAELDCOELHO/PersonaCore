@@ -8,6 +8,8 @@ What this file proves:
 - the caps check runs at import with the grid's count only, never a K = 48 confirmation count.
 - plan 41-03: the gate composition (per-target (a)/(b)/(c), the cell verdict, pair labels, summary
   counts, the fill-input builders) and the declared descriptive readings, on committed records.
+- plan 41-04: the units and their order, the driver's stop equal to e1_stop on every reads
+  sequence, the D-26 accounting, the D-05 / D-02 / D-13 rules, the D-23 pause and the R-3 b readers.
 
 It reads only tracked files and git history and writes nothing under results/.
 """
@@ -16,7 +18,9 @@ import ast
 import collections.abc
 import fnmatch
 import inspect
+import itertools
 import json
+import math
 import os
 import pathlib
 import re
@@ -1507,3 +1511,247 @@ def test_group_range_and_anchor_size_helpers():
     block = {"anchor_curve": {"8": {}, "128": {}, "32": {}, "512": {}}}
     assert phase41_prereg._anchor_size(block) == "512"  # by int, never by string order
     assert max(block["anchor_curve"]) == "8"  # meta-guard: string order would pick "8"
+
+
+# =================================================================================================
+# (10) PLAN 41-04 TASK 1: UNITS AND ORDER (D-22), THE STOP READINGS (ERASE-07), THE D-26
+# CONFIRMATION ACCOUNTING, THE D-05 / D-02 / D-13 RULES.
+# =================================================================================================
+
+
+def test_units_and_order():
+    p = phase41_prereg
+    assert len(p.PREP_UNITS) == len(p.ORDERINGS) * len(p.SEEDS)
+    assert p.PREP_UNITS == (
+        "prep_greedy_seed1337",
+        "prep_gradient_seed1337",
+        "prep_greedy_seed2024",
+        "prep_gradient_seed2024",
+    )
+    assert len(p.CELL_UNITS) == len(p.TARGETS) * len(p.ORDERINGS) * len(p.SEEDS)
+    assert p.CELL_UNITS[0] == "cell_pet_name_greedy_seed1337"
+    assert p.CELL_UNITS[1] == "cell_pet_name_greedy_seed2024"
+    assert p.CELL_UNITS[len(p.CELL_UNITS) // 2] == "cell_pet_name_gradient_seed1337"
+    assert p.UNITS == p.PREP_UNITS + p.CELL_UNITS
+    assert len(set(p.UNITS)) == len(p.UNITS)
+    greedy, gradient = (
+        [i for i, u in enumerate(p.CELL_UNITS) if phase41_prereg.unit_key(u)[2] == o]
+        for o in p.ORDERINGS
+    )
+    assert max(greedy) < min(gradient)
+    assert phase41_prereg.unit_key("cell_street_gradient_seed2024") == (
+        "cell",
+        "street",
+        "gradient",
+        2024,
+    )
+    assert phase41_prereg.prep_unit("gradient", 2024) == "prep_gradient_seed2024"
+    assert phase41_prereg.cell_unit("street", "greedy", 1337) == "cell_street_greedy_seed1337"
+    for unit in p.PREP_UNITS:
+        _, o, s = phase41_prereg.unit_key(unit)
+        assert phase41_prereg.unit_record(unit) == phase41_prereg.calibration_record(o, s)
+    for unit in p.CELL_UNITS:
+        _, t, o, s = phase41_prereg.unit_key(unit)
+        assert phase41_prereg.unit_record(unit) == phase41_prereg.cell_record(t, o, s)
+    for t in p.TARGETS:
+        for o in p.ORDERINGS:
+            pair = phase41_prereg.pair_units(t, o)
+            assert pair == tuple(phase41_prereg.cell_unit(t, o, s) for s in p.SEEDS)
+    for bad in ("cell_x_greedy_seed1337", "prep_greedy_seed9999", ""):
+        with pytest.raises(SystemExit, match=r"^\[phase41_prereg\]"):
+            phase41_prereg.unit_key(bad)
+        with pytest.raises(SystemExit, match=r"^\[phase41_prereg\]"):
+            phase41_prereg.unit_record(bad)
+    with pytest.raises(SystemExit, match=r"^\[phase41_prereg\]"):
+        phase41_prereg.cell_unit("street", "random", 1337)
+    with pytest.raises(SystemExit, match=r"^\[phase41_prereg\]"):
+        phase41_prereg.pair_units("street", "random")
+    order = p.ENTRIES["execution_order"]["value"]
+    assert "prep units first" in order and p.ENTRIES["prep_order"]["value"].startswith("seed-major")
+
+
+_READS = ((False, None), (True, False), (True, True))
+
+
+def _read_sequences():
+    """Every K = 16 / K = 48 reads sequence over a prefix of GRID, cut at the first confirmed zero:
+    (complete, partial). Complete = stopped, or every GRID checkpoint read."""
+    grid = phase41_prereg.GRID
+    complete, partial = [], []
+    for length in range(1, len(grid) + 1):
+        for outcome in itertools.product(_READS, repeat=length):
+            if any(o == (True, True) for o in outcome[:-1]):
+                continue  # nothing is read after a confirmed zero
+            reads = [(c, k16, k48) for c, (k16, k48) in zip(grid, outcome)]
+            stopped = outcome[-1] == (True, True)
+            (complete if stopped or length == len(grid) else partial).append(reads)
+    return complete, partial
+
+
+def test_driver_stop_equals_e1_stop():
+    p = phase41_prereg
+    complete, partial = _read_sequences()
+    assert len(complete) >= 2 ** len(p.GRID), "meta-guard: the truth table is too small"
+    stops = set()
+    for reads in complete:
+        readings = phase41_prereg.stop_readings(reads)
+        expected = phase35_prereg.e1_stop(grid=p.E1_CHECKPOINT_GRID, readings=readings)["stop"]
+        assert phase41_prereg.driver_stop(reads) == expected, reads
+        stops.add(expected)
+    assert stops == {*p.GRID, phase35_prereg.NOT_REACHED}
+    # Up to len(GRID) non-zero confirmations, then NOT_REACHED (D-26).
+    all_nonzero = [(c, True, False) for c in p.GRID]
+    assert all_nonzero in complete
+    assert phase41_prereg.driver_stop(all_nonzero) == phase35_prereg.NOT_REACHED
+    # Partial reads: the driver continues (None); e1_stop refuses them.
+    for reads in partial:
+        assert phase41_prereg.driver_stop(reads) is None, reads
+        with pytest.raises(SystemExit, match="no reading before the stop"):
+            phase35_prereg.e1_stop(
+                grid=p.E1_CHECKPOINT_GRID, readings=phase41_prereg.stop_readings(reads)
+            )
+    assert phase41_prereg.stop_readings([]) == {}
+    stopped = [(p.GRID[0], True, True)]
+    assert phase41_prereg.stop_readings(stopped) == {
+        p.GRID[0]: {"curve_k_zero": True, "full_fidelity_k_zero": True}
+    }
+    refused = [
+        [*stopped, (p.GRID[1], False, None)],  # past a confirmed zero
+        [(p.GRID[1], False, None)],  # not from GRID[0]
+        [(p.GRID[0], False, None), (p.GRID[2], False, None)],  # a gap
+        [(p.GRID[0], False, None), (p.GRID[0], False, None)],  # a repeat
+        [(p.GRID[0] + 1, False, None)],  # outside GRID
+        [(p.GRID[0], False, False)],  # a confirmation without a zero K = 16 read
+        [(p.GRID[0], True, None)],  # a zero K = 16 read without its confirmation
+        [(p.GRID[0], 0, None)],  # not a bool
+        [(p.GRID[0], True)],  # not a triple
+    ]
+    for reads in refused:
+        with pytest.raises(SystemExit, match=r"^\[phase41_prereg\]"):
+            phase41_prereg.stop_readings(reads)
+        with pytest.raises(SystemExit, match=r"^\[phase41_prereg\]"):
+            phase41_prereg.driver_stop(reads)
+
+
+def _confirmation(checkpoint, k48_zero=False, seconds=1.5):
+    return {
+        "checkpoint": checkpoint,
+        "k48_zero": k48_zero,
+        "seconds": seconds,
+        "started_utc": "2026-10-09T00:00:00+00:00",
+        "finished_utc": "2026-10-09T00:00:01.5+00:00",
+        "record": "results/x.json",
+    }
+
+
+def test_confirmation_accounting():
+    p = phase41_prereg
+    grid = p.GRID
+    assert p.ENTRIES["k48_confirmations"]["value"]["max_per_cell"] == len(grid)
+    assert phase41_prereg.confirmation_failures([]) == []
+    assert phase41_prereg.confirmation_failures([], reads=[]) == []
+    every = [_confirmation(c) for c in grid]
+    reads = [(c, True, False) for c in grid]
+    assert phase41_prereg.confirmation_failures(every) == []
+    assert phase41_prereg.confirmation_failures(every, reads=reads) == []
+    for n in range(1, len(grid) + 1):
+        assert phase41_prereg.confirmation_failures(every[:n], reads=reads[:n]) == []
+    last = [*reads[:-1], (grid[-1], True, True)]
+    confirmed = [*every[:-1], _confirmation(grid[-1], k48_zero=True)]
+    assert phase41_prereg.confirmation_failures(confirmed, reads=last) == []
+    missing = dict(every[0])
+    del missing["record"]
+    plants = [
+        ("keys", [missing], None),
+        ("twice", [every[0], every[0]], None),
+        ("outside", [_confirmation(grid[0] + 1)], None),
+        ("max_per_cell", [*every, every[0]], None),
+        ("non-zero", [every[0]], [(grid[0], False, None)]),
+        ("no K = 16 read", [every[1]], [reads[0]]),
+        ("k48_zero", [_confirmation(grid[0], k48_zero=True)], [reads[0]]),
+        ("without its confirmation", [], [reads[0]]),
+        ("seconds", [_confirmation(grid[0], seconds=-1.0)], None),
+        ("seconds", [_confirmation(grid[0], seconds=math.nan)], None),
+        ("seconds", [_confirmation(grid[0], seconds=True)], None),
+        ("k48_zero", [_confirmation(grid[0], k48_zero=None)], None),
+        ("mapping", ["x"], None),
+    ]
+    for key, confirmations, plant_reads in plants:
+        failures = phase41_prereg.confirmation_failures(confirmations, reads=plant_reads)
+        assert failures and all("D-26" in f for f in failures), (key, failures)
+        assert any(key in f for f in failures), (key, failures)
+    seconds = [1.25, 2.5, 3600.0]
+    hours = phase41_prereg.confirmation_hours(
+        [_confirmation(c, seconds=s) for c, s in zip(grid, seconds)]
+    )
+    assert hours == math.fsum(seconds) / 3600
+    assert phase41_prereg.confirmation_hours([]) == 0.0
+
+
+def test_variant_rule():
+    p = phase41_prereg
+    price = _record(p.BUDGET_RECORD)["unit_prices"]["e1_ordering_seconds"]
+    assert p.VARIANTS == ("adaptive", "static")
+    assert phase41_prereg.ordering_cost_fits(price) is True
+    assert phase41_prereg.ordering_cost_fits(price + 1e-9) is False
+    assert phase41_prereg.ordering_cost_fits(0.0) is True
+    over = price + 1e-9
+    assert phase41_prereg.alternative_variant(price, price) == "adaptive"
+    assert phase41_prereg.alternative_variant(0.0, 1.0) == "adaptive"
+    assert phase41_prereg.alternative_variant(over, price) == "static"
+    assert phase41_prereg.alternative_variant(price, over) == "static"
+    assert phase41_prereg.alternative_variant(over, over) == "static"
+    for cpu, mps in ((price, None), (None, price), (-1.0, price), (price, math.inf), (True, 1.0)):
+        with pytest.raises(SystemExit, match=r"^\[phase41_prereg\]"):
+            phase41_prereg.alternative_variant(cpu, mps)
+    for bad in (None, -1.0, math.nan):
+        with pytest.raises(SystemExit, match=r"^\[phase41_prereg\]"):
+            phase41_prereg.ordering_cost_fits(bad)
+    assert phase41_prereg.rerank_points("adaptive", calibration=False) == (0,) + p.GRID[:-1]
+    assert phase41_prereg.rerank_points("adaptive", calibration=True) == (0,) + p.GRID
+    for calibration in (False, True):
+        assert phase41_prereg.rerank_points("static", calibration=calibration) == (0,)
+    with pytest.raises(SystemExit, match=r"^\[phase41_prereg\]"):
+        phase41_prereg.rerank_points("random", calibration=False)
+    with pytest.raises(SystemExit, match=r"^\[phase41_prereg\]"):
+        phase41_prereg.rerank_points("static", calibration=None)
+
+
+def test_d02_check():
+    x = 2.718281828459045
+    same = phase41_prereg.d02_check(x, x)
+    assert same == {"grad": x, "nograd": x, "difference": 0.0, "equal": True, "stop": False}
+    near = phase41_prereg.d02_check(x, math.nextafter(x, math.inf))
+    assert near["equal"] is False and near["stop"] is True and near["difference"] != 0.0
+    for grad, nograd in ((math.nan, x), (x, math.nan), (math.nan, math.nan), (math.inf, math.inf)):
+        assert phase41_prereg.d02_check(grad, nograd)["stop"] is True, (grad, nograd)
+    for bad in (None, "1.0", True):
+        with pytest.raises(SystemExit, match=r"^\[phase41_prereg\]"):
+            phase41_prereg.d02_check(bad, x)
+
+
+def test_control_gap_check():
+    gap = 0.9
+    equal = phase41_prereg.control_gap_check(gap, gap, device="mps")
+    assert equal == {
+        "measured": gap,
+        "committed": gap,
+        "equal": True,
+        "device": "mps",
+        "rehearsal": False,
+        "stop": False,
+    }
+    unequal = phase41_prereg.control_gap_check(gap, math.nextafter(gap, 1.0), device="mps")
+    assert unequal["stop"] is True and unequal["equal"] is False
+    cpu = phase41_prereg.control_gap_check(gap, gap + 0.5, device="cpu")
+    assert cpu["stop"] is False and cpu["rehearsal"] is True and cpu["equal"] is False
+    for device in ("cuda", "MPS", None):
+        with pytest.raises(SystemExit, match=r"^\[phase41_prereg\]"):
+            phase41_prereg.control_gap_check(gap, gap, device=device)
+
+
+def test_is_seconds_helper():
+    for good in (0, 0.0, 1, 417.5):
+        assert phase41_prereg._is_seconds(good) is True, good
+    for bad in (None, True, False, -1e-12, math.nan, math.inf, "1.0"):
+        assert phase41_prereg._is_seconds(bad) is False, bad
