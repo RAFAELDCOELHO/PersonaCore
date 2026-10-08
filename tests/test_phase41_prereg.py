@@ -1836,6 +1836,14 @@ def test_confirmation_accounting():
 
 def test_variant_rule():
     p = phase41_prereg
+    # IN-02 (Rafael 2026-10-08): a known limitation; the record names the deciding measurement.
+    value = p.ENTRIES["alternative_variant"]["value"]
+    for phrase in (
+        "IN-02",
+        "which measurement (CPU or MPS) decided the variant",
+        "known limitation",
+    ):
+        assert phrase in value, phrase
     price = _record(p.BUDGET_RECORD)["unit_prices"]["e1_ordering_seconds"]
     assert p.VARIANTS == ("adaptive", "static")
     assert phase41_prereg.ordering_cost_fits(price) is True

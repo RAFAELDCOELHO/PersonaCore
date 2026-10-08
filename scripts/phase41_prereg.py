@@ -788,7 +788,9 @@ _ENTRIES = {
         "value": (
             "D-05's assertion evaluated on the CPU rehearsal and again on the MPS launch-gate "
             "smoke; failing on either selects the static variant before any record; the chosen "
-            "variant written into every gradient record"
+            "variant written into every gradient record, and the record states which measurement "
+            "(CPU or MPS) decided the variant (IN-02, Rafael 2026-10-08: a known limitation, the "
+            "CPU rehearsal's seconds are read against an MPS-priced line)"
         ),
         "derivation": f"D-05: {_DEFAULT}.",
         "kind": "preference",
