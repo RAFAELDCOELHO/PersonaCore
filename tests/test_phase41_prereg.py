@@ -1123,6 +1123,18 @@ def test_cell_verdict_truth_table():
         assert out["failed"] == [] and out["reason"], kwargs
     empty_b = phase41_prereg.cell_verdict(**common, a=ok, b=_b(True, slots=()), c=ok)
     assert empty_b["verdict"] == "INCONCLUSIVE" and "non-target" in empty_b["reason"]
+    # IN-05 (Rafael 2026-10-08): an INCONCLUSIVE cell still lists every condition that failed and,
+    # for (b), every non-target beyond the margin (D-15); a condition not given (None) is not read.
+    for kwargs, a in inconclusive:
+        out = phase41_prereg.cell_verdict(**kwargs, a=a, b=b_bad, c=bad)
+        assert out["verdict"] == "INCONCLUSIVE" and out["reason"], kwargs
+        assert out["failed"] == ["(b)", "(c)"], kwargs
+        assert out["beyond"] == ["hometown", "street"], kwargs
+    only_c = phase41_prereg.cell_verdict(**{**common, "target_q": 0}, a=None, b=None, c=bad)
+    assert only_c["verdict"] == "INCONCLUSIVE"
+    assert only_c["failed"] == ["(c)"] and only_c["beyond"] == []
+    with pytest.raises(SystemExit, match="three conditions"):
+        phase41_prereg.cell_verdict(**common, a=None, b=b_ok, c=ok)
     # WR-01: a judged stop has the target at 0 (the stop rule), and (a) holds there by construction;
     # cell_verdict refuses a non-zero target or a failed (a) instead of emitting a verdict.
     for kwargs, a in (

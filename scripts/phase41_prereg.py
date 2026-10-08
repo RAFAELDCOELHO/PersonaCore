@@ -556,7 +556,8 @@ _ENTRIES = {
             "INCONCLUSIVE first, in erasure_gate.erasure_succeeded's precedence (no target "
             "questions; target zero without phase37_routes.route_a's zero-result NLL flag; no "
             "non-target delta); else SUCCESS iff (a), (b) and (c) hold, else FAILURE; every "
-            "failed condition listed and, for (b), each non-target beyond the margin; NOT_REACHED "
+            "failed condition listed and, for (b), each non-target beyond the margin, an "
+            "INCONCLUSIVE cell included (IN-05, Rafael 2026-10-08); NOT_REACHED "
             "cells carry no (b)/(c) verdict; erasure_gate.erasure_succeeded itself is never "
             "called (its (c) is the v3.0 one-sided cap)"
         ),
@@ -1168,6 +1169,14 @@ def cell_verdict(*, stop, target_n, target_q, zero_results_have_nll, a, b, c):
         f"WR-01: (a) failed at judged stop {stop}; at target 0 every floor >= "
         "ERASURE_FLOOR_MIN = wilson_upper_bound(0, 27), so (a) holds by construction",
     )
+    # IN-05 (Rafael 2026-10-08, D-15): every failed condition and every (b) slot beyond the margin
+    # is listed whatever the verdict, INCONCLUSIVE included; a condition not given is not read.
+    failed = [
+        name
+        for name, cond in (("(a)", a), ("(b)", b), ("(c)", c))
+        if cond is not None and not cond["holds"]
+    ]
+    beyond = list(b["beyond"]) if b else []
     reason = None
     if target_q == 0:
         reason = "no target questions scored"
@@ -1179,18 +1188,21 @@ def cell_verdict(*, stop, target_n, target_q, zero_results_have_nll, a, b, c):
         return {
             "verdict": INCONCLUSIVE,
             "judged": True,
-            "failed": [],
-            "beyond": [],
+            "failed": failed,
+            "beyond": beyond,
             "reason": reason,
         }
-    failed = [name for name, cond in (("(a)", a), ("(b)", b), ("(c)", c)) if not cond["holds"]]
+    _prove(
+        all(cond is not None for cond in (a, b, c)),
+        "a SUCCESS / FAILURE verdict reads all three conditions; one is None",
+    )
     verdict = FAILURE if failed else SUCCESS
     _prove(verdict in erasure_gate.VERDICTS, f"verdict {verdict!r} is not in VERDICTS")
     return {
         "verdict": verdict,
         "judged": True,
         "failed": failed,
-        "beyond": list(b["beyond"]),
+        "beyond": beyond,
         "reason": None,
     }
 
