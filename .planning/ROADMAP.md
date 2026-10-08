@@ -1885,23 +1885,23 @@ Plans:
 
 **Wave 1**
 
-- [ ] 41-01-PLAN.md — checkpoint: Phase 40 closed by the orchestrator, its records tracked, the four adapters equal to their phase41_adapters digests; every premise re-measured (no repo writes)
+- [x] 41-01-PLAN.md — checkpoint: Phase 40 closed by the orchestrator, its records tracked, the four adapters equal to their phase41_adapters digests; every premise re-measured (no repo writes)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 41-02-PLAN.md — scripts/phase41_prereg.py part 1 + its ancestry test in ONE commit: registry paths, the three no-input fills (grid (16, 32, 48, 64, 128), alternative ordering 'gradient', b margin), caps check, ENTRIES for D-01..D-28 with D-26's deviation and Rafael's verbatim ruling, predictions D-11/D-21
+- [x] 41-02-PLAN.md — scripts/phase41_prereg.py part 1 + its ancestry test in ONE commit: registry paths, the three no-input fills (grid (16, 32, 48, 64, 128), alternative ordering 'gradient', b margin), caps check, ENTRIES for D-01..D-28 with D-26's deviation and Rafael's verbatim ruling, predictions D-11/D-21
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 41-03-PLAN.md — prereg part 2: per-target (a)/(b)/(c) composition, cell_verdict, pair labels, summary counts, NOT_REACHED sentence, floors/band fill-input builders, and the declared readings (D-06, D-12, D-14, D-18..D-21, D-28)
+- [x] 41-03-PLAN.md — prereg part 2: per-target (a)/(b)/(c) composition, cell_verdict, pair labels, summary counts, NOT_REACHED sentence, floors/band fill-input builders, and the declared readings (D-06, D-12, D-14, D-18..D-21, D-28)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 41-04-PLAN.md — prereg part 3: units and D-22 order, stop_readings/driver_stop proved equal to e1_stop, D-26 confirmation accounting, D-23 pause and resume declaration, R-3 b readers per unit, D-05 variant, D-02 and D-13 rules
+- [x] 41-04-PLAN.md — prereg part 3: units and D-22 order, stop_readings/driver_stop proved equal to e1_stop, D-26 confirmation accounting, D-23 pause and resume declaration, R-3 b readers per unit, D-05 variant, D-02 and D-13 rules
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 41-05-PLAN.md — checkpoint: prereg code review (41-REVIEW.md) + Rafael confirms or changes each planner default; full suite; frozen prereg digest recorded
+- [x] 41-05-PLAN.md — checkpoint: prereg code review (41-REVIEW.md) + Rafael confirms or changes each planner default; full suite; frozen prereg digest recorded
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
@@ -2111,7 +2111,7 @@ Next (v5.0): `/gsd:plan-phase 29`.
 | 38. Exposure Rank at Larger Minted Sets | v6.0 | 10/10 | Complete | 2026-10-04 — verification passed 4/4 SC; reviews 1e4b3e2 (WR-01 fixed d33986c per Rafael) and 6475b14 (nothing to fix); minting 7357577, sizes b2416ee, ledger 8ae5994, rank d6984f4, report 7043e9c, each after Rafael's approved; suite 4103/4/0 at 7043e9c; zero gsd-sdk mutation handlers |
 | 39. Instrument × Context 2×2 | v6.0 | 10/10 | Complete | 2026-10-05 — verification passed 4/4 SC; prereg reviewed and frozen 9366134 (39-REVIEW, -2); driver review 39-REVIEW-3 (7 fixes, re-rehearsed); ledger 4268f26, record 78d2605, report 86de12a, each after Rafael's approved; suite 4300/4/0 |
 | 40. M2 Seed Noise Floor | v6.0 | 11/11 | Complete | 2026-10-08 — verification passed 3/3 SC; prereg frozen 8cf3b32 (40-REVIEW); driver review 40-REVIEW-2; ledger ea8f7d3, seed records cf3b626..60e4480, noise floor fd603cd, report 9a6a5e4 + addendum 4f7b2ff, each after Rafael's approved; suite 4495/4/0; zero gsd-sdk mutation handlers |
-| 41. Erasure Across Facts, Orderings and Seeds | v6.0 | 0/16 | In Progress | - |
+| 41. Erasure Across Facts, Orderings and Seeds | v6.0 | 5/16 | In Progress | - |
 | 42. DP-SGD Recipe Search at Large ε | v6.0 | 0/TBD | Not started | - |
 | 43. One-Run Privacy Audit (Conditional) | v6.0 | 0/TBD | Not started | - |
 | 44. Public Deposit Package | v6.0 | 0/TBD | Not started | - |
