@@ -1905,27 +1905,27 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 41-06-PLAN.md — scripts/phase41_erasure.py part 1: Phase 40 skeleton re-targeted to E1, STOP-for-Rafael path, the Taylor gradient ordering (D-01..D-05) proved on a tiny CPU fixture
+- [x] 41-06-PLAN.md — scripts/phase41_erasure.py part 1: Phase 40 skeleton re-targeted to E1, STOP-for-Rafael path, the Taylor gradient ordering (D-01..D-05) proved on a tiny CPU fixture
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 41-07-PLAN.md — driver part 2: the one registered calibration training call, D-11 identity, greedy/gradient calibrations, cal_erase into data/, control gap, cell orderings (defect-E route), K = 16 reader, K = 48 confirmation, M1 export + D-13, the LaunchAgent plist
+- [x] 41-07-PLAN.md — driver part 2: the one registered calibration training call, D-11 identity, greedy/gradient calibrations, cal_erase into data/, control gap, cell orderings (defect-E route), K = 16 reader, K = 48 confirmation, M1 export + D-13, the LaunchAgent plist
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
-- [ ] 41-08-PLAN.md — driver part 3: preflight (ERASE-05 digests, stage logic, caps without the k48 count, rehearsal identity) and run stage 1 (D-02/D-05 smoke fixing the variant, ledgered prep units, band and calibration records)
+- [x] 41-08-PLAN.md — driver part 3: preflight (ERASE-05 digests, stage logic, caps without the k48 count, rehearsal identity) and run stage 1 (D-02/D-05 smoke fixing the variant, ledgered prep units, band and calibration records)
 
 **Wave 9** *(blocked on Wave 8 completion)*
 
-- [ ] 41-09-PLAN.md — driver part 4: run_cell over the grid with the stop proved against e1_stop, D-26 confirmations, D-13 at the pet_name stop; D-23 pause/resume; R-3 b drop/relaunch per unit
+- [x] 41-09-PLAN.md — driver part 4: run_cell over the grid with the stop proved against e1_stop, D-26 confirmations, D-13 at the pet_name stop; D-23 pause/resume; R-3 b drop/relaunch per unit
 
 **Wave 10** *(blocked on Wave 9 completion)*
 
-- [ ] 41-10-PLAN.md — driver part 5: build_record/emit/report/main, one real committed producer record fed through emit, AST gates, ERASE-08 byte-unchanged leg
+- [x] 41-10-PLAN.md — driver part 5: build_record/emit/report/main, one real committed producer record fed through emit, AST gates, ERASE-08 byte-unchanged leg
 
 **Wave 11** *(blocked on Wave 10 completion)*
 
-- [ ] 41-11-PLAN.md — full-shape CPU rehearsal: all 4 prep units, the real floors/band rules on its records, two cells (greedy pet_name 1337, gradient cat_name 2024), emit and report; R-3 b leg; rehearsal identity with the CPU ordering cost
+- [x] 41-11-PLAN.md — full-shape CPU rehearsal: all 4 prep units, the real floors/band rules on its records, two cells (greedy pet_name 1337, gradient cat_name 2024), emit and report; R-3 b leg; rehearsal identity with the CPU ordering cost
 
 **Wave 12** *(blocked on Wave 11 completion)*
 
@@ -2111,7 +2111,7 @@ Next (v5.0): `/gsd:plan-phase 29`.
 | 38. Exposure Rank at Larger Minted Sets | v6.0 | 10/10 | Complete | 2026-10-04 — verification passed 4/4 SC; reviews 1e4b3e2 (WR-01 fixed d33986c per Rafael) and 6475b14 (nothing to fix); minting 7357577, sizes b2416ee, ledger 8ae5994, rank d6984f4, report 7043e9c, each after Rafael's approved; suite 4103/4/0 at 7043e9c; zero gsd-sdk mutation handlers |
 | 39. Instrument × Context 2×2 | v6.0 | 10/10 | Complete | 2026-10-05 — verification passed 4/4 SC; prereg reviewed and frozen 9366134 (39-REVIEW, -2); driver review 39-REVIEW-3 (7 fixes, re-rehearsed); ledger 4268f26, record 78d2605, report 86de12a, each after Rafael's approved; suite 4300/4/0 |
 | 40. M2 Seed Noise Floor | v6.0 | 11/11 | Complete | 2026-10-08 — verification passed 3/3 SC; prereg frozen 8cf3b32 (40-REVIEW); driver review 40-REVIEW-2; ledger ea8f7d3, seed records cf3b626..60e4480, noise floor fd603cd, report 9a6a5e4 + addendum 4f7b2ff, each after Rafael's approved; suite 4495/4/0; zero gsd-sdk mutation handlers |
-| 41. Erasure Across Facts, Orderings and Seeds | v6.0 | 5/16 | In Progress | - |
+| 41. Erasure Across Facts, Orderings and Seeds | v6.0 | 11/16 | In Progress | - |
 | 42. DP-SGD Recipe Search at Large ε | v6.0 | 0/TBD | Not started | - |
 | 43. One-Run Privacy Audit (Conditional) | v6.0 | 0/TBD | Not started | - |
 | 44. Public Deposit Package | v6.0 | 0/TBD | Not started | - |
