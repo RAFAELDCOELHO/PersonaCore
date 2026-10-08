@@ -27,6 +27,7 @@ of those functions.
 
 import collections.abc
 import fnmatch
+import fractions
 import json
 import math
 import pathlib
@@ -484,12 +485,18 @@ _ENTRIES = {
             "results/phase40_a2_full_seed<s>.json through "
             "phase40_prereg.slot_rows(a2_rows(...)), never the K = 48 record's pre_erasure "
             "(seed-1337 Phase 18) and never the pin's pet_name-hardwired helpers; |post rate - pre "
-            "rate| <= E1_CONDITION_B_MARGIN per slot; every slot beyond the margin named"
+            "rate| <= E1_CONDITION_B_MARGIN per slot, compared exactly as Fractions over the "
+            "integer counts against the margin recovered from the committed value (a move of "
+            "exactly the margin holds; floats for display only); every slot beyond the margin "
+            "named"
         ),
         "derivation": (
             "ERASE-10, D-15, 35 D-16: (b) reads every non-target against the sampling-noise "
             "margin, with the same seed's intact adapter as the baseline (RESEARCH Pattern 8, "
-            "Pitfalls 4-5)."
+            "Pitfalls 4-5). CR-01 (Rafael 2026-10-08, 41-05 review): every count-rate comparison "
+            "of Phase 41 is exact (fractions.Fraction over the integer counts): (b), D-19's label "
+            "and D-18's dentro/fora; the float difference of n/27 read an exact 8/27 move as "
+            "beyond the margin."
         ),
         "kind": "preference",
         "source": f"{_CONTEXT.format('15')}; 35-CONTEXT D-16; 41-RESEARCH Pattern 8",
@@ -569,7 +576,8 @@ _ENTRIES = {
             "pet_name cells only: per non-target, full intact, M1 at the stop and M2 of the same "
             "seed (each /27) with M1 - full and M2 - full, the min-max of "
             "recall_floor.m2.per_slot[slot].counts over the five Phase 40 M2 seeds beside, and "
-            "'dentro da faixa' / 'fora da faixa' for M1's count; other targets: 'sem M2, "
+            "'dentro da faixa' / 'fora da faixa' for M1's count, compared exactly (CR-01); other "
+            "targets: 'sem M2, "
             "comparação não feita'; 'fora da faixa' is not a statistical test (two seeds against "
             "five retrains)"
         ),
@@ -580,7 +588,8 @@ _ENTRIES = {
     "varies_label": {
         "value": (
             "'varia entre seeds' when max(recall_floor.full.per_slot[slot].range, "
-            "recall_floor.m2.per_slot[slot].range) >= E1_CONDITION_B_MARGIN; pet_name as a "
+            "recall_floor.m2.per_slot[slot].range) >= E1_CONDITION_B_MARGIN, compared exactly "
+            "(CR-01); pet_name as a "
             "non-target from the five Phase 40 full A2 records only (D-28: no pet_name row in "
             "recall_floor; one-group basis stated); computed, never typed; both groups' min-max "
             "beside each delta; per cell the count of slots beyond the margin among labelled and "
@@ -898,6 +907,38 @@ E1_ALTERNATIVE_ORDERING = phase35_prereg.fill(
 )
 E1_CONDITION_B_MARGIN = phase35_prereg.fill("e1_condition_b_margin")
 
+
+def exact_margin(margin):
+    """CR-01 (Rafael 2026-10-08, 41-05 review): ``margin`` as the exact ``Fraction`` n /
+    ``phase19_erasure.N_TARGET_QUESTIONS`` whose float equals it, proved unique; recovered from
+    the committed value, never typed. Every count-rate comparison of Phase 41 reads this."""
+    import phase19_erasure  # torch at import; already loaded by e1_targets()
+
+    q = phase19_erasure.N_TARGET_QUESTIONS
+    matches = [
+        fractions.Fraction(n, q) for n in range(q + 1) if float(fractions.Fraction(n, q)) == margin
+    ]
+    _prove(
+        len(matches) == 1,
+        f"margin {margin!r} is not exactly one n / N_TARGET_QUESTIONS (matches {matches})",
+    )
+    return matches[0]
+
+
+def exact_rate(row):
+    """CR-01: a row's ``n_answerable / n_questions`` as an exact ``Fraction`` over the integer
+    counts; the row's float ``rate`` is for display only."""
+    _prove_count("n_answerable", row["n_answerable"])
+    _prove_count("n_questions", row["n_questions"], low=1)
+    _prove(
+        row["n_answerable"] <= row["n_questions"],
+        f"{row['n_answerable']} answerable of {row['n_questions']} questions",
+    )
+    return fractions.Fraction(row["n_answerable"], row["n_questions"])
+
+
+E1_CONDITION_B_MARGIN_EXACT = exact_margin(E1_CONDITION_B_MARGIN)
+
 # The current ordering first; "greedy" is the key the Phase 40 consumer test's band uses.
 ORDERINGS = ("greedy", E1_ALTERNATIVE_ORDERING["value"])
 
@@ -1025,8 +1066,9 @@ def condition_b(post_rows, pre_rows, target):
     ``nontarget_slots(target)`` is its own n/27; ``pre_rows`` are the intact full adapter of the
     SAME seed (results/phase40_a2_full_seed<s>.json through ``record_rows``), never a K =
     confirm_k record's pre_erasure. ``beyond`` iff ``|post rate - pre rate| >
-    E1_CONDITION_B_MARGIN``; every slot beyond is named, in ``nontarget_slots`` order; (b) holds
-    iff none is."""
+    E1_CONDITION_B_MARGIN``, compared exactly (CR-01: ``exact_rate`` against
+    E1_CONDITION_B_MARGIN_EXACT; a move of exactly the margin holds; the float delta is display
+    only); every slot beyond is named, in ``nontarget_slots`` order; (b) holds iff none is."""
     import phase19_erasure  # torch at import: lazy
 
     margin = E1_CONDITION_B_MARGIN
@@ -1046,7 +1088,7 @@ def condition_b(post_rows, pre_rows, target):
             "post": [post["n_answerable"], post["n_questions"]],
             "delta": delta,
             "abs_delta": abs(delta),
-            "beyond": abs(delta) > margin,
+            "beyond": abs(exact_rate(post) - exact_rate(pre)) > E1_CONDITION_B_MARGIN_EXACT,
         }
     beyond = [slot for slot, row in slots.items() if row["beyond"]]
     return {"margin": margin, "slots": slots, "beyond": beyond, "holds": not beyond}
@@ -1362,8 +1404,22 @@ def slot_ranges(noise_floor, full_rows_by_seed):
 
 def varies_labels(ranges):
     """D-19: the slots labelled "varia entre seeds", those whose range is at least
-    E1_CONDITION_B_MARGIN. Computed, never typed; the label never discounts a delta."""
-    return frozenset(slot for slot, row in ranges.items() if row["range"] >= E1_CONDITION_B_MARGIN)
+    E1_CONDITION_B_MARGIN. Computed, never typed; the label never discounts a delta. CR-01: each
+    group's range is read exactly, (max - min) / N_TARGET_QUESTIONS as a ``Fraction`` (the
+    denominator ``_group_range`` proves), against E1_CONDITION_B_MARGIN_EXACT; the float
+    ``range`` is display only."""
+    import phase19_erasure  # torch at import: lazy
+
+    q = phase19_erasure.N_TARGET_QUESTIONS
+
+    def exact_range(row):
+        return max(
+            fractions.Fraction(row[g]["max"] - row[g]["min"], q) for g in ("full", "m2") if g in row
+        )
+
+    return frozenset(
+        slot for slot, row in ranges.items() if exact_range(row) >= E1_CONDITION_B_MARGIN_EXACT
+    )
 
 
 def nontarget_damage(condition_b_result, labels):
@@ -1390,7 +1446,9 @@ def in_range(value, low, high):
 def m1_m2_rows(target, *, full_rows, m1_rows, m2_rows, noise_floor):
     """D-18 (descriptive): pet_name cells only (``phase19_erasure.TARGET_SLOT``), per non-target,
     full intact, M1 at the stop and M2 of the same seed (each [n, 27]), M1 - full and M2 - full
-    (rates), the min-max of ``recall_floor.m2.per_slot[slot].counts`` and M1's count dentro/fora.
+    (rates, display only), the min-max of ``recall_floor.m2.per_slot[slot].counts`` and M1's count
+    dentro/fora, compared exactly (CR-01: ``exact_rate`` against the M2 min and max over
+    N_TARGET_QUESTIONS).
     Any other target: {"comparison": "sem M2, comparação não feita"}. Not a statistical test."""
     import phase19_erasure  # torch at import: lazy
 
@@ -1409,7 +1467,11 @@ def m1_m2_rows(target, *, full_rows, m1_rows, m2_rows, noise_floor):
             "m1_minus_full": m1["rate"] - full["rate"],
             "m2_minus_full": m2["rate"] - full["rate"],
             "m2_range": (m2_range["min"], m2_range["max"]),
-            "m1_in_range": in_range(m1["n_answerable"], m2_range["min"], m2_range["max"]),
+            "m1_in_range": in_range(
+                exact_rate(m1),
+                fractions.Fraction(m2_range["min"], phase19_erasure.N_TARGET_QUESTIONS),
+                fractions.Fraction(m2_range["max"], phase19_erasure.N_TARGET_QUESTIONS),
+            ),
         }
     return rows
 

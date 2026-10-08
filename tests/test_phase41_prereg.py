@@ -963,6 +963,101 @@ def test_condition_b_per_target():
         phase41_prereg.condition_b(post, single_tier, "pet_name")
 
 
+# CR-01 (41-05 review, Rafael 2026-10-08): the four measured |dn| = 8 moves the float rates read
+# beyond the margin. Exact Fraction arithmetic over the counts reads them AT the margin, which (b)
+# allows (the rule is <=).
+_CR01_PAIRS = ((15, 7), (17, 9), (19, 11), (21, 13))
+
+
+def _with_count(rows, slot, n):
+    return {**rows, slot: {**rows[slot], "n_answerable": n, "rate": n / rows[slot]["n_questions"]}}
+
+
+def test_exact_margin_and_rate():
+    from fractions import Fraction
+
+    import phase19_erasure
+
+    p = phase41_prereg
+    q = phase19_erasure.N_TARGET_QUESTIONS
+    margin = phase41_prereg.exact_margin(p.E1_CONDITION_B_MARGIN)
+    assert margin == p.E1_CONDITION_B_MARGIN_EXACT
+    assert float(margin) == p.E1_CONDITION_B_MARGIN and (margin * q).denominator == 1
+    # Recovered from the committed value, unique among the n / q.
+    unique = [n for n in range(q + 1) if float(Fraction(n, q)) == p.E1_CONDITION_B_MARGIN]
+    assert unique == [margin * q]
+    with pytest.raises(SystemExit, match="margin"):
+        phase41_prereg.exact_margin(0.3)  # no n / 27 has this float
+    assert phase41_prereg.exact_rate({"n_answerable": 13, "n_questions": 27}) == Fraction(13, 27)
+    for bad in (
+        {"n_answerable": 13.0, "n_questions": 27},
+        {"n_answerable": 1, "n_questions": 0},
+        {"n_answerable": 28, "n_questions": 27},
+        {"n_answerable": True, "n_questions": 27},
+    ):
+        with pytest.raises(SystemExit, match=r"^\[phase41_prereg\]"):
+            phase41_prereg.exact_rate(bad)
+
+
+def test_condition_b_reads_the_margin_exactly():
+    p = phase41_prereg
+    pre = p.record_rows(_phase40_a2("full", 1337))
+    margin = p.E1_CONDITION_B_MARGIN
+    for n_pre, n_post in _CR01_PAIRS:
+        # meta-guard: the float difference of the rates reads this move beyond the margin.
+        assert abs(n_post / 27 - n_pre / 27) > margin, (n_pre, n_post)
+        base, moved = _with_count(pre, "hometown", n_pre), _with_count(pre, "hometown", n_post)
+        for post_rows, pre_rows in ((moved, base), (base, moved)):
+            b = phase41_prereg.condition_b(post_rows, pre_rows, "pet_name")
+            assert b["slots"]["hometown"]["beyond"] is False, (n_pre, n_post)
+            assert b["holds"] is True and b["beyond"] == [], (n_pre, n_post)
+        # NON-VACUITY: one question further is beyond.
+        far = phase41_prereg.condition_b(_with_count(pre, "hometown", n_post - 1), base, "pet_name")
+        assert far["beyond"] == ["hometown"] and far["holds"] is False, (n_pre, n_post)
+
+    # The real seed-1337 baseline: hometown 21/27 intact; a stop record at 13/27 is SUCCESS, where
+    # the float arithmetic read FAILURE (b).
+    assert pre["hometown"]["n_answerable"] == 21
+    post = _with_count(_with_count(pre, "hometown", 13), "pet_name", 0)
+    b = phase41_prereg.condition_b(post, pre, "pet_name")
+    verdict = phase41_prereg.cell_verdict(
+        stop=p.GRID[-2],
+        target_n=0,
+        target_q=27,
+        zero_results_have_nll=True,
+        a={"holds": True},
+        b=b,
+        c={"holds": True},
+    )
+    assert verdict["verdict"] == "SUCCESS" and verdict["failed"] == [] and verdict["beyond"] == []
+
+
+def test_varies_labels_and_m1_range_read_exactly():
+    p = phase41_prereg
+
+    def row(low, high):
+        group = {"min": low, "max": high, "range": high / 27 - low / 27}
+        return {"basis": "full only", "full": group, "range": group["range"]}
+
+    # Every exact 8/27 range is labelled (>=), every 7/27 range is not.
+    at = {f"at{low}": row(low, low + 8) for low in range(27 - 8 + 1)}
+    under = {f"under{low}": row(low, low + 7) for low in range(27 - 7 + 1)}
+    assert phase41_prereg.varies_labels({**at, **under}) == frozenset(at)
+
+    # D-18: M1's dentro/fora compares n / q exactly; 2 x max over 54 is max / 27, dentro.
+    noise = _record(p.NOISE_FLOOR_RECORD)
+    full = p.record_rows(_phase40_a2("full", 1337))
+    m2 = p.record_rows(_phase40_a2("m2", 1337))
+    slot = p.nontarget_slots("pet_name")[0]
+    high = max(n for n, _ in noise["recall_floor"]["m2"]["per_slot"][slot]["counts"])
+    for n_answerable, label in ((2 * high, p.INSIDE), (2 * high + 1, p.OUTSIDE)):
+        m1 = {**full, slot: {"n_answerable": n_answerable, "n_questions": 54, "rate": 0.0}}
+        rows = phase41_prereg.m1_m2_rows(
+            "pet_name", full_rows=full, m1_rows=m1, m2_rows=m2, noise_floor=noise
+        )
+        assert rows[slot]["m1_in_range"] == label, n_answerable
+
+
 def test_condition_c_uses_the_band():
     import mitigation_gate
 
