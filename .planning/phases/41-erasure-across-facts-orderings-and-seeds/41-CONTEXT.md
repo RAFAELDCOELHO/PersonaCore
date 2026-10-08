@@ -224,7 +224,40 @@ and the four adapters it names. Close Phase 40 before the Phase 41 plans treat i
   The plan lists in advance any automatic per-point commits; outside that list, nothing is
   committed without his "approved".
 
+### Rulings on the research open questions (plan-phase, 2026-10-08; Rafael's answers verbatim in 41-DISCUSSION-LOG.md)
+- **D-26 (further K = 48 confirmations):** Additional K = 48 confirmations are allowed, as ERASE-07
+  requires: a non-zero confirmation continues to the next checkpoint. The grid sets the natural
+  ceiling: at most 4 confirmations beyond the first, at most one per checkpoint after the first
+  K = 16 zero. With the 5-point grid that is at most 5 confirmations per cell, the most
+  `phase35_prereg.e1_stop` admits.
+  - Each confirmation is written into the cell record with its hours, and the hours are charged to
+    E1's share.
+  - The cost falls under the existing D-23 pause (52.78 h; whether to go past it is Rafael's call).
+    There is **no pause per confirmation**.
+  - **Declared deviation** from Phase 36's `unit_caps.E1.k48_confirms_per_cell` = 1. Reason: that
+    cap was a pricing assumption, and ERASE-07's stopping rule is the measurement.
+  - No cell becomes NOT_REACHED for lack of a confirmation. NOT_REACHED happens only when no zero is
+    confirmed by checkpoint 128.
+  - The driver must not hand a confirmation count > 1 to `phase36_caps.check_unit_caps` as if the
+    cap still bound. The deviation is recorded in the fill file, with its reason, before any record
+    exists.
+- **D-27 (K = 16 read scope):** The K = 16 read at each checkpoint covers **all 216 A2 questions**.
+  This is the configuration Phase 36 priced (1437.67 s), and it gives per-fact damage at every
+  checkpoint (descriptive). Only the target's 27 enter the stop.
+- **D-28 (D-19 label for `pet_name` as a non-target):** `recall_floor.{full,m2}.per_slot` has no
+  `pet_name` row, so in the `cat_name`/`street`/`sibling_name` cells the label is computed from the
+  **full group only**. That means Phase 40's five full-adapter A2 records (27, 26, 27, 25, 27 → range
+  2/27, below 8/27, so unlabelled), and the one-group basis is stated in the report. The rule
+  computes this; nothing is typed.
+
 ### Claude's Discretion
+- Resume after the D-23 pause: a written approval record that mirrors Phase 40's
+  `relaunch_declaration` (`phase40_prereg.RELAUNCH_DECLARATION_KEYS`) under `data/phase41_*`.
+- Ledger attempt granularity for the band-input records (their own attempts, or measured first
+  inside each calibration attempt). Either way the hours stay on E1.
+- D-02 value equality on MPS. It is exact on CPU (measured in research). On MPS the launch gate
+  measures the grad-path value against the no-grad value. A non-zero difference stops the run for
+  Rafael's decision; it is never absorbed by a tolerance chosen after the fact.
 - File split of the Phase 41 fill files (`scripts/phase41_*prereg.py`) and the driver, subject to
   the Phase 35 fill-order rules.
 - Exact field names of the new descriptive blocks in the records and report.

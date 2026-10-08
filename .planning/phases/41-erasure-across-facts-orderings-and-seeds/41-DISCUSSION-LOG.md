@@ -184,6 +184,18 @@ is 11/27; a stop at 48 is a new prefix.
 
 > "Opção 1: pausa na fatia do E1 (52,78 h), com decisão minha. O stop global de 90 h continua acima.Três acréscimos:1. A pausa é checada antes de cada célula. O aviso de pausa traz: as horas gastas no E1 (com as perdidas em quedas, como no E2), quais pares estão completos, se há um par pela metade, e quanto sobra para E3, E4 e para o stop de 90 h. Completar ou não um par pela metade é decisão minha nesse momento.2. Regra de queda igual à R-3 b da Fase 40, valendo por célula: nova tentativa só com meu approved e nota de causa, mesma seed e mesmo HEAD, saídas parciais guardadas e listadas, adaptadores e ordenações comparados entre as tentativas. Vale só para queda (sem linha de fim), nunca para refazer uma célula inteira.3. Operação: a espera acompanha o PID do driver, nunca o log; o bootout só depois de duas checagens de que o processo saiu. O plano prevê relançamento por bloco sem mudar o HEAD (como as seeds pendentes da Fase 40), com o estado de memória gravado em cada portão de lançamento e o coletor do outro projeto parado."
 
+## Plan-phase rulings (2026-10-08, research open questions)
+
+| Question | Selected |
+|----------|----------|
+| Second K = 48 confirmation vs Phase 36 cap of 1 | Option 2 (allow, count in E1 hours), with two constraints → D-26 |
+| K = 16 read scope | All 216 (Recommended) → D-27 |
+| D-19 label for pet_name as a non-target | Full group only (Recommended) → D-28 |
+
+> "Opção 2, com duas amarras:1. Confirmações adicionais em K = 48 são permitidas, como manda o ERASE-07 (uma confirmação não zero continua para o próximo checkpoint). O teto natural é a grade: no máximo 4 confirmações por célula, uma por checkpoint depois do primeiro zero em K = 16. Cada confirmação é gravada no registro da célula com suas horas, lançadas na fatia do E1.2. O custo fica sob a pausa da fatia já decidida (52,78 h, decisão minha ao passar dela). Não há pausa por confirmação.Desvio declarado em relação ao limite de 1 por célula da Fase 36 (unit_caps.E1.k48_confirms_per_cell), com o motivo: o limite foi uma suposição de preço e a regra de parada do ERASE-07 é a medição. Nenhuma célula vira NOT_REACHED por falta de confirmação; NOT_REACHED só quando não há zero confirmado até o checkpoint 128."
+
+Reading recorded in D-26: the "4" is read as 4 additional confirmations beyond the first, one per later grid checkpoint, which gives at most 5 per cell. That is the most `phase35_prereg.e1_stop` admits on the 5-point grid.
+
 ---
 
 ## Claude's Discretion
