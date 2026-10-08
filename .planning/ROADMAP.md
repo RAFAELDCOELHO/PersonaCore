@@ -1879,7 +1879,73 @@ replication at the second seed
      result records are write-once and committed only after Rafael writes approved. (ERASE-06,
      ERASE-10)
 
-**Plans**: TBD
+**Plans**: 16 plans in 16 waves (the commit order is load-bearing and pinned by the Phase 35 fill-order legs: fill file 1 (grid, alternative ordering, b margin) and its ancestry test first; the prereg reviewed and frozen before any driver code; the CPU rehearsal before any MPS time; the stage-1 calibration and band records, then the floors fill file (floors and band in one file), before any cell; every record committed only after Rafael's approved, the ledger before the records)
+
+Plans:
+
+**Wave 1**
+
+- [ ] 41-01-PLAN.md — checkpoint: Phase 40 closed by the orchestrator, its records tracked, the four adapters equal to their phase41_adapters digests; every premise re-measured (no repo writes)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 41-02-PLAN.md — scripts/phase41_prereg.py part 1 + its ancestry test in ONE commit: registry paths, the three no-input fills (grid (16, 32, 48, 64, 128), alternative ordering 'gradient', b margin), caps check, ENTRIES for D-01..D-28 with D-26's deviation and Rafael's verbatim ruling, predictions D-11/D-21
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 41-03-PLAN.md — prereg part 2: per-target (a)/(b)/(c) composition, cell_verdict, pair labels, summary counts, NOT_REACHED sentence, floors/band fill-input builders, and the declared readings (D-06, D-12, D-14, D-18..D-21, D-28)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 41-04-PLAN.md — prereg part 3: units and D-22 order, stop_readings/driver_stop proved equal to e1_stop, D-26 confirmation accounting, D-23 pause and resume declaration, R-3 b readers per unit, D-05 variant, D-02 and D-13 rules
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 41-05-PLAN.md — checkpoint: prereg code review (41-REVIEW.md) + Rafael confirms or changes each planner default; full suite; frozen prereg digest recorded
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 41-06-PLAN.md — scripts/phase41_erasure.py part 1: Phase 40 skeleton re-targeted to E1, STOP-for-Rafael path, the Taylor gradient ordering (D-01..D-05) proved on a tiny CPU fixture
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [ ] 41-07-PLAN.md — driver part 2: the one registered calibration training call, D-11 identity, greedy/gradient calibrations, cal_erase into data/, control gap, cell orderings (defect-E route), K = 16 reader, K = 48 confirmation, M1 export + D-13, the LaunchAgent plist
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
+- [ ] 41-08-PLAN.md — driver part 3: preflight (ERASE-05 digests, stage logic, caps without the k48 count, rehearsal identity) and run stage 1 (D-02/D-05 smoke fixing the variant, ledgered prep units, band and calibration records)
+
+**Wave 9** *(blocked on Wave 8 completion)*
+
+- [ ] 41-09-PLAN.md — driver part 4: run_cell over the grid with the stop proved against e1_stop, D-26 confirmations, D-13 at the pet_name stop; D-23 pause/resume; R-3 b drop/relaunch per unit
+
+**Wave 10** *(blocked on Wave 9 completion)*
+
+- [ ] 41-10-PLAN.md — driver part 5: build_record/emit/report/main, one real committed producer record fed through emit, AST gates, ERASE-08 byte-unchanged leg
+
+**Wave 11** *(blocked on Wave 10 completion)*
+
+- [ ] 41-11-PLAN.md — full-shape CPU rehearsal: all 4 prep units, the real floors/band rules on its records, two cells (greedy pet_name 1337, gradient cat_name 2024), emit and report; R-3 b leg; rehearsal identity with the CPU ordering cost
+
+**Wave 12** *(blocked on Wave 11 completion)*
+
+- [ ] 41-12-PLAN.md — checkpoint: driver review (41-REVIEW-2.md), launch gate (collector, memory state, identity), Rafael's approved, stage-1 MPS run waited by PID (no commits)
+
+**Wave 13** *(blocked on Wave 12 completion)*
+
+- [ ] 41-13-PLAN.md — checkpoint: Rafael's approved on the stage-1 records; commit ledger, then the 8 records, then scripts/phase41_floors_prereg.py (floors + band in one file) with its test; full suite
+
+**Wave 14** *(blocked on Wave 13 completion)*
+
+- [ ] 41-14-PLAN.md — checkpoint: stage-2 launch gate and Rafael's approved; the 16 cells on MPS in D-22 order with the E1 share pause, per-block relaunch and R-3 b (no commits)
+
+**Wave 15** *(blocked on Wave 14 completion)*
+
+- [ ] 41-15-PLAN.md — checkpoint: first approved on the ledger and every cell record with its K = 16 / K = 48 records (ledger first, one commit per cell); emit on CPU; second approved on the erasure record
+
+**Wave 16** *(blocked on Wave 15 completion)*
+
+- [ ] 41-16-PLAN.md — checkpoint: commit the erasure record, full suite, render the report, third approved, commit the report, full suite; SC1-SC5 by command; hand close left to the orchestrator
 
 ### Phase 42: DP-SGD Recipe Search at Large ε
 
