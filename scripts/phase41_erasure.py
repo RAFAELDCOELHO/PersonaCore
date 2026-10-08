@@ -19,9 +19,11 @@ Torch-free at import only: every torch-importing module and the pre-registration
 inside the functions that need them.
 """
 
+import collections.abc
 import datetime
 import gc
 import hashlib
+import json
 import pathlib
 import re
 import shutil
@@ -597,3 +599,232 @@ def cal_erase(ordering, seed, adapter_path, components, *, root, device):
     )
     _release()
     return {"record": _rel(record, root), "record_sha256": _sha256(record)}
+
+
+# =================================================================================================
+# The Phase 40 adapters, the control gap (D-13), the cell orderings (ERASE-08), the K = 16 reader
+# (D-27), the K = 48 confirmation (D-26), the M1 export and the D-13 wrapper (D-20).
+# =================================================================================================
+
+
+def _noise_floor():
+    return json.loads((_REPO / _prereg().NOISE_FLOOR_RECORD).read_text(encoding="utf-8"))
+
+
+def phase40_adapter(seed, group):
+    """ERASE-05: ``{"path", "sha256"}`` of one committed Phase 40 adapter, read from
+    ``NOISE_FLOOR_RECORD``::phase41_adapters (the path is repo-relative)."""
+    adapters = _noise_floor()["phase41_adapters"]
+    _prove(str(seed) in adapters, f"seed {seed!r} is not one of {sorted(adapters)}")
+    _prove(
+        group in adapters[str(seed)], f"group {group!r} is not one of {sorted(adapters[str(seed)])}"
+    )
+    return dict(adapters[str(seed)][group])
+
+
+def measure_control_gap(seed, device):
+    """D-13: the dialogue gap re-measured on the intact Phase 40 full adapter before any ablation,
+    against the committed ``per_seed[seed].full.dialogue_gap.gap`` (``control_gap_check``; the
+    caller stops on ``stop``)."""
+    import phase14_recall as recall  # torch at import: lazy
+    import phase19_erasure as pin  # same
+
+    model, _cfg, _tok, forbid, _artifact = recall.load_adapted_model(
+        device, adapter_path=_REPO / phase40_adapter(seed, "full")["path"]
+    )
+    pair = pin.dialogue_ppl_pair(model, device, forbid)
+    committed = _noise_floor()["per_seed"][str(seed)]["full"]["dialogue_gap"]["gap"]
+    gap = pair["adapter_on"] - pair["adapter_off"]
+    del model
+    _release()
+    return {"dialogue_ppl": pair, **_prereg().control_gap_check(gap, committed, device=device)}
+
+
+def target_fact(target):
+    """The one locked fact on slot ``target``."""
+    import phase14_factset
+
+    _prove(target in _prereg().TARGETS, f"target {target!r} is not one of {_prereg().TARGETS}")
+    facts = [f for f in phase14_factset.LOCKED_FACTS if f.slot == target]
+    _prove(len(facts) == 1, f"{len(facts)} locked facts on slot {target!r}")
+    return facts[0]
+
+
+def cell_ordering(model, tok, device, forbid, artifact, *, target, ordering, variant, unit, root):
+    """ERASE-08: a cell's ordering. "greedy" is the defect-E route
+    ``phase37_routes.select_target_prefix`` (|R| = 8 references; its k, stopped and curve are
+    descriptive); the alternative is ``model_gradient_ordering`` at ``variant``."""
+    import phase19_erasure as pin  # torch at import: lazy
+
+    prereg = _prereg()
+    _prove(ordering in prereg.ORDERINGS, f"ordering {ordering!r} is not one of {prereg.ORDERINGS}")
+    fact = target_fact(target)
+    if ordering == "greedy":
+        import phase37_routes
+
+        out = phase37_routes.select_target_prefix(
+            model,
+            tok,
+            device,
+            artifact,
+            fact=fact,
+            dialogue_ppl=lambda: pin.dialogue_ppl_pair(model, device, forbid),
+        )
+        return {key: out[key] for key in ("ordered", "k", "stopped", "curve")}
+    return model_gradient_ordering(
+        model,
+        tok,
+        device,
+        artifact,
+        slot=fact.slot,
+        value=fact.value,
+        variant=variant,
+        calibration=False,
+        unit=unit,
+        root=root,
+    )
+
+
+def k16_read(model, tok, device, forbid, *, target):
+    """D-27: K = read_k completions for every A2 corpus entry under the loaded weights, the pin's
+    stride (``seed_index * phase18_extraction.K``) after ``seed_everything(recall.SEED)``, the
+    clean-room guard in place on the ids dispatched (run_erasure_arm's value set); then the
+    target's exposure. The draw dicts are the pin's schema."""
+    import phase14_factset
+    import phase14_recall as recall  # torch at import: lazy
+    import phase18_extraction as x18  # same
+    import phase35_prereg
+    import teach_persona as tp  # same
+
+    k = _prereg().E1_CHECKPOINT_GRID["read_k"]
+    clean_room_values = [
+        f.value for f in phase14_factset.LOCKED_FACTS + phase14_factset.SOFT_TIER_FACTS
+    ]
+    tp.seed_everything(recall.SEED)
+    draws = []
+    for entry in phase35_prereg.a2_corpus_entries():
+        base_ids = x18._guarded_span(entry)
+        recall.assert_no_value_in_prompt(
+            tok, tok.decode(base_ids), clean_room_values, prompt_ids=base_ids
+        )
+        realized = entry["realized_injection"]
+        completions, stopped = recall.draw_all(
+            model,
+            tok,
+            entry["prompt_ids"],
+            device,
+            forbid,
+            entry["seed_index"] * x18.K,
+            n_samples=k - 1,
+        )
+        _prove(
+            len(completions) == k,
+            f"{entry['fact_id']!r}/{entry['seed_index']} drew {len(completions)} completions, "
+            f"not read_k = {k}",
+        )
+        draws.append(
+            {
+                "family": entry["family"],
+                "dose": entry["dose"],
+                "fact_id": entry["fact_id"],
+                "slot": entry["slot"],
+                "tier": entry["tier"],
+                "arm": x18.ARMS[0],
+                "seed_index": entry["seed_index"],
+                "prefix_text": tok.decode(entry["prompt_ids"][-realized:]) if realized else None,
+                "completions": completions,
+                "stopped": stopped,
+            }
+        )
+    exposure = x18.measure_exposure(
+        model, tok, device, slot=target, taught_value=target_fact(target).value
+    )
+    return {"draws": draws, "k": k, "exposure": exposure}
+
+
+def k48_confirm(target, ordering, seed, checkpoint, components, *, root, device):
+    """D-26: the K = confirm_k A2 arm at ``components`` on the seed's Phase 40 full adapter,
+    through the pin's ``run_erasure_arm("erased", ...)`` (parity asserted by the pin) into the
+    write-once ``root``/``k48_record(...)``; ``target_zero`` from ``record_rows``."""
+    import phase19_erasure as pin  # torch at import: lazy
+
+    prereg = _prereg()
+    rel = prereg.k48_record(target, ordering, seed, checkpoint)
+    record = pathlib.Path(root) / rel
+    _prove(not record.exists(), f"{record} exists: the K = 48 records are write-once")
+    record.parent.mkdir(parents=True, exist_ok=True)
+    pin.run_erasure_arm(
+        "erased",
+        device,
+        adapter_path=_REPO / phase40_adapter(seed, "full")["path"],
+        components=list(components),
+        record_path=record,
+    )
+    _release()
+    rows = prereg.record_rows(json.loads(record.read_text(encoding="utf-8")))
+    return {
+        "record": rel,
+        "record_sha256": _sha256(record),
+        "target_zero": rows[target]["n_answerable"] == 0,
+    }
+
+
+def export_m1(artifact, components, path):
+    """D-20: the M1-ablated adapter (``ablate_components``) as a write-once export_adapter file at
+    ``path`` (the caller builds it under root/data/phase41_e1/m1/)."""
+    import phase19_erasure as pin  # torch at import: lazy
+
+    from personacore.checkpoint import export_adapter
+
+    path = pathlib.Path(path)
+    _prove(not path.exists(), f"{path} exists: write-once")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    ablated = pin.ablate_components(artifact, list(components))
+    export_adapter(
+        path,
+        adapter=ablated["adapter"],
+        lora_config=ablated["lora_config"],
+        base_fingerprint=ablated["base_fingerprint"],
+    )
+    return {"path": path, "sha256": _sha256(path)}
+
+
+def d13_at_stop(m1_path, k48_record_path, device, state):
+    """D-20: ``phase40_noise.d13_scores`` on the M1 adapter at the stop, with
+    ``phase40_noise.run``'s ruling-c catch: every exception (SystemExit included, never
+    KeyboardInterrupt) and every non-conforming return becomes ``d13_not_measured``; the cell is
+    never dropped."""
+    import phase40_noise
+    import phase40_prereg
+
+    try:
+        raw = phase40_noise.d13_scores(m1_path, k48_record_path, device, state)
+    except (Exception, SystemExit) as exc:
+        reason = f"{type(exc).__name__}: {exc}"
+        try:
+            _release()
+        except Exception as cleanup:  # the cleanup may not fail the cell either
+            reason += f" (then _release raised {type(cleanup).__name__}: {cleanup})"
+        return {**phase40_prereg.d13_not_measured("exception", reason), "n_nlls": None}
+    defect = None
+    if not isinstance(raw, collections.abc.Mapping) or type(raw.get("measured")) is not bool:
+        defect = "no bool 'measured'"
+    elif not raw["measured"] and not (
+        raw.get("failure_kind") in phase40_prereg.D13_FAILURE_KINDS
+        and isinstance(raw.get("reason"), str)
+        and raw["reason"].strip()
+    ):
+        defect = "measured False without a D13_FAILURE_KINDS failure_kind + reason"
+    else:
+        try:
+            json.dumps(raw, sort_keys=True)
+        except (TypeError, ValueError) as exc:
+            defect = f"not JSON-serialisable ({type(exc).__name__}: {exc})"
+    if defect is None:
+        return raw
+    return {
+        **phase40_prereg.d13_not_measured(
+            "malformed_reading", f"d13_scores returned a {type(raw).__name__}: {defect}"
+        ),
+        "n_nlls": None,
+    }

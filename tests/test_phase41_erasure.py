@@ -840,3 +840,389 @@ def test_cal_erase_writes_under_data_only(monkeypatch, tmp_path):
     assert len(calls) == 1
     with pytest.raises(SystemExit, match="ordering"):
         phase41_erasure.cal_erase("random", 2024, adapter, components, root=tmp_path, device="cpu")
+
+
+# =================================================================================================
+# (4) Plan 41-07: the control gap, the cell orderings, the K = 16 reader, the K = 48
+# confirmation, the M1 export and the D-13 wrapper. The pin's scorers and loaders are faked.
+# =================================================================================================
+
+
+def _noise_floor():
+    return json.loads((_ROOT / phase41_prereg.NOISE_FLOOR_RECORD).read_text(encoding="utf-8"))
+
+
+def test_phase40_adapter_paths_from_the_record():
+    committed = _noise_floor()["phase41_adapters"]
+    for seed in phase41_prereg.SEEDS:
+        for group in ("full", "m2"):
+            assert phase41_erasure.phase40_adapter(seed, group) == committed[str(seed)][group]
+    with pytest.raises(SystemExit, match="seed"):
+        phase41_erasure.phase40_adapter(1339, "full")
+    with pytest.raises(SystemExit, match="group"):
+        phase41_erasure.phase40_adapter(1337, "m1")
+
+
+@pytest.mark.parametrize("device", ["mps", "cpu"])
+@pytest.mark.parametrize("equal", [True, False])
+def test_measure_control_gap_wiring(monkeypatch, device, equal):
+    import phase14_recall
+    import phase19_erasure
+
+    seed = phase41_prereg.SEEDS[1]
+    committed = _noise_floor()["per_seed"][str(seed)]["full"]["dialogue_gap"]["gap"]
+    loads = []
+    model, forbid = object(), object()
+
+    def fake_load(dev, adapter_path=None):
+        loads.append((dev, adapter_path))
+        return model, "cfg", "tok", forbid, "artifact"
+
+    monkeypatch.setattr(phase14_recall, "load_adapted_model", fake_load)
+    off = 4.5
+    on = off + committed if equal else off + committed + 1e-9
+    pair = {"adapter_on": on, "adapter_off": off, "n_targets": 7}
+    seen = []
+    monkeypatch.setattr(
+        phase19_erasure, "dialogue_ppl_pair", lambda *a: seen.append(a) or dict(pair)
+    )
+    out = phase41_erasure.measure_control_gap(seed, device)
+    assert loads == [(device, _ROOT / phase41_erasure.phase40_adapter(seed, "full")["path"])]
+    assert seen == [(model, device, forbid)]
+    assert out == {
+        "dialogue_ppl": pair,
+        **phase41_prereg.control_gap_check(on - off, committed, device=device),
+    }
+    assert out["equal"] is ((on - off) == committed)
+    assert out["stop"] is (device == "mps" and not out["equal"])
+
+
+def test_cell_ordering_greedy_uses_the_defect_e_route(monkeypatch, tmp_path):
+    import phase14_factset
+    import phase19_erasure
+    import phase37_routes
+
+    rec = _Recorder({"k": 9, "stopped": True, "ordered": ("a", "b"), "curve": ("c",), "cap": 2})
+    monkeypatch.setattr(phase37_routes, "select_target_prefix", rec)
+    seen = []
+    monkeypatch.setattr(phase19_erasure, "dialogue_ppl_pair", lambda *a: seen.append(a) or "ppl")
+    model, tok, artifact = object(), object(), {"adapter": {}}
+    out = phase41_erasure.cell_ordering(
+        model,
+        tok,
+        "cpu",
+        "forbid",
+        artifact,
+        target="street",
+        ordering="greedy",
+        variant="adaptive",
+        unit="cell_u",
+        root=tmp_path,
+    )
+    ((args, kw),) = rec.calls
+    assert args == (model, tok, "cpu", artifact)
+    (street,) = [f for f in phase14_factset.LOCKED_FACTS if f.slot == "street"]
+    assert kw["fact"] == street and set(kw) == {"fact", "dialogue_ppl"}
+    assert kw["dialogue_ppl"]() == "ppl" and seen == [(model, "cpu", "forbid")]
+    assert out == {"ordered": ("a", "b"), "k": 9, "stopped": True, "curve": ("c",)}
+
+    grad = _Recorder({"ordered": ("x",), "rankings": [], "variant": "static"})
+    monkeypatch.setattr(phase41_erasure, "model_gradient_ordering", grad)
+    alternative = phase41_prereg.E1_ALTERNATIVE_ORDERING["value"]
+    out = phase41_erasure.cell_ordering(
+        model,
+        tok,
+        "cpu",
+        "forbid",
+        artifact,
+        target="street",
+        ordering=alternative,
+        variant="static",
+        unit="cell_u",
+        root=tmp_path,
+    )
+    ((args, kw),) = grad.calls
+    assert args == (model, tok, "cpu", artifact)
+    assert kw == {
+        "slot": "street",
+        "value": street.value,
+        "variant": "static",
+        "calibration": False,
+        "unit": "cell_u",
+        "root": tmp_path,
+    }
+    assert out is grad.result
+    assert len(rec.calls) == 1
+    with pytest.raises(SystemExit, match="ordering"):
+        phase41_erasure.cell_ordering(
+            model,
+            tok,
+            "cpu",
+            "forbid",
+            artifact,
+            target="street",
+            ordering="random",
+            variant="static",
+            unit="cell_u",
+            root=tmp_path,
+        )
+
+
+class _DecodeTok:
+    def decode(self, ids):
+        return " ".join(f"t{i}" for i in ids)
+
+
+def _a2_entry(seed_index, fact_id, slot):
+    return {
+        "family": "A2",
+        "dose": 1,
+        "fact_id": fact_id,
+        "slot": slot,
+        "tier": "reported",
+        "seed_index": seed_index,
+        "prompt_ids": [5, 6, 7, 8 + seed_index],
+        "realized_injection": 1,
+        "source_family": "A1",
+    }
+
+
+def test_k16_read_draw_loop(monkeypatch):
+    import phase14_factset
+    import phase14_recall
+    import phase18_extraction
+    import phase35_prereg
+    import teach_persona
+
+    entries = (_a2_entry(0, "f_a", "street"), _a2_entry(3, "f_b", "pet_name"))
+    monkeypatch.setattr(phase35_prereg, "a2_corpus_entries", lambda: entries)
+    events = []
+    monkeypatch.setattr(teach_persona, "seed_everything", lambda s: events.append(("seed", s)))
+
+    def fake_assert(tok, question, values, *, prompt_ids=None):
+        events.append(("assert", question, tuple(values), tuple(prompt_ids)))
+
+    read_k = phase41_prereg.E1_CHECKPOINT_GRID["read_k"]
+
+    def fake_draw(model, tok, prompt_ids, device, forbid, index, *, n_samples):
+        events.append(("draw", tuple(prompt_ids), device, forbid, index, n_samples))
+        return [f"c{i}" for i in range(n_samples + 1)], [False] * (n_samples + 1)
+
+    monkeypatch.setattr(phase14_recall, "assert_no_value_in_prompt", fake_assert)
+    monkeypatch.setattr(phase14_recall, "draw_all", fake_draw)
+    exposure = []
+    monkeypatch.setattr(
+        phase18_extraction,
+        "measure_exposure",
+        lambda m, t, d, *, slot, taught_value: exposure.append((slot, taught_value)) or {"r": 1},
+    )
+    tok = _DecodeTok()
+    out = phase41_erasure.k16_read("model", tok, "cpu", "forbid", target="street")
+
+    values = tuple(f.value for f in phase14_factset.LOCKED_FACTS + phase14_factset.SOFT_TIER_FACTS)
+    expected = [("seed", phase14_recall.SEED)]
+    for entry in entries:
+        span = phase18_extraction._guarded_span(entry)
+        expected.append(("assert", tok.decode(span), values, tuple(span)))
+        expected.append(
+            (
+                "draw",
+                tuple(entry["prompt_ids"]),
+                "cpu",
+                "forbid",
+                entry["seed_index"] * phase18_extraction.K,
+                read_k - 1,
+            )
+        )
+    assert events == expected
+    (street,) = [f for f in phase14_factset.LOCKED_FACTS if f.slot == "street"]
+    assert exposure == [("street", street.value)]
+    assert out["k"] == read_k and out["exposure"] == {"r": 1}
+    assert [d["fact_id"] for d in out["draws"]] == ["f_a", "f_b"]
+    for draw, entry in zip(out["draws"], entries):
+        assert set(draw) == {
+            "family",
+            "dose",
+            "fact_id",
+            "slot",
+            "tier",
+            "arm",
+            "seed_index",
+            "prefix_text",
+            "completions",
+            "stopped",
+        }
+        assert draw["arm"] == phase18_extraction.ARMS[0]
+        assert len(draw["completions"]) == read_k
+        assert draw["prefix_text"] == tok.decode(entry["prompt_ids"][-1:])
+
+    # A short draw set is refused.
+    monkeypatch.setattr(
+        phase14_recall, "draw_all", lambda *a, n_samples: (["c"] * n_samples, [False] * n_samples)
+    )
+    with pytest.raises(SystemExit, match="completions"):
+        phase41_erasure.k16_read("model", tok, "cpu", "forbid", target="street")
+
+
+def test_k16_reader_passes_the_draw_all_census():
+    from test_phase14_scoring import _call_sites, _function_index
+
+    sites = [s for s in _call_sites("draw_all") if s[0] == "scripts/phase41_erasure.py"]
+    assert [s[1] for s in sites] == ["k16_read"]
+    asserting, decorated = _function_index()
+    assert ("scripts/phase41_erasure.py", "k16_read") in asserting
+    assert ("scripts/phase41_erasure.py", "k16_read") not in decorated
+
+
+@pytest.mark.parametrize("zero", [False, True])
+def test_k48_confirm_calls_the_pin_with_the_record_path(monkeypatch, tmp_path, zero):
+    import shutil
+
+    import phase19_erasure
+
+    committed = _ROOT / "results" / "phase40_a2_full_seed1337.json"
+    calls = []
+
+    def fake(arm, device, **kw):
+        calls.append((arm, device, kw))
+        shutil.copyfile(committed, kw["record_path"])
+
+    monkeypatch.setattr(phase19_erasure, "run_erasure_arm", fake)
+    if zero:
+        real = phase41_prereg.record_rows
+        monkeypatch.setattr(
+            phase41_prereg,
+            "record_rows",
+            lambda r: {**real(r), "street": {**real(r)["street"], "n_answerable": 0}},
+        )
+    components = ((0, "q_proj", 1),)
+    out = phase41_erasure.k48_confirm(
+        "street", "greedy", 1337, 16, components, root=tmp_path, device="cpu"
+    )
+    rel = phase41_prereg.k48_record("street", "greedy", 1337, 16)
+    record = tmp_path / rel
+    assert calls == [
+        (
+            "erased",
+            "cpu",
+            {
+                "adapter_path": _ROOT / phase41_erasure.phase40_adapter(1337, "full")["path"],
+                "components": list(components),
+                "record_path": record,
+            },
+        )
+    ]
+    assert out == {
+        "record": rel,
+        "record_sha256": phase41_erasure._sha256(record),
+        "target_zero": zero,
+    }
+    with pytest.raises(SystemExit, match="exists"):
+        phase41_erasure.k48_confirm(
+            "street", "greedy", 1337, 16, components, root=tmp_path, device="cpu"
+        )
+    assert len(calls) == 1
+
+
+def test_export_m1_and_d13_at_stop(monkeypatch, tmp_path):
+    import dataclasses
+
+    import phase19_erasure
+    import phase40_noise
+    import phase40_prereg
+    import torch
+
+    from personacore.checkpoint import load_adapter
+    from personacore.lora import LoRAConfig, lora_state_dict
+
+    model = _tiny()
+    artifact = {
+        "adapter": {k: v.detach().clone() for k, v in lora_state_dict(model).items()},
+        "lora_config": dataclasses.asdict(LoRAConfig(r=8)),
+        "base_fingerprint": {"git_sha": "abc", "step": 1, "val_loss": 2.0},
+    }
+    components = ((0, "q_proj", 1), (0, "fc_in", 5))
+    path = tmp_path / "data" / "phase41_e1" / "m1" / "cell_k016_adapter.pt"
+    out = phase41_erasure.export_m1(artifact, components, path)
+    back = load_adapter(path)
+    assert out == {"path": path, "sha256": phase41_erasure._sha256(path)}
+    assert back["lora_config"] == artifact["lora_config"]
+    assert back["base_fingerprint"] == artifact["base_fingerprint"]
+    want = phase19_erasure.ablate_components(artifact, list(components))["adapter"]
+    assert sorted(back["adapter"]) == sorted(want)
+    assert all(torch.equal(back["adapter"][k], want[k]) for k in want)
+    for layer, proj, j in components:
+        prefix = phase19_erasure._COMPONENT_PREFIX[(layer, proj)]
+        assert not back["adapter"][f"{prefix}.lora_A"][j].any()
+        assert not back["adapter"][f"{prefix}.lora_B"][:, j].any()
+        assert artifact["adapter"][f"{prefix}.lora_B"][:, j].any()  # the input is untouched
+    with pytest.raises(SystemExit, match="exists"):
+        phase41_erasure.export_m1(artifact, components, path)
+
+    seen = []
+
+    def raising(*args):
+        seen.append(args)
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(phase40_noise, "d13_scores", raising)
+    got = phase41_erasure.d13_at_stop(path, tmp_path / "k48.json", "cpu", {"s": 1})
+    assert seen == [(path, tmp_path / "k48.json", "cpu", {"s": 1})]
+    assert got == {
+        **phase40_prereg.d13_not_measured("exception", "RuntimeError: boom"),
+        "n_nlls": None,
+    }
+
+    def refusing(*args):
+        raise SystemExit("refused")
+
+    monkeypatch.setattr(phase40_noise, "d13_scores", refusing)
+    got = phase41_erasure.d13_at_stop(path, tmp_path / "k48.json", "cpu", {})
+    assert got["failure_kind"] == "exception" and got["reason"] == "SystemExit: refused"
+
+    monkeypatch.setattr(phase40_noise, "d13_scores", lambda *a: {"measured": "yes"})
+    got = phase41_erasure.d13_at_stop(path, tmp_path / "k48.json", "cpu", {})
+    assert got["failure_kind"] == "malformed_reading" and got["n_nlls"] is None
+
+    measured = {"measured": True, "n_nlls": 925, "curve": [1]}
+    monkeypatch.setattr(phase40_noise, "d13_scores", lambda *a: measured)
+    assert phase41_erasure.d13_at_stop(path, tmp_path / "k48.json", "cpu", {}) is measured
+
+    def interrupted(*args):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(phase40_noise, "d13_scores", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        phase41_erasure.d13_at_stop(path, tmp_path / "k48.json", "cpu", {})
+
+
+def _record_path_failures(source):
+    import ast
+
+    return [
+        node.lineno
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.Call)
+        and (getattr(node.func, "attr", None) or getattr(node.func, "id", None))
+        == "run_erasure_arm"
+        and not any(k.arg == "record_path" for k in node.keywords)
+    ]
+
+
+def test_run_erasure_arm_always_has_a_record_path():
+    import ast
+
+    files = sorted(_SCRIPTS.glob("phase41_*.py"))
+    assert _SCRIPTS / "phase41_erasure.py" in files
+    calls = 0
+    for path in files:
+        source = path.read_text(encoding="utf-8")
+        assert _record_path_failures(source) == [], path
+        calls += sum(
+            1
+            for n in ast.walk(ast.parse(source))
+            if isinstance(n, ast.Call) and getattr(n.func, "attr", None) == "run_erasure_arm"
+        )
+    assert calls >= 2  # cal_erase and k48_confirm: the census is not blind
+    planted = "pin.run_erasure_arm('erased', 'cpu', adapter_path=a)\n"
+    assert _record_path_failures(planted) == [1]
