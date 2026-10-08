@@ -1755,3 +1755,375 @@ def test_is_seconds_helper():
         assert phase41_prereg._is_seconds(good) is True, good
     for bad in (None, True, False, -1e-12, math.nan, math.inf, "1.0"):
         assert phase41_prereg._is_seconds(bad) is False, bad
+
+
+# =================================================================================================
+# (11) PLAN 41-04 TASK 2: PER-UNIT OUTCOMES, THE D-23 PAUSE AND RESUME DECLARATION, THE R-3 b
+# READERS PER UNIT (D-24; phase40_prereg's readers re-keyed per unit).
+# =================================================================================================
+
+
+def _unit_line(event, unit, utc, record=None):
+    return {
+        "utc": utc,
+        "event": event,
+        "run_id": phase41_prereg.run_id(unit),
+        "phase": 41,
+        "front": "E1",
+        "record": record,
+        "seconds": None,
+        "flag": None,
+        "stop": None,
+        "ruling": None,
+    }
+
+
+def _unit_lines():
+    p = phase41_prereg
+    prep, cell = p.PREP_UNITS, p.CELL_UNITS
+    return [
+        _unit_line("start", prep[0], "t1"),
+        _unit_line("end", prep[0], "t2", phase41_prereg.unit_record(prep[0])),
+        _unit_line("start", prep[1], "t3"),
+        _unit_line("lost", prep[1], "t4"),
+        _unit_line("start", cell[0], "t5"),
+        _unit_line("lost", cell[0], "t6"),
+        _unit_line("start", cell[0], "t7"),
+        _unit_line("end", cell[0], "t8", phase41_prereg.unit_record(cell[0])),
+    ]
+
+
+def test_unit_outcomes():
+    p = phase41_prereg
+    prep, cell = p.PREP_UNITS, p.CELL_UNITS
+    outcomes = phase41_prereg.unit_outcomes(_unit_lines(), p.UNITS)
+    assert tuple(outcomes) == p.UNITS
+    assert outcomes[prep[0]] == "whole" and outcomes[cell[0]] == "whole"
+    assert outcomes[prep[1]] == "dropped"
+    assert {u for u, o in outcomes.items() if o == "not_run"} == set(p.UNITS) - {
+        prep[0],
+        prep[1],
+        cell[0],
+    }
+    # A cell's end line must name its cell record, a prep unit's its calibration record.
+    other = _unit_lines()
+    other[1] = _unit_line("end", prep[0], "t2", phase41_prereg.unit_record(prep[1]))
+    with pytest.raises(SystemExit, match=r"^\[phase41_prereg\].*names"):
+        phase41_prereg.unit_outcomes(other, p.UNITS)
+    opened = [*_unit_lines(), _unit_line("start", cell[1], "t9")]
+    with pytest.raises(SystemExit, match="reconcile"):
+        phase41_prereg.unit_outcomes(opened, p.UNITS)
+    whole = _unit_lines()[:2]
+    for close in (
+        _unit_line("lost", prep[0], "t4"),
+        _unit_line("end", prep[0], "t4", phase41_prereg.unit_record(prep[0])),
+    ):
+        with pytest.raises(SystemExit, match="R-3 b"):
+            phase41_prereg.unit_outcomes(
+                [*whole, _unit_line("start", prep[0], "t3"), close], p.UNITS
+            )
+    with pytest.raises(SystemExit, match=r"^\[phase41_prereg\]"):
+        phase41_prereg.unit_outcomes([], ("cell_x",))
+
+    not_run = tuple(u for u in p.UNITS if outcomes[u] == "not_run")
+    assert phase41_prereg.pending_units(outcomes) == not_run
+    rerun = phase41_prereg.pending_units(outcomes, rerun=frozenset({prep[1]}))
+    assert rerun == (prep[1], *not_run) and rerun == tuple(u for u in p.UNITS if u in rerun)
+    for bad in (frozenset({prep[0]}), frozenset({cell[1]}), frozenset({"cell_x"})):
+        with pytest.raises(SystemExit, match="R-3 b"):
+            phase41_prereg.pending_units(outcomes, rerun=bad)
+
+
+def _outcomes(whole=()):
+    return {u: ("whole" if u in whole else "not_run") for u in phase41_prereg.UNITS}
+
+
+def test_pair_progress():
+    p = phase41_prereg
+    pairs = [(t, o) for o in p.ORDERINGS for t in p.TARGETS]
+    assert len(pairs) == len(p.TARGETS) * len(p.ORDERINGS)
+    done, half = pairs[0], pairs[1]
+    whole = {*phase41_prereg.pair_units(*done), phase41_prereg.pair_units(*half)[1]}
+    progress = phase41_prereg.pair_progress(_outcomes(whole))
+    assert progress == {
+        "completed": (done,),
+        "half_done": (half,),
+        "untouched": tuple(pairs[2:]),
+    }
+    assert phase41_prereg.pair_progress(_outcomes())["untouched"] == tuple(pairs)
+    dropped = {**_outcomes(), phase41_prereg.pair_units(*done)[0]: "dropped"}
+    assert phase41_prereg.pair_progress(dropped)["untouched"] == tuple(pairs)
+    missing = _outcomes()
+    del missing[p.CELL_UNITS[-1]]
+    with pytest.raises(SystemExit, match=r"^\[phase41_prereg\]"):
+        phase41_prereg.pair_progress(missing)
+
+
+def _resume(**changes):
+    declaration = {
+        "e1_hours_at_pause": 53.0,
+        "cells": [phase41_prereg.CELL_UNITS[0]],
+        "approved": "approved",
+    }
+    declaration.update(changes)
+    return declaration
+
+
+def test_pause_due_and_notice():
+    p = phase41_prereg
+    budget = _record(p.BUDGET_RECORD)
+    share = p.ENTRIES["e1_share_hours"]["value"]
+    assert share == budget["front_hours"]["E1"]
+    c, other = p.CELL_UNITS[0], p.CELL_UNITS[1]
+    assert phase41_prereg.e1_pause_due(share * 3600 - 1, cell=c, declarations=()) is False
+    assert phase41_prereg.e1_pause_due(share * 3600, cell=c, declarations=()) is True
+    lifted = (_resume(cells=[c]),)
+    assert phase41_prereg.e1_pause_due(share * 3600, cell=c, declarations=lifted) is False
+    assert phase41_prereg.e1_pause_due(share * 3600, cell=other, declarations=lifted) is True
+    missing = _resume(cells=[c])
+    del missing["approved"]
+    for bad in (
+        missing,
+        _resume(cells=[c], approved="not approved"),
+        _resume(cells=[c], approved="não approved"),
+        _resume(cells=[c], approved="ok"),
+        _resume(cells=[c], planted=1),
+        "approved",
+    ):
+        assert phase41_prereg.e1_pause_due(share * 3600, cell=c, declarations=(bad,)) is True, bad
+    for bad_seconds in (None, -1.0, math.nan, True):
+        with pytest.raises(SystemExit, match=r"^\[phase41_prereg\]"):
+            phase41_prereg.e1_pause_due(bad_seconds, cell=c, declarations=())
+    with pytest.raises(SystemExit, match=r"^\[phase41_prereg\]"):
+        phase41_prereg.e1_pause_due(0.0, cell=p.PREP_UNITS[0], declarations=())
+
+    done = (p.TARGETS[0], p.ORDERINGS[0])
+    half = (p.TARGETS[1], p.ORDERINGS[0])
+    whole = {*phase41_prereg.pair_units(*done), phase41_prereg.pair_units(*half)[0]}
+    by_front = {"E1": 7200.0, "E3": 1800.0, "E4": 0.0}
+    total = 9000.0
+    notice = phase41_prereg.pause_notice(
+        by_front_seconds=by_front, total_seconds=total, outcomes=_outcomes(whole)
+    )
+    assert notice == {
+        "e1_hours": by_front["E1"] / 3600,
+        "completed_pairs": (done,),
+        "half_done_pairs": (half,),
+        "remaining_hours": {
+            "E3": budget["front_hours"]["E3"] - by_front["E3"] / 3600,
+            "E4": budget["front_hours"]["E4"] - by_front["E4"] / 3600,
+        },
+        "to_90h": budget["stop_line_hours"] - total / 3600,
+    }
+    for front in ("E1", "E3", "E4"):
+        short = {k: v for k, v in by_front.items() if k != front}
+        with pytest.raises((SystemExit, KeyError)):
+            phase41_prereg.pause_notice(
+                by_front_seconds=short, total_seconds=total, outcomes=_outcomes()
+            )
+    with pytest.raises(SystemExit, match=r"^\[phase41_prereg\]"):
+        phase41_prereg.pause_notice(
+            by_front_seconds={**by_front, "E1": -1.0}, total_seconds=total, outcomes=_outcomes()
+        )
+
+
+def test_resume_declaration_failures():
+    p = phase41_prereg
+    assert p.RESUME_ROOT == "data/phase41_resume"
+    assert p.RESUME_DECLARATION_KEYS == ("e1_hours_at_pause", "cells", "approved")
+    assert tuple(_resume()) == p.RESUME_DECLARATION_KEYS
+    name = phase41_prereg.resume_declaration_name(1)
+    assert name == "data/phase41_resume/resume_01.json"
+    assert name.startswith(p.RESUME_ROOT + "/") and ":" not in name
+    assert not fnmatch.fnmatch(name, p.RECORD_GLOB)
+    for bad in (0, -1, True, 1.0, "1"):
+        with pytest.raises(SystemExit, match=r"^\[phase41_prereg\]"):
+            phase41_prereg.resume_declaration_name(bad)
+
+    def failures(declaration, at=53.0):
+        return phase41_prereg.resume_declaration_failures(declaration, e1_hours_at_pause=at)
+
+    assert failures(_resume()) == []
+    assert failures(_resume(cells=list(p.CELL_UNITS))) == []
+    missing = _resume()
+    del missing["cells"]
+    plants = [
+        ("keys", missing),
+        ("keys", _resume(planted=1)),
+        ("e1_hours_at_pause", _resume(e1_hours_at_pause=52.0)),
+        ("e1_hours_at_pause", _resume(e1_hours_at_pause=None)),
+        ("cells", _resume(cells=[])),
+        ("cells", _resume(cells=[p.PREP_UNITS[0]])),
+        ("cells", _resume(cells=["cell_x"])),
+        ("cells", _resume(cells=[p.CELL_UNITS[0], p.CELL_UNITS[0]])),
+        ("cells", _resume(cells=p.CELL_UNITS[0])),
+        ("approved", _resume(approved="Approved")),
+        ("approved", _resume(approved="pre-approved")),
+        ("approved", _resume(approved="unapproved")),
+        ("approved", _resume(approved=None)),
+        ("mapping", ["x"]),
+    ]
+    for key, declaration in plants:
+        found = failures(declaration)
+        assert found and any(key in f for f in found), (key, found)
+        assert all("D-23" in f for f in found), (key, found)
+    assert failures(_resume(), at=52.0)
+
+
+_UU = "2026-10-09T01:02:03.000004+00:00"
+_UNIT = "cell_pet_name_greedy_seed1337"
+
+
+def _unit_manifest(**changes):
+    manifest = {
+        "unit": _UNIT,
+        "run_id": phase41_prereg.run_id(_UNIT),
+        "lost_utc": _UU,
+        "cause_note": "x",
+        "approved": "approved",
+        "head_at_dropped_attempt": "H",
+        "relaunch_git_sha": "H",
+        "head_change_declared": None,
+        "kept": [
+            {
+                "from": "checkpoints/a.pt",
+                "path": phase41_prereg.dropped_attempt_dir(_UNIT, _UU) + "/checkpoints/a.pt",
+                "sha256": "0" * 64,
+            }
+        ],
+    }
+    manifest.update(changes)
+    return manifest
+
+
+def _unit_manifest_failures(manifest):
+    return phase41_prereg.dropped_manifest_failures(manifest, unit=_UNIT, lost_utc=_UU)
+
+
+def test_r3b_readers_per_unit():
+    p = phase41_prereg
+    other = p.CELL_UNITS[1]
+    # lost_attempts: every lost line of run_id(unit), in ledger order.
+    lines = [
+        _unit_line("start", _UNIT, "s1"),
+        _unit_line("lost", _UNIT, "A"),
+        _unit_line("start", other, "s2"),
+        _unit_line("end", other, "s3", phase41_prereg.unit_record(other)),
+        _unit_line("start", _UNIT, "s4"),
+        _unit_line("lost", _UNIT, "B"),
+    ]
+    assert phase41_prereg.lost_attempts(lines, _UNIT) == ["A", "B"]
+    assert phase41_prereg.lost_attempts(lines, other) == []
+    assert phase41_prereg.lost_attempts(lines, p.PREP_UNITS[0]) == []
+    with pytest.raises(SystemExit, match=r"^\[phase41_prereg\]"):
+        phase41_prereg.lost_attempts(lines, "cell_x")
+
+    # dropped_attempt_dir: under DROPPED_ROOT, no ':'.
+    assert p.DROPPED_ROOT == "data/phase41_dropped"
+    assert p.DROPPED_MANIFEST == "manifest.json"
+    path = phase41_prereg.dropped_attempt_dir(_UNIT, _UU)
+    assert path == (
+        "data/phase41_dropped/v6_41_E1_cell_pet_name_greedy_seed1337_2026-10-09T010203.000004+0000"
+    )
+    assert ":" not in path and not fnmatch.fnmatch(path, p.RECORD_GLOB)
+    for unit in p.UNITS:
+        assert phase41_prereg.dropped_attempt_dir(unit, "A").startswith(p.DROPPED_ROOT + "/")
+    with pytest.raises(SystemExit, match=r"^\[phase41_prereg\]"):
+        phase41_prereg.dropped_attempt_dir("cell_x", "A")
+    with pytest.raises(SystemExit, match=r"^\[phase41_prereg\]"):
+        phase41_prereg.dropped_attempt_dir(_UNIT, "")
+
+    # _text and _approved (the Phase 40 regex verbatim).
+    assert phase41_prereg._text(" x ") is True
+    assert [phase41_prereg._text(v) for v in ("", "  ", None, 1)] == [False] * 4
+    for text in ("approved", "aprovo a re-execução. approved"):
+        assert phase41_prereg._approved(text) is True, text
+    for text in (
+        "not approved",
+        "não approved",
+        "nao approved",
+        "Not approved",
+        "unapproved",
+        "Approved",
+        "pre-approved",
+        "",
+        "ok",
+        None,
+        1,
+    ):
+        assert phase41_prereg._approved(text) is False, text
+
+    # dropped_manifest_failures: each key and condition (the Phase 40 table, per unit).
+    assert p.DROPPED_MANIFEST_KEYS[0] == "unit" and "seed" not in p.DROPPED_MANIFEST_KEYS
+    assert tuple(_unit_manifest()) == p.DROPPED_MANIFEST_KEYS
+    assert _unit_manifest_failures(_unit_manifest()) == []
+    assert _unit_manifest_failures(_unit_manifest(kept=[])) == []
+    moved = _unit_manifest(relaunch_git_sha="H2", head_change_declared="y")
+    assert _unit_manifest_failures(moved) == []
+    item = _unit_manifest()["kept"][0]
+    missing = _unit_manifest()
+    del missing["cause_note"]
+    plants = [
+        ("cause_note", missing),
+        ("planted", _unit_manifest(planted=1)),
+        ("unit", _unit_manifest(unit=other)),
+        ("run_id", _unit_manifest(run_id=phase41_prereg.run_id(other))),
+        ("lost_utc", _unit_manifest(lost_utc="2026-10-09T09:09:09+00:00")),
+        ("cause_note", _unit_manifest(cause_note="")),
+        ("cause_note", _unit_manifest(cause_note="   ")),
+        ("approved", _unit_manifest(approved="ok")),
+        ("approved", _unit_manifest(approved="não approved")),
+        ("relaunch_git_sha", _unit_manifest(relaunch_git_sha="")),
+        ("head_change_declared", _unit_manifest(relaunch_git_sha="H2")),
+        ("head_change_declared", _unit_manifest(head_change_declared="y")),
+        ("kept", _unit_manifest(kept=[{**item, "path": "data/elsewhere/a.pt"}])),
+        ("kept", _unit_manifest(kept="x")),
+        ("sha256", _unit_manifest(kept=[{k: v for k, v in item.items() if k != "sha256"}])),
+        ("extra", _unit_manifest(kept=[{**item, "extra": 1}])),
+        ("..", _unit_manifest(kept=[{**item, "path": item["path"] + "/../../../../results/x"}])),
+        ("sha256", _unit_manifest(kept=[{**item, "sha256": "G" * 64}])),
+        ("from", _unit_manifest(kept=[{**item, "from": " "}])),
+    ]
+    for key, manifest in plants:
+        failures = _unit_manifest_failures(manifest)
+        assert failures and any(key in f for f in failures), (key, failures)
+    for bad in (None, [], "manifest"):
+        failures = _unit_manifest_failures(bad)
+        assert failures and "mapping" in failures[0], bad
+
+    # relaunch_declaration_name / relaunch_declaration_failures / latest_head_failures.
+    assert p.RELAUNCH_DECLARATION_KEYS == ("launch_git_sha", "head_change_declared", "approved")
+    assert phase41_prereg.relaunch_declaration_name("h2") == "relaunch_h2.json"
+    with pytest.raises(SystemExit, match=r"^\[phase41_prereg\]"):
+        phase41_prereg.relaunch_declaration_name("")
+    manifest = _unit_manifest()
+    assert phase41_prereg.latest_head_failures(manifest, None, launch_git_sha="H") == []
+    undeclared = phase41_prereg.latest_head_failures(manifest, None, launch_git_sha="H2")
+    assert len(undeclared) == 1 and "HEAD moved" in undeclared[0]
+    declaration = {"launch_git_sha": "H2", "head_change_declared": "y", "approved": "approved"}
+    assert tuple(declaration) == p.RELAUNCH_DECLARATION_KEYS
+    assert phase41_prereg.latest_head_failures(manifest, declaration, launch_git_sha="H2") == []
+    assert phase41_prereg.relaunch_declaration_failures(declaration, relaunch_git_sha="H") == []
+    missing = dict(declaration)
+    del missing["approved"]
+    plants = [
+        ("approved", missing),
+        ("planted", {**declaration, "planted": 1}),
+        ("launch_git_sha", {**declaration, "launch_git_sha": "H"}),
+        ("head_change_declared", {**declaration, "head_change_declared": " "}),
+        ("approved", {**declaration, "approved": "ok"}),
+        ("approved", {**declaration, "approved": "not approved"}),
+    ]
+    for key, planted in plants:
+        failures = phase41_prereg.relaunch_declaration_failures(planted, relaunch_git_sha="H")
+        assert failures and any(key in f for f in failures), (key, failures)
+    wrong = phase41_prereg.latest_head_failures(manifest, declaration, launch_git_sha="H3")
+    assert wrong and any("launch_git_sha" in f for f in wrong)
+
+
+def test_prove_units_helper():
+    assert phase41_prereg._prove_units(phase41_prereg.UNITS) is None
+    assert phase41_prereg._prove_units(()) is None
+    for bad in (("cell_x",), (None,), (phase41_prereg.UNITS[0], 1)):
+        with pytest.raises(SystemExit, match="not in UNITS"):
+            phase41_prereg._prove_units(bad)

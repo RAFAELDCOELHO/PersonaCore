@@ -30,6 +30,7 @@ import fnmatch
 import json
 import math
 import pathlib
+import re
 import sys
 import types
 
@@ -1755,3 +1756,314 @@ def control_gap_check(measured, committed, *, device):
         "rehearsal": device == "cpu",
         "stop": device == "mps" and not equal,
     }
+
+
+# =================================================================================================
+# (12) PER-UNIT OUTCOMES AND PAIR PROGRESS (D-22, D-24): read from the append-only ledger, never
+# from logs (phase40_prereg.seed_outcomes / pending_seeds re-keyed per unit).
+# =================================================================================================
+
+
+def _prove_units(units):
+    """Every unit a member of UNITS."""
+    unknown = [u for u in units if not (isinstance(u, str) and u in _UNIT_KEYS)]
+    _prove(not unknown, f"units {unknown!r} are not in UNITS")
+
+
+def unit_outcomes(ledger_lines, units):
+    """D-24: each unit whole / dropped / not_run from its LAST ledger attempt of run_id(unit); a
+    whole unit's end line names unit_record(unit)."""
+    import phase36_ledger  # torch-free; lazy so the import surface stays small
+
+    _prove_units(units)
+    attempts = phase36_ledger._attempts(ledger_lines)
+    outcomes = {}
+    for unit in units:
+        mine = [(start, close) for start, close in attempts if start["run_id"] == run_id(unit)]
+        if not mine:
+            outcomes[unit] = "not_run"
+            continue
+        _prove(
+            all(close is not None for _, close in mine),
+            f"unit {unit}: an attempt is still open: phase36_ledger.py reconcile first",
+        )
+        _prove(
+            not any(close["event"] == "end" for _, close in mine[:-1]),
+            f"unit {unit}: a whole unit has a later attempt (R-3 b: never for a completed unit)",
+        )
+        close = mine[-1][1]
+        if close["event"] == "lost":
+            outcomes[unit] = "dropped"
+        else:
+            _prove(
+                close["record"] == unit_record(unit),
+                f"unit {unit}: the end line names {close['record']!r}, not {unit_record(unit)}",
+            )
+            outcomes[unit] = "whole"
+    return outcomes
+
+
+def pending_units(outcomes, rerun=frozenset()):
+    """D-24 / R-3 b: the not_run units plus each dropped unit in ``rerun`` (Rafael's manifest
+    approved it), in UNITS order. A whole or not_run unit is never in ``rerun``."""
+    _prove_units(outcomes)
+    _prove(
+        all(outcomes.get(u) == "dropped" for u in rerun),
+        f"R-3 b: only a dropped unit can be re-run, never a whole or not-run one ({sorted(rerun)})",
+    )
+    return tuple(
+        unit
+        for unit in UNITS
+        if outcomes.get(unit) == "not_run" or (outcomes.get(unit) == "dropped" and unit in rerun)
+    )
+
+
+def pair_progress(outcomes):
+    """D-23: the (target, ordering) pairs, in CELL_UNITS order, with both seeds whole
+    (completed), one seed whole (half_done), or none (untouched)."""
+    missing = [u for u in CELL_UNITS if u not in outcomes]
+    _prove(not missing, f"outcomes lack cells {missing}")
+    progress = {"completed": [], "half_done": [], "untouched": []}
+    for ordering in ORDERINGS:
+        for target in TARGETS:
+            whole = sum(outcomes[u] == "whole" for u in pair_units(target, ordering))
+            key = "completed" if whole == len(SEEDS) else "half_done" if whole else "untouched"
+            progress[key].append((target, ordering))
+    return {key: tuple(pairs) for key, pairs in progress.items()}
+
+
+# =================================================================================================
+# (13) THE D-23 PAUSE AND ITS RESUME DECLARATION (ENTRIES["e1_pause"], ["resume_declaration"]).
+# =================================================================================================
+
+RESUME_ROOT = "data/phase41_resume"
+RESUME_DECLARATION_KEYS = ("e1_hours_at_pause", "cells", "approved")
+
+
+def resume_declaration_name(n):
+    """D-23: the n-th resume declaration (n >= 1), under RESUME_ROOT (data/, gitignored)."""
+    _prove_count("n", n, low=1)
+    return f"{RESUME_ROOT}/resume_{n:02d}.json"
+
+
+def resume_declaration_failures(declaration, *, e1_hours_at_pause):
+    """D-23: the failures of a resume declaration; [] when it holds: exactly
+    RESUME_DECLARATION_KEYS, e1_hours_at_pause equal to the pause notice's e1_hours, cells a
+    non-empty list of distinct CELL_UNITS, and Rafael's approved. Never raises."""
+    if not isinstance(declaration, collections.abc.Mapping):
+        return [f"D-23: declaration is {type(declaration).__name__}, not a mapping"]
+    keys = tuple(declaration)
+    if set(keys) != set(RESUME_DECLARATION_KEYS) or len(keys) != len(RESUME_DECLARATION_KEYS):
+        missing = sorted(set(RESUME_DECLARATION_KEYS) - set(keys))
+        extra = sorted(set(keys) - set(RESUME_DECLARATION_KEYS))
+        return [f"D-23: declaration keys: missing {missing}, extra {extra}"]
+    failures = []
+    at = declaration["e1_hours_at_pause"]
+    if not (_is_seconds(at) and at == e1_hours_at_pause):
+        failures.append(f"D-23: e1_hours_at_pause {at!r} != the notice's {e1_hours_at_pause!r}")
+    cells = declaration["cells"]
+    if not (
+        isinstance(cells, (list, tuple))
+        and cells
+        and all(isinstance(c, str) and c in CELL_UNITS for c in cells)
+        and len(set(cells)) == len(cells)
+    ):
+        failures.append(f"D-23: cells {cells!r} are not a non-empty list of distinct CELL_UNITS")
+    if not _approved(declaration["approved"]):
+        failures.append(f"D-23: approved {declaration['approved']!r} lacks Rafael's 'approved'")
+    return failures
+
+
+def e1_pause_due(e1_seconds, *, cell, declarations):
+    """D-23, checked before every cell: True iff E1's spent seconds (lost attempts included)
+    reach ENTRIES["e1_share_hours"] and no resume declaration listing ``cell`` holds. Here a
+    declaration is checked against its own e1_hours_at_pause; the driver checks that value against
+    the pause notice (resume_declaration_failures) before passing the declaration."""
+    _prove(_is_seconds(e1_seconds), f"e1_seconds {e1_seconds!r} is not a finite real >= 0")
+    _prove(cell in CELL_UNITS, f"cell {cell!r} is not one of CELL_UNITS")
+    if e1_seconds < ENTRIES["e1_share_hours"]["value"] * 3600:
+        return False
+    for declaration in declarations:
+        if not isinstance(declaration, collections.abc.Mapping):
+            continue
+        own = declaration.get("e1_hours_at_pause")
+        if not resume_declaration_failures(declaration, e1_hours_at_pause=own) and (
+            cell in declaration["cells"]
+        ):
+            return False
+    return True
+
+
+def pause_notice(*, by_front_seconds, total_seconds, outcomes):
+    """D-23: what Rafael reads at the pause: E1 hours (phase36_ledger.spent's by_front, lost
+    attempts included), the completed and half-done pairs, and the hours left for E3, E4 (their
+    front_hours minus spent) and to the stop line, all from the inputs and the budget."""
+    fronts = ("E1", "E3", "E4")
+    for front in fronts:
+        _prove(
+            front in by_front_seconds and _is_seconds(by_front_seconds[front]),
+            f"by_front_seconds[{front!r}] is missing or not a finite real >= 0",
+        )
+    _prove(_is_seconds(total_seconds), f"total_seconds {total_seconds!r} is not a finite real >= 0")
+    progress = pair_progress(outcomes)
+    hours = _BUDGET["front_hours"]
+    return {
+        "e1_hours": by_front_seconds["E1"] / 3600,
+        "completed_pairs": progress["completed"],
+        "half_done_pairs": progress["half_done"],
+        "remaining_hours": {f: hours[f] - by_front_seconds[f] / 3600 for f in fronts[1:]},
+        "to_90h": _BUDGET["stop_line_hours"] - total_seconds / 3600,
+    }
+
+
+# =================================================================================================
+# (14) R-3 b PER UNIT (D-24): phase40_prereg's crash readers re-keyed per unit (a prep unit or a
+# cell); a new attempt of a dropped unit only, never a rerun of a whole unit.
+# =================================================================================================
+
+# R-3 b (c): a crashed attempt's partial outputs are kept (never deleted) under DROPPED_ROOT, which
+# .gitignore's data/ covers, and listed in the records.
+DROPPED_ROOT = "data/phase41_dropped"
+DROPPED_MANIFEST = "manifest.json"
+DROPPED_MANIFEST_KEYS = (
+    "unit",
+    "run_id",
+    "lost_utc",
+    "cause_note",
+    "approved",
+    "head_at_dropped_attempt",
+    "relaunch_git_sha",
+    "head_change_declared",
+    "kept",
+)
+RELAUNCH_DECLARATION_KEYS = ("launch_git_sha", "head_change_declared", "approved")
+_KEPT_KEYS = ("from", "path", "sha256")
+
+
+def lost_attempts(ledger_lines, unit):
+    """R-3 b (e): the utc of every lost line of run_id(unit), in ledger order; reconcile writes a
+    lost line only for an open start, so each closes a crashed attempt."""
+    _prove_units((unit,))
+    return [
+        line["utc"]
+        for line in ledger_lines
+        if line["event"] == "lost" and line["run_id"] == run_id(unit)
+    ]
+
+
+def dropped_attempt_dir(unit, lost_utc):
+    """R-3 b (c): where a crashed attempt's kept outputs and its manifest live (no ':' in it)."""
+    _prove_units((unit,))
+    _prove(isinstance(lost_utc, str) and lost_utc, f"lost_utc {lost_utc!r} is not a non-empty str")
+    return f"{DROPPED_ROOT}/{run_id(unit).replace('/', '_')}_{lost_utc.replace(':', '')}"
+
+
+def _text(value):
+    """A str non-empty after strip."""
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _approved(text):
+    """Rafael's approved (Phase 40 WR-02, regex verbatim): the standalone token ``approved``,
+    never a negated one ("not", "não", "nao" or "un" before it)."""
+    return (
+        isinstance(text, str)
+        and re.search(r"(?<![\w-])approved\b", text) is not None
+        and re.search(r"\b(?:not|não|nao|un)[\s-]*approved\b", text, re.IGNORECASE) is None
+    )
+
+
+def dropped_manifest_failures(manifest, *, unit, lost_utc):
+    """R-3 b (a, b, c, e): the failures of a crashed attempt's manifest, checked on the manifest
+    ALONE; [] when every condition holds. Never raises on a bad manifest."""
+    if not isinstance(manifest, collections.abc.Mapping):
+        return [f"manifest is {type(manifest).__name__}, not a mapping"]
+    keys = tuple(manifest)
+    if set(keys) != set(DROPPED_MANIFEST_KEYS) or len(keys) != len(DROPPED_MANIFEST_KEYS):
+        missing = sorted(set(DROPPED_MANIFEST_KEYS) - set(keys))
+        extra = sorted(set(keys) - set(DROPPED_MANIFEST_KEYS))
+        return [f"manifest keys: missing {missing}, extra {extra}"]
+    failures = []
+    if manifest["unit"] != unit:
+        failures.append(f"unit {manifest['unit']!r} != {unit!r} (b: same unit)")
+    if manifest["run_id"] != run_id(unit):
+        failures.append(f"run_id {manifest['run_id']!r} != {run_id(unit)!r} (b: same unit)")
+    if manifest["lost_utc"] != lost_utc:
+        failures.append(f"lost_utc {manifest['lost_utc']!r} != {lost_utc!r} (e: that attempt)")
+    if not _text(manifest["cause_note"]):
+        failures.append("cause_note is empty (a: a cause note)")
+    if not _approved(manifest["approved"]):
+        failures.append(f"approved {manifest['approved']!r} lacks Rafael's 'approved' (a)")
+    head, relaunch = manifest["head_at_dropped_attempt"], manifest["relaunch_git_sha"]
+    for key, sha in (("head_at_dropped_attempt", head), ("relaunch_git_sha", relaunch)):
+        if not _text(sha):
+            failures.append(f"{key} {sha!r} is not a non-empty str (b)")
+    declared = manifest["head_change_declared"]
+    if head == relaunch and declared is not None:
+        failures.append("head_change_declared is set but the HEAD did not change (b)")
+    if head != relaunch and not _text(declared):
+        failures.append(f"head_change_declared {declared!r}: HEAD {head} -> {relaunch} (b)")
+    kept = manifest["kept"]
+    if not isinstance(kept, list):
+        return [*failures, f"kept is {type(kept).__name__}, not a list (c)"]
+    prefix = dropped_attempt_dir(unit, lost_utc) + "/"
+    for index, item in enumerate(kept):
+        if not (isinstance(item, dict) and tuple(sorted(item)) == _KEPT_KEYS):
+            found = sorted(item) if isinstance(item, dict) else type(item).__name__
+            failures.append(f"kept[{index}] keys {found} are not {list(_KEPT_KEYS)} (c)")
+            continue
+        if not all(isinstance(item[k], str) for k in _KEPT_KEYS):
+            failures.append(f"kept[{index}] has a non-str field (c)")
+            continue
+        if not item["path"].startswith(prefix):
+            failures.append(f"kept[{index}] path {item['path']!r} is not under {prefix} (c)")
+        if ".." in pathlib.PurePosixPath(item["path"]).parts:
+            failures.append(f"kept[{index}] path {item['path']!r} has a '..' segment (c)")
+        if not re.fullmatch(r"[0-9a-f]{64}", item["sha256"]):
+            failures.append(f"kept[{index}] sha256 {item['sha256']!r} is not 64 hex (c)")
+        if not _text(item["from"]):
+            failures.append(f"kept[{index}] from {item['from']!r} is empty (c)")
+    return failures
+
+
+def relaunch_declaration_name(launch_git_sha):
+    """R-3 b (b): the file, in the attempt directory, declaring a HEAD moved after drop_attempt."""
+    _prove(_text(launch_git_sha), f"launch_git_sha {launch_git_sha!r} is not a non-empty str")
+    return f"relaunch_{launch_git_sha}.json"
+
+
+def relaunch_declaration_failures(declaration, *, relaunch_git_sha):
+    """R-3 b (b): the failures of a relaunch declaration of a HEAD that moved after drop_attempt,
+    declared and approved by Rafael before that launch; [] when it holds."""
+    keys = tuple(declaration)
+    if set(keys) != set(RELAUNCH_DECLARATION_KEYS) or len(keys) != len(RELAUNCH_DECLARATION_KEYS):
+        missing = sorted(set(RELAUNCH_DECLARATION_KEYS) - set(keys))
+        extra = sorted(set(keys) - set(RELAUNCH_DECLARATION_KEYS))
+        return [f"declaration keys: missing {missing}, extra {extra}"]
+    failures = []
+    launch = declaration["launch_git_sha"]
+    if not _text(launch) or launch == relaunch_git_sha:
+        failures.append(f"launch_git_sha {launch!r} is empty or the drop-time HEAD (b)")
+    if not _text(declaration["head_change_declared"]):
+        failures.append("head_change_declared is empty (b)")
+    approved = declaration["approved"]
+    if not _approved(approved):
+        failures.append(f"approved {approved!r} lacks Rafael's 'approved' (b)")
+    return failures
+
+
+def latest_head_failures(manifest, declaration, *, launch_git_sha):
+    """R-3 b (b), only for a unit's latest crashed attempt: the launch HEAD is the drop-time HEAD,
+    or a relaunch declaration covers the move."""
+    relaunch = manifest["relaunch_git_sha"]
+    if launch_git_sha == relaunch:
+        return []
+    if declaration is None:
+        return [f"HEAD moved after drop_attempt ({relaunch} -> {launch_git_sha}), undeclared (b)"]
+    failures = relaunch_declaration_failures(declaration, relaunch_git_sha=relaunch)
+    if declaration.get("launch_git_sha") != launch_git_sha:
+        failures.append(
+            f"declaration launch_git_sha {declaration.get('launch_git_sha')!r} != the launch "
+            f"{launch_git_sha!r} (b)"
+        )
+    return failures
