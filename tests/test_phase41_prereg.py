@@ -11,8 +11,11 @@ It reads only tracked files and git history and writes nothing under results/.
 """
 
 import ast
+import collections.abc
 import fnmatch
+import json
 import pathlib
+import re
 import sys
 
 import pytest
@@ -31,6 +34,8 @@ if _TESTS not in sys.path:
 import phase35_prereg  # noqa: E402  (scripts/ is not a package)
 import phase36_caps  # noqa: E402  (same)
 import phase41_prereg  # noqa: E402  (same)
+
+from test_phase29_prereg import _git  # noqa: E402
 
 PREREG = "scripts/phase41_prereg.py"
 
@@ -202,3 +207,199 @@ def test_caps_are_checked_at_import():
     # The import-time check is the grid's count, which the committed cap admits.
     counts = phase36_caps.counts_for("e1_checkpoint_grid", phase41_prereg.E1_CHECKPOINT_GRID)
     assert phase36_caps.check_unit_caps("E1", **counts) == counts
+
+
+# =================================================================================================
+# (2) THE ENTRIES: EVERY DECISION WRITTEN BEFORE ANY RECORD (Task 2).
+# =================================================================================================
+
+_D01_D25 = "447747c"
+_D26_D28 = "3787b9d"
+_LOG = ".planning/phases/41-erasure-across-facts-orderings-and-seeds/41-DISCUSSION-LOG.md"
+_D26_PREFIX = '> "Opção 2, com duas amarras:'
+
+_DECISION_ENTRIES = frozenset(
+    {
+        "e1_checkpoint_grid",
+        "e1_alternative_ordering",
+        "targets",
+        "seeds_and_adapters",
+        "stop_rule",
+        "k48_confirmations",
+        "calibration",
+        "condition_a",
+        "condition_b",
+        "condition_c",
+        "verdict",
+        "pair_labels",
+        "summary_line",
+        "m1_m2",
+        "varies_label",
+        "d13_block",
+        "predictions",
+        "d06_correlation",
+        "d12_side_by_side",
+        "execution_order",
+        "e1_pause",
+        "crash_rule",
+        "operations",
+        "e1_share_hours",
+        "e1_unit_prices",
+    }
+)
+
+_LABEL = "default taken at plan time, not yet confirmed by Rafael"
+# Keyed by ENTRY NAME: the decision id its derivation cites. Plan 41-05 removes each name once
+# Rafael confirms or changes that default.
+_UNCONFIRMED = {
+    "record_layout": "D-22",
+    "alternative_variant": "D-05",
+    "not_run": "D-17",
+    "resume_declaration": "D-23",
+    "d02_equality": "D-02",
+    "control_gap_scope": "D-13",
+    "approvals": "ERASE-06",
+    "prep_order": "D-10",
+    "stop_for_rafael": "D-24",
+}
+
+
+def _record(rel):
+    return json.loads((_ROOT / rel).read_text(encoding="utf-8"))
+
+
+def _no_mutable_containers(value):
+    if isinstance(value, (list, dict, set)):
+        return False
+    if isinstance(value, collections.abc.Mapping):
+        return all(_no_mutable_containers(v) for v in value.values())
+    if isinstance(value, tuple):
+        return all(_no_mutable_containers(v) for v in value)
+    return True
+
+
+def test_entries_names_kinds_and_d_ids():
+    entries = phase41_prereg.ENTRIES
+    assert set(entries) == _DECISION_ENTRIES | set(_UNCONFIRMED)
+    assert len(entries) == len(_DECISION_ENTRIES) + len(_UNCONFIRMED)
+    for name, entry in entries.items():
+        assert re.search(r"\b(D-\d\d|ERASE-\d\d)\b", entry["derivation"]), name
+        assert _D01_D25 in entry["source"] or _D26_D28 in entry["source"], name
+        expected = "derived" if name in ("e1_share_hours", "e1_unit_prices") else "preference"
+        assert entry["kind"] == expected, name
+        assert _no_mutable_containers(entry["value"]), name
+    budget = _record(phase41_prereg.BUDGET_RECORD)
+    assert entries["e1_share_hours"]["value"] == budget["front_hours"]["E1"]
+    prices = entries["e1_unit_prices"]["value"]
+    assert set(prices) == {
+        "e1_calibration_seconds",
+        "e1_k16_seconds",
+        "e1_k48_seconds",
+        "e1_ordering_seconds",
+    }
+    for key, price in prices.items():
+        assert price == budget["unit_prices"][key], key
+    assert "D-07" in entries["e1_checkpoint_grid"]["derivation"]
+    assert "D-26" in entries["k48_confirmations"]["derivation"]
+    assert _D26_D28 in entries["k48_confirmations"]["source"]
+
+
+def _d26_quote(log_text):
+    lines = [line for line in log_text.splitlines() if line.startswith(_D26_PREFIX)]
+    assert len(lines) == 1, "meta-guard: the D-26 reply is not exactly one line"
+    (line,) = lines
+    return line[line.index('"') + 1 : line.rindex('"')]
+
+
+def test_d26_ruling_is_quoted_verbatim():
+    quote = _d26_quote(_git("show", f"{_D26_D28}:{_LOG}"))
+    assert phase41_prereg.D26_RULING == quote
+    assert quote in phase41_prereg.ENTRIES["k48_confirmations"]["derivation"]
+    # NON-VACUITY: one character changed fails the same equality.
+    changed = quote[:-1] + ("!" if quote[-1] != "!" else "?")
+    assert changed != quote and changed != phase41_prereg.D26_RULING
+
+
+def test_k48_deviation_is_declared():
+    entry = phase41_prereg.ENTRIES["k48_confirmations"]
+    value = entry["value"]
+    budget = _record(phase41_prereg.BUDGET_RECORD)
+    assert value["max_per_cell"] == len(phase41_prereg.GRID)
+    assert value["per_checkpoint"] == 1
+    assert value["committed_cap"] == budget["unit_caps"]["E1"]["k48_confirms_per_cell"]
+    for phrase in ("deviation", "pricing assumption", "no pause per confirmation"):
+        assert phrase in entry["derivation"], phrase
+    # The committed cap is not what binds: passing the count would be refused.
+    with pytest.raises(SystemExit, match="k48_confirms_per_cell"):
+        phase36_caps.check_unit_caps("E1", k48_confirms_per_cell=value["max_per_cell"])
+
+
+def test_predictions_are_recorded_before_any_run():
+    predictions = phase41_prereg.ENTRIES["predictions"]["value"]
+    assert set(predictions) == {
+        "d11_calibration_identity",
+        "d21_d13_at_stop",
+        "greedy_1337_phase19_prefix",
+        "d02_cpu_equality",
+    }
+    for name, text in predictions.items():
+        assert "descriptive" in text, name
+        assert "a mismatch is a finding, not a failure" in text, name
+    d11 = predictions["d11_calibration_identity"]
+    for phrase in (
+        "phase19_erasure.CALIBRATION_ARM",
+        "phase19_erasure.RETRAIN_PREFIX",
+        "teach_persona.arm_outputs",
+        "torch.equal",
+        phase41_prereg.D11_REFERENCE_RECORD,
+        phase41_prereg.D11_REFERENCE_KEY,
+        phase41_prereg.D11_REFERENCE_SHA256,
+    ):
+        assert phrase in d11, phrase
+    assert (
+        phase41_prereg.D11_REFERENCE_SHA256 in phase41_prereg.ENTRIES["predictions"]["derivation"]
+    )
+
+
+def test_d11_reference_digest_is_read_from_the_committed_record():
+    import phase19_erasure
+    import phase19_run
+    import teach_persona
+
+    p = phase41_prereg
+    _git("ls-files", "--error-unmatch", p.D11_REFERENCE_RECORD)  # tracked, never the .pt
+    assert _ROOT / p.D11_REFERENCE_RECORD == phase19_run.CURVE_PATH
+    record = _record(p.D11_REFERENCE_RECORD)
+    assert p.D11_REFERENCE_SHA256 == record[p.D11_REFERENCE_KEY]
+    assert re.fullmatch(r"[0-9a-f]{64}", p.D11_REFERENCE_SHA256)
+    # The record's input adapter is the arm the prediction compares against (by file name: the
+    # record's absolute path is host-specific).
+    adapter = teach_persona.arm_outputs(
+        phase19_erasure.CALIBRATION_ARM, prefix=phase19_erasure.RETRAIN_PREFIX
+    )["adapter"]
+    assert pathlib.Path(record["adapter_in"]).name == pathlib.Path(adapter).name
+
+
+def test_value_nll_bound_is_the_budget_price_over_the_components():
+    import phase19_erasure
+
+    price = _record(phase41_prereg.BUDGET_RECORD)["unit_prices"]["e1_ordering_seconds"]
+    assert phase41_prereg.value_nll_seconds() == price / phase19_erasure.N_COMPONENTS
+    assert phase41_prereg.VALUE_NLL_SECONDS == phase41_prereg.value_nll_seconds()
+    assert phase41_prereg.MAX_GRADIENTS_PER_CELL == len(phase41_prereg.GRID)
+    assert phase41_prereg.GRADIENT_HEADROOM == price / (
+        len(phase41_prereg.GRID) * phase41_prereg.VALUE_NLL_SECONDS
+    )
+    derivation = phase41_prereg.ENTRIES["e1_alternative_ordering"]["derivation"]
+    assert repr(phase41_prereg.VALUE_NLL_SECONDS) in derivation
+    assert repr(phase41_prereg.GRADIENT_HEADROOM) in derivation
+
+
+def test_defaults_are_labelled():
+    assert phase41_prereg._DEFAULT == _LABEL
+    for name, entry in phase41_prereg.ENTRIES.items():
+        if name in _UNCONFIRMED:
+            assert _LABEL in entry["derivation"], name
+            assert _UNCONFIRMED[name] in entry["derivation"], name
+        else:
+            assert _LABEL not in entry["derivation"], name
