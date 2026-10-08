@@ -234,6 +234,9 @@ MAX_GRADIENTS_PER_CELL = len(GRID)
 GRADIENT_HEADROOM = _BUDGET["unit_prices"]["e1_ordering_seconds"] / (
     MAX_GRADIENTS_PER_CELL * VALUE_NLL_SECONDS
 )
+# IN-01 (Rafael 2026-10-08): of a gradient step's GRADIENT_HEADROOM value NLLs, one pays the
+# forward and one D-02's no-grad check, so the backward may cost this many forwards.
+BACKWARD_FORWARD_CEILING = GRADIENT_HEADROOM - 2
 
 # =================================================================================================
 # (5) THE ENTRIES: one entry per decision.
@@ -337,8 +340,12 @@ _ENTRIES = {
             f"phase19_erasure.N_COMPONENTS = {VALUE_NLL_SECONDS!r} s (Rafael 2026-10-08, the "
             "measured figure, computed); the assertion is that a cell's ordering cost fits in "
             f"{BUDGET_RECORD} unit_prices.e1_ordering_seconds, which holds while one gradient "
-            "(forward + backward) costs at most GRADIENT_HEADROOM = e1_ordering_seconds / "
-            f"(MAX_GRADIENTS_PER_CELL x VALUE_NLL_SECONDS) = {GRADIENT_HEADROOM!r} value NLLs. "
+            "step costs at most GRADIENT_HEADROOM = e1_ordering_seconds / "
+            f"(MAX_GRADIENTS_PER_CELL x VALUE_NLL_SECONDS) = {GRADIENT_HEADROOM!r} "
+            f"({GRADIENT_HEADROOM:.1f}) value NLLs, including D-02's no-grad check, i.e. backward "
+            f"<= ~{BACKWARD_FORWARD_CEILING:.1f} x forward (IN-01, Rafael 2026-10-08: "
+            "BACKWARD_FORWARD_CEILING = GRADIENT_HEADROOM - 2, one forward and one no-grad value "
+            "NLL). "
             "Written static fallback (no new decision needed): if that assertion fails, or if a "
             "calibration turns out unable to take a grid-dependent ordering, the alternative "
             "ordering becomes the static gradient ordering, one gradient on the intact adapter, "

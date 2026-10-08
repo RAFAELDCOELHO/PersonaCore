@@ -419,6 +419,16 @@ def test_value_nll_bound_is_the_budget_price_over_the_components():
     derivation = phase41_prereg.ENTRIES["e1_alternative_ordering"]["derivation"]
     assert repr(phase41_prereg.VALUE_NLL_SECONDS) in derivation
     assert repr(phase41_prereg.GRADIENT_HEADROOM) in derivation
+    # IN-01 (Rafael 2026-10-08): a gradient step's GRADIENT_HEADROOM value NLLs pay one forward and
+    # D-02's no-grad check, so backward <= GRADIENT_HEADROOM - 2 forwards, computed.
+    ceiling = phase41_prereg.BACKWARD_FORWARD_CEILING
+    assert ceiling == phase41_prereg.GRADIENT_HEADROOM - 2
+    for phrase in (
+        f"({phase41_prereg.GRADIENT_HEADROOM:.1f})",
+        "including D-02's no-grad check",
+        f"backward <= ~{ceiling:.1f} x forward",
+    ):
+        assert phrase in derivation, phrase
 
 
 def test_defaults_are_labelled():
@@ -2266,9 +2276,9 @@ def test_prove_units_helper():
 
 
 # =================================================================================================
-# WR-03 (41-05 review, Rafael 2026-10-08): the calibration training CSV lands under results/phase41_*
-# (teach_persona.arm_outputs), where the Phase 35 ordering legs would count it as a record; it is
-# gitignored, while the calibration and band records stay trackable.
+# WR-03 (41-05 review, Rafael 2026-10-08): the calibration training CSV lands under
+# results/phase41_* (teach_persona.arm_outputs), where the Phase 35 ordering legs would count it as
+# a record; it is gitignored, while the calibration and band records stay trackable.
 # =================================================================================================
 
 
