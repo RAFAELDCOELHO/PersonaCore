@@ -25,6 +25,7 @@ import gc
 import hashlib
 import json
 import math
+import os
 import pathlib
 import re
 import shutil
@@ -2438,3 +2439,407 @@ def emit(*, root=None, ledger_path=None, floors=None, bands=None):
         flush=True,
     )
     return record
+
+
+# =================================================================================================
+# The report: the erasure record rendered, nothing else (every number read from the record)
+# =================================================================================================
+
+
+def _table(header, rows):
+    """A GFM table; a pipe inside a cell is escaped, else it would add cells."""
+
+    def line(cells):
+        return "| " + " | ".join(str(c).replace("|", "\\|") for c in cells) + " |"
+
+    return [line(header), "|" + "---|" * len(header), *(line(row) for row in rows), ""]
+
+
+def _counts(pair):
+    return f"{pair[0]}/{pair[1]}"
+
+
+def _cell_section(unit, c, labels):
+    """One cell: verdict, D-27 reads and per-fact counts, D-26 confirmations, (a)/(b)/(c), D-14,
+    D-18, D-19 and D-20, each from the cell's block."""
+    prereg = _prereg()
+    out = [f"### {unit}", ""]
+    if c["verdict"] == prereg.NOT_RUN:
+        return out + [f"Verdict **{c['verdict']}** (ledger outcome: {c['outcome']}).", ""]
+    out += [
+        f"Verdict **{c['verdict']}** at stop {c['stop']}; failed conditions: "
+        f"{', '.join(c['failed']) or 'none'}; non-targets beyond the margin: "
+        f"{', '.join(c['beyond']) or 'none'}; INCONCLUSIVE reason: {c['reason'] or 'none'}.",
+        "",
+    ]
+    if c["not_reached_sentence"]:
+        out += [f"D-09: {c['not_reached_sentence']}.", ""]
+    out += [
+        "Reads (D-27: K = read_k at every checkpoint; ERASE-10: the exposure rank recorded, never "
+        "read by the stop):",
+        "",
+        *_table(
+            ("checkpoint", "target n/q", "rank", "K = read_k zero", "K = confirm_k zero"),
+            [
+                [
+                    r["checkpoint"],
+                    _counts(r["target_count"]),
+                    r["rank"],
+                    r["k16_zero"],
+                    r["k48_zero"],
+                ]
+                for r in c["reads"]
+            ],
+        ),
+        "Per-fact counts at every checkpoint (K = read_k):",
+        "",
+        *_table(
+            ("slot", *(r["checkpoint"] for r in c["reads"])),
+            [
+                [
+                    slot,
+                    *(
+                        _counts(
+                            [r["slot_counts"][slot][k] for k in ("n_answerable", "n_questions")]
+                        )
+                        for r in c["reads"]
+                    ),
+                ]
+                for slot in c["reads"][0]["slot_counts"]
+            ],
+        ),
+        f"D-26 confirmations ({len(c['confirmations'])}; {c['confirmation_hours']!r} h):",
+        "",
+        *_table(
+            ("checkpoint", "K = confirm_k zero", "seconds", "started", "finished"),
+            [
+                [
+                    x["checkpoint"],
+                    x["k48_zero"],
+                    repr(x["seconds"]),
+                    x["started_utc"],
+                    x["finished_utc"],
+                ]
+                for x in c["confirmations"]
+            ],
+        ),
+    ]
+    if c["conditions"] is not None:
+        a, b, cc = (c["conditions"][k] for k in ("a", "b", "c"))
+        out += [
+            f"(a): Wilson upper {a['upper']!r} against the floor {a['floor']!r}: holds "
+            f"{a['holds']} (vazia no ponto de parada julgado: o alvo está em 0).",
+            "",
+            f"(b): every non-target against the same seed's intact full adapter, margin "
+            f"{b['margin']!r} compared exactly; holds {b['holds']}:",
+            "",
+            *_table(
+                (
+                    "slot",
+                    "pre",
+                    "post",
+                    "delta",
+                    "beyond",
+                    prereg.VARIES_LABEL,
+                    "full min-max",
+                    "m2 min-max",
+                ),
+                [
+                    [
+                        slot,
+                        _counts(row["pre"]),
+                        _counts(row["post"]),
+                        repr(row["delta"]),
+                        row["beyond"],
+                        "sim" if slot in labels["varies"] else "não",
+                        *(
+                            f"{labels['ranges'][slot][g]['min']}-{labels['ranges'][slot][g]['max']}"
+                            if g in labels["ranges"][slot]
+                            else "—"
+                            for g in ("full", "m2")
+                        ),
+                    ]
+                    for slot, row in b["slots"].items()
+                ],
+            ),
+            f"(c): dialogue gap {cc['gap']!r} in [{cc['lo']!r}, {cc['hi']!r}]: "
+            f"holds {cc['holds']}.",
+            "",
+        ]
+        damage = c["nontarget_damage"]
+        out += [
+            f"D-19: beyond the margin, {damage['beyond_labelled']} labelled "
+            f'"{prereg.VARIES_LABEL}" ({", ".join(damage["labelled"]) or "none"}) and '
+            f"{damage['beyond_unlabelled']} unlabelled "
+            f"({', '.join(damage['unlabelled']) or 'none'}); "
+            f"(b) would fail on the unlabelled alone: {damage['b_fails_on_unlabelled_alone']}.",
+            "",
+        ]
+        r = c["retention"]
+        out += [
+            "D-14 retention_ppl (descriptive, no verdict):",
+            "",
+            *_table(
+                ("stop", "intact full", "m2", "v4.0 cap", prereg.V4_CAP_LABEL),
+                [
+                    [
+                        repr(r["stop"]),
+                        repr(r["intact_full"]),
+                        repr(r["m2"]),
+                        repr(r["cap"]),
+                        r[prereg.V4_CAP_LABEL],
+                    ]
+                ],
+            ),
+        ]
+    m1_m2 = c["m1_m2"]
+    if m1_m2 is not None and "comparison" in m1_m2:
+        out += [f"D-18: {m1_m2['comparison']}.", ""]
+    elif m1_m2 is not None:
+        out += [
+            "D-18 M1 x M2 (descriptive; 'fora da faixa' não é teste estatístico: duas seeds "
+            "contra cinco retreinos do M2):",
+            "",
+            *_table(
+                ("slot", "full", "M1", "M2", "M1 - full", "M2 - full", "M2 min-max", "M1"),
+                [
+                    [
+                        slot,
+                        _counts(row["full"]),
+                        _counts(row["m1"]),
+                        _counts(row["m2"]),
+                        repr(row["m1_minus_full"]),
+                        repr(row["m2_minus_full"]),
+                        f"{row['m2_range'][0]}-{row['m2_range'][1]}",
+                        row["m1_in_range"],
+                    ]
+                    for slot, row in m1_m2.items()
+                ],
+            ),
+        ]
+    if c["d13"] is not None:
+        if c["d13"]["measured"]:
+            out += [
+                "D-20 D-13 at the stop beside Phase 40's M2 range (descriptive):",
+                "",
+                *_table(
+                    ("reading", "value", "M2 range", "label"),
+                    [
+                        [name, x["value"], f"{x['range'][0]}-{x['range'][1]}", x["label"]]
+                        for name, x in c["d13"]["readings"].items()
+                    ],
+                ),
+            ]
+        else:
+            out += ["D-20: D-13 not measured at this stop.", ""]
+    return out
+
+
+def render_report(record):
+    """The erasure report, rendered from the record only (pure; returns the markdown)."""
+    import re as regex
+
+    record = json.loads(json.dumps(record, sort_keys=True))  # one key type: the file's
+    prereg = _prereg()
+    seeds = [str(s) for s in prereg.SEEDS]
+    summary = record["summary"]
+    out = ["# Phase 41 — E1: erasure across facts, orderings and seeds", ""]
+    out += [
+        "## Summary (D-16, D-17)",
+        "",
+        f"Status: **{record['status']}**. Of the {summary['n_pairs']} (target, ordering) pairs: "
+        + ", ".join(f"{label} {summary[label]}" for label in prereg.PAIR_LABELS)
+        + ".",
+        "",
+        f'Inside "{prereg.PAIR_LABELS[2]}", each pair counted once under its seeds\' verdicts '
+        f"({' + '.join(seeds)}):",
+        "",
+        *_table(("verdicts", "pairs"), sorted(summary["inside_nao_replicado"].items())),
+        f"The rule: {record['limits']['summary_line']}.",
+        "",
+        *_table(
+            ("pair", "label", "per seed"),
+            [
+                [key, record["pairs"][key]["label"], record["pairs"][key]["text"]]
+                for key in (_key(t, o) for t in prereg.TARGETS for o in prereg.ORDERINGS)
+            ],
+        ),
+        "## The 4 x 2 x 2 table (D-15)",
+        "",
+        *_table(
+            ("target", "ordering", *seeds),
+            [
+                [t, o, *(record["table"][t][o][s] for s in seeds)]
+                for t in prereg.TARGETS
+                for o in prereg.ORDERINGS
+            ],
+        ),
+        f'A NOT_REACHED cell reads (D-09): "{record["not_reached_sentence"]}". NOT_RUN: a cell '
+        "never started (or dropped and not re-run).",
+        "",
+        f"Alternative ordering variant: {record['variant']} (decided by "
+        f"{record['variant_decided_by']}; IN-02).",
+        "",
+        "## Cells",
+        "",
+    ]
+    labels = record["labels"]
+    for unit in prereg.CELL_UNITS:
+        out += _cell_section(unit, record["cells"][unit], labels)
+    cal = record["calibrations"]
+    out += [
+        "## (a) floors and the calibrations (D-12, D-06, D-11; WR-01)",
+        "",
+        "(a) é vazia no ponto de parada julgado: the stop requires the target at 0, so (a) holds "
+        f"by construction. The four calibrations ({cal['prep_hours']!r} h measured) feed only "
+        f"D-12. The entry: {cal['condition_a']}",
+        "",
+        *_table(
+            (
+                "ordering",
+                "seed",
+                "calibration rate",
+                "successes/questions",
+                "floor",
+                "floor_branch",
+            ),
+            [
+                [
+                    r["ordering"],
+                    r["seed"],
+                    repr(r["calibration_rate"]),
+                    f"{r['calibration_successes']}/{r['calibration_questions']}",
+                    repr(r["floor"]),
+                    r["floor_branch"],
+                ]
+                for r in cal["d12"]
+            ],
+        ),
+        *_table(
+            ("seed", "D-06 Spearman rho (gradient vs greedy)", "D-11 tensor-identical"),
+            [[s, repr(cal["d06"][s]), cal["d11"][s].get("tensors_identical")] for s in seeds],
+        ),
+        "## (c) bands (D-13)",
+        "",
+        *_table(
+            ("seed|ordering", "lo", "hi"),
+            [
+                [key, *map(repr, record["bands"][key])]
+                for key in (_key(s, o) for s in seeds for o in prereg.ORDERINGS)
+            ],
+        ),
+        "## D-19 / D-28 labels",
+        "",
+        f'"{prereg.VARIES_LABEL}": {", ".join(labels["varies"]) or "none"} (the label never '
+        "discounts a delta nor enters a verdict).",
+        "",
+        *_table(
+            ("slot", "basis", "range"),
+            [[slot, row["basis"], repr(row["range"])] for slot, row in labels["ranges"].items()],
+        ),
+        f"The rule: {record['limits']['d19']}.",
+        "",
+    ]
+    spread = record["retention_spread"]
+    out += [
+        "## D-14 retention spread",
+        "",
+        *_table(
+            ("group", "min", "max", "range", "n"),
+            [
+                [
+                    g,
+                    repr(spread[g]["min"]),
+                    repr(spread[g]["max"]),
+                    repr(spread[g]["range"]),
+                    spread[g]["n"],
+                ]
+                for g in ("full", "m2")
+            ],
+        ),
+        f"Beside the two-seed retention noise floor {spread['retention_ppl_noise_floor']!r}.",
+        "",
+        "## D-18 / D-20 / D-21",
+        "",
+        f'D-18: {record["limits"]["d18"]}. "{prereg.OUTSIDE}" não é teste estatístico (two '
+        "seeds against five M2 retrains).",
+        "",
+        f"D-20: {record['limits']['d20']}.",
+        "",
+        f"D-21 (descriptive, never a criterion): {record['d21']['prediction']}",
+        "",
+        *_table(
+            ("pet_name cell", "reading"),
+            [
+                [key, record["d21"]["per_cell"][key]]
+                for key in (_key(o, s) for o in prereg.ORDERINGS for s in seeds)
+            ],
+        ),
+        f"Prediction held: {record['d21']['prediction_held']}.",
+        "",
+        "## Predictions (descriptive; a mismatch is a finding, not a failure)",
+        "",
+        *_table(
+            ("prediction", "held"),
+            [[name, x["held"]] for name, x in record["predictions"].items()],
+        ),
+    ]
+    end = record["end_point"]
+    out += [
+        "## D-08 end point (cited, never re-measured)",
+        "",
+        f"{end['record']} (sha256 {end['sha256']}), readings by {end['basis']}:",
+        "",
+        *_table(
+            ("slot", "reading"),
+            [[slot, json.dumps(value, sort_keys=True)] for slot, value in end["readings"].items()],
+        ),
+        "## Hours",
+        "",
+        f"E1 spent (ledger): {record['e1_hours']!r} h; D-26 confirmations: "
+        f"{record['confirmation_hours']!r} h; calibrations: {cal['prep_hours']!r} h.",
+        "",
+        "## Provenance",
+        "",
+        f"- emitted {record['provenance']['emitted_utc']} at {record['provenance']['git_sha']}",
+        f"- {len(record['inputs'])} input records, each with its sha256 in the erasure record",
+        "",
+    ]
+    return regex.sub(r"\n{3,}", "\n\n", "\n".join(out))
+
+
+def report(*, root=None):
+    """Write results/phase41_erasure_report.md ONCE from the erasure record (on the real root only
+    from a tracked, unmodified record)."""
+    root = pathlib.Path(root) if root is not None else pathlib.Path(_ROOT)
+    prereg = _prereg()
+    record_path = root / prereg.ERASURE_RECORD
+    _prove(record_path.exists(), f"{record_path} is missing: emit the record first")
+    _prove(
+        not _is_real(root) or _tracked_and_clean(prereg.ERASURE_RECORD),
+        f"{prereg.ERASURE_RECORD} must be committed and unmodified before the report renders it",
+    )
+    out = root / prereg.REPORT_RECORD
+    _prove(
+        not out.exists(),
+        f"{out} exists — REFUSING to overwrite it. The report is write-once; a correction is a "
+        "dated continuation via scripts/_addendum.py",
+    )
+    out.write_text(render_report(_load(record_path)), encoding="utf-8")
+    print(f"REPORT {out}", flush=True)
+    return out
+
+
+def main(argv=None):
+    argv = sys.argv[1:] if argv is None else list(argv)
+    commands = {"preflight": preflight, "run": run, "emit": emit, "report": report}
+    if len(argv) != 1 or argv[0] not in commands:
+        raise SystemExit(__doc__)
+    # git_sha() reads the process cwd: every command runs at the repository root.
+    os.chdir(_REPO)
+    commands[argv[0]]()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

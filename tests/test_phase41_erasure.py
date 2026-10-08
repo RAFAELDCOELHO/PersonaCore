@@ -3527,3 +3527,458 @@ def test_record_has_no_top_level_run_provenance(monkeypatch, tmp_path):
     assert "run" not in record["provenance"]
     assert set(record["provenance"]) == {"emitted_utc", "git_sha", "module_sha256"}
     assert record["provenance"]["module_sha256"] == phase41_erasure.module_sha256()
+
+
+# =================================================================================================
+# (11) Plan 41-10 Task 2: render_report, report, main; the gates that keep the driver honest (AST,
+# ERASE-08's byte-unchanged leg, the every-function census, no skips).
+# =================================================================================================
+
+
+def _producer_record(monkeypatch, tmp_path):
+    """The Task 1 record: one judged pet_name cell on the real producer record, the rest NOT_RUN."""
+    rig = _producer_rig(monkeypatch, tmp_path)
+    _producer_cell(monkeypatch, rig, phase41_prereg.cell_unit("pet_name", "greedy", 1337))
+    floors, bands = _fills(monkeypatch, rig.root)
+    kw = {"ledger_path": rig.ledger, "floors": floors, "bands": bands}
+    return rig, phase41_erasure.emit(root=rig.root, **kw)
+
+
+def test_render_report_has_every_declared_label(monkeypatch, tmp_path):
+    p = phase41_prereg
+    _, record = _producer_record(monkeypatch, tmp_path)
+    text = phase41_erasure.render_report(record)
+    assert text == phase41_erasure.render_report(json.loads(json.dumps(record)))  # pure
+    assert "\n\n\n" not in text and text.endswith("\n") and not text.endswith("\n\n")
+    summary = record["summary"]
+    for label in p.PAIR_LABELS:
+        assert f"{label} {summary[label]}" in text, label
+    for combination, count in summary["inside_nao_replicado"].items():
+        assert f"| {combination} | {count} |" in text, combination
+    for t in p.TARGETS:
+        for o in p.ORDERINGS:
+            row = " | ".join(str(record["table"][t][o][str(s)]) for s in p.SEEDS)
+            assert f"| {t} | {o} | {row} |" in text, (t, o)
+    for label in (
+        p.VARIES_LABEL,
+        p.INSIDE,
+        p.OUTSIDE,
+        p.V4_CAP_LABEL,
+        p.NO_M2,
+        p.not_reached_sentence(),
+        "não é teste estatístico",
+        "vazia no ponto de parada julgado",
+    ):
+        assert label in text, label
+    cell = record["cells"][p.cell_unit("pet_name", "greedy", 1337)]
+    assert f"Verdict **{cell['verdict']}**" in text
+    for name in cell["failed"] + cell["beyond"]:
+        assert name in text
+    assert repr(cell["confirmation_hours"]) in text
+    assert repr(record["e1_hours"]) in text
+    assert record["end_point"]["record"] in text and record["end_point"]["sha256"] in text
+    assert repr(record["calibrations"]["prep_hours"]) in text
+    assert record["variant_decided_by"] in text
+    for name, prediction in record["predictions"].items():
+        assert f"| {name} | {prediction['held']} |" in text, name
+
+
+def test_report_writes_once_from_a_tracked_record(monkeypatch, tmp_path):
+    p = phase41_prereg
+    real = _producer_rig(monkeypatch, tmp_path, real=True)
+    floors, bands = _fills(monkeypatch, real.root)
+    _floors_module(monkeypatch, floors, bands)
+    with pytest.raises(SystemExit, match="emit the record first"):
+        phase41_erasure.report()
+    with monkeypatch.context() as m:
+        m.setattr(phase41_erasure, "_tracked_and_clean", lambda *rels: True)
+        record = phase41_erasure.emit()
+    # The real root renders only a tracked, unmodified record: this one is untracked.
+    with pytest.raises(SystemExit, match="committed and unmodified"):
+        phase41_erasure.report()
+    out = real.root / p.REPORT_RECORD
+    assert not out.exists()
+    asked = []
+    monkeypatch.setattr(
+        phase41_erasure, "_tracked_and_clean", lambda *rels: asked.append(rels) or True
+    )
+    assert phase41_erasure.report() == out
+    assert asked == [(p.ERASURE_RECORD,)]
+    assert out.read_text(encoding="utf-8") == phase41_erasure.render_report(record)
+    with pytest.raises(SystemExit, match=r"write-once.*scripts/_addendum\.py"):
+        phase41_erasure.report()
+
+
+@pytest.mark.parametrize("command", ["preflight", "run", "emit", "report"])
+def test_main_dispatches_with_no_arguments_from_the_repo(tmp_path, monkeypatch, command):
+    import inspect
+
+    real = getattr(phase41_erasure, command)
+    seen = []
+
+    def recorder(*args, **kwargs):
+        inspect.signature(real).bind(*args, **kwargs)
+        seen.append((args, kwargs, pathlib.Path.cwd()))
+
+    monkeypatch.setattr(phase41_erasure, command, recorder)
+    monkeypatch.chdir(tmp_path)
+    assert phase41_erasure.main([command]) == 0
+    assert seen == [((), {}, phase41_erasure._REPO)]
+
+
+@pytest.mark.parametrize("argv", [[], ["bogus"], ["run", "x"]])
+def test_main_refuses_anything_else(argv):
+    with pytest.raises(SystemExit) as raised:
+        phase41_erasure.main(argv)
+    assert raised.value.code == phase41_erasure.__doc__
+
+
+def test_main_the_cli_exits_non_zero_on_a_bogus_command():
+    done = subprocess.run(
+        [sys.executable, "scripts/phase41_erasure.py", "bogus"],
+        cwd=_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert done.returncode != 0
+    assert "phase41_erasure.py emit" in done.stderr
+
+
+def test_the_full_fake_chain_through_the_commands(monkeypatch, tmp_path):
+    import inspect
+
+    p = phase41_prereg
+    rig = _cell_fakes(
+        monkeypatch, _run_fakes(monkeypatch, _e1_rig(monkeypatch, tmp_path)), _NEVER_ZERO
+    )
+
+    def command(name, **kw):
+        real = getattr(phase41_erasure, name)
+        bound = inspect.signature(real).bind(**kw)
+        return real(*bound.args, **bound.kwargs)
+
+    run_kw = {**rig.kw, "rehearsal_identity": rig.identity}
+    assert command("preflight", **rig.kw)["stage"] == 1
+    assert command("run", **run_kw) == {"stage": 1, "whole": list(p.PREP_UNITS)}
+    assert command("preflight", **rig.kw)["pending"] == p.CELL_UNITS
+    assert command("run", **run_kw) == {"stage": 2, "whole": list(p.CELL_UNITS)}
+    floors, bands = _fills(monkeypatch, rig.root)
+    record = command("emit", root=rig.root, ledger_path=rig.ledger, floors=floors, bands=bands)
+    out = command("report", root=rig.root)
+    assert record["status"] == "COMPLETE"
+    assert {c["verdict"] for c in record["cells"].values()} == {"NOT_REACHED"}
+    assert record["summary"]["inside_nao_replicado"] == {"NOT_REACHED + NOT_REACHED": 8}
+    assert out.read_text(encoding="utf-8") == phase41_erasure.render_report(record)
+    assert _json(rig.identity)["units"] == list(p.UNITS)
+
+
+def test_phase41_call_gate(monkeypatch, tmp_path):
+    import test_phase37_routes
+
+    allowed = {"draw_all", "reference_set_for_calibration", "write_text"}
+    assert allowed < test_phase37_routes._FORBIDDEN_CALLEES  # non-vacuity: each was forbidden
+    monkeypatch.setattr(
+        test_phase37_routes,
+        "_FORBIDDEN_CALLEES",
+        test_phase37_routes._FORBIDDEN_CALLEES - allowed,
+    )
+    paths = sorted(_SCRIPTS.glob("phase41_*.py"))
+    assert _SCRIPTS / "phase41_erasure.py" in paths
+    for path in paths:
+        assert test_phase37_routes._call_failures(path.read_text(encoding="utf-8")) == [], path
+    source = (_SCRIPTS / "phase41_erasure.py").read_text(encoding="utf-8")
+    for plant in (
+        "\n\ndef planted(rec):\n    return erasure_gate.erasure_succeeded(rec)\n",
+        "\n\ndef planted():\n    import phase19_erasure as pin\n\n    pin._cmd_cal_train()\n",
+        "\n\ndef planted():\n    pin.run_erasure_arm('x', 'cpu')\n",
+        "\n\ndef planted(path):\n    return open(path)\n",
+    ):
+        assert test_phase37_routes._call_failures(source + plant), plant
+
+
+def test_no_os_replace_and_no_inject_lora(tmp_path):
+    from test_phase29_prereg import _planted
+    from test_phase40_noise import _driver_failures
+
+    source = (_SCRIPTS / "phase41_erasure.py").read_text(encoding="utf-8")
+    assert _driver_failures(source) == []
+    for name, plant in (
+        ("replace.py", "\n\ndef planted(a, b):\n    os.replace(a, b)\n"),
+        ("inject.py", "\n\ndef planted(m):\n    personacore.lora.inject.inject_lora(m)\n"),
+        ("import.py", "\n\nfrom personacore.lora.inject import inject_lora\n"),
+    ):
+        assert _driver_failures(_planted(tmp_path, source, source + plant, name)), name
+
+
+def test_driver_binds_no_slot_name(tmp_path):
+    from test_phase29_prereg import _planted
+    from test_phase35_prereg import _slot_census_failures
+
+    source = (_SCRIPTS / "phase41_erasure.py").read_text(encoding="utf-8")
+    assert _slot_census_failures([("scripts/phase41_erasure.py", source)]) == []
+    planted = _planted(tmp_path, source, source + "\n\nE1_CONDITION_A_FLOORS = 3\n", "slot.py")
+    assert _slot_census_failures([("scripts/phase41_erasure.py", planted)])
+
+
+def test_no_check_unit_caps_k48_in_the_driver(tmp_path):
+    from test_phase29_prereg import _planted
+    from test_phase41_prereg import _k48_caps_call_failures
+
+    source = (_SCRIPTS / "phase41_erasure.py").read_text(encoding="utf-8")
+    assert "check_unit_caps(" in source  # meta-guard: the driver does call the caps
+    assert _k48_caps_call_failures(source) == []
+    plant = '\nphase36_caps.check_unit_caps("E1", k48_confirms_per_cell=2)\n'
+    assert _k48_caps_call_failures(_planted(tmp_path, source, source + plant, "k48.py"))
+
+
+def _driver_census_values():
+    """The ints and floats the driver must never type: every one read from its source here."""
+    import mitigation_gate
+    import phase19_erasure
+    import phase20_run
+    import phase35_prereg
+
+    p = phase41_prereg
+    noise = _noise_floor()
+    gnf = noise["gap_noise_floor"]
+    gaps = [noise["per_seed"][str(s)]["full"]["dialogue_gap"]["gap"] for s in p.SEEDS]
+    bands = [
+        edge
+        for gap in gaps
+        for edge in mitigation_gate.dialogue_gap_band(control_gap=gap, gap_noise_floor=gnf)
+    ]
+    retention = json.loads(phase20_run.RETENTION_FLOOR_PATH.read_text(encoding="utf-8"))
+    ints = {
+        p.E1_CHECKPOINT_GRID["read_k"],
+        phase35_prereg.FULL_FIDELITY_K,
+        phase19_erasure.N_TARGET_QUESTIONS,
+        p.GRID[-1],
+        phase19_erasure.N_COMPONENTS,
+        *p.SEEDS,
+    }
+    floats = {
+        p.E1_CONDITION_B_MARGIN,
+        *bands,
+        *gaps,
+        gnf,
+        p.ENTRIES["e1_share_hours"]["value"],
+        *p.ENTRIES["e1_unit_prices"]["value"].values(),
+        retention["cap"],
+        retention["retention_ppl_noise_floor"],
+    }
+    assert len(ints) == 7 and len(bands) == 2 * len(gaps), "meta-guard: a census value collided"
+    assert all(type(f) is float for f in floats), "meta-guard: a census value is not a float"
+    return ints, floats
+
+
+def test_no_derived_value_is_typed_in_the_driver(tmp_path):
+    from test_phase29_prereg import _planted
+    from test_phase35_prereg import _literal_failures
+
+    ints, floats = _driver_census_values()
+    source = (_SCRIPTS / "phase41_erasure.py").read_text(encoding="utf-8")
+    assert _literal_failures(source, ints, floats, set()) == []
+    confirm_k = repr(max(i for i in ints if i in phase41_prereg.GRID))
+    for name, plant in (
+        ("k48.py", f"\nX = {confirm_k}\n"),
+        ("margin.py", f"\nX = {phase41_prereg.E1_CONDITION_B_MARGIN!r}\n"),
+    ):
+        assert _literal_failures(
+            _planted(tmp_path, source, source + plant, name), ints, floats, set()
+        )
+
+
+def test_no_target_name_is_typed_in_the_driver(tmp_path):
+    from test_phase29_prereg import _planted
+    from test_phase41_prereg import _typed_target_failures
+
+    source = (_SCRIPTS / "phase41_erasure.py").read_text(encoding="utf-8")
+    assert _typed_target_failures(source) == []
+    target = phase41_prereg.TARGETS[1]
+    planted = _planted(tmp_path, source, source + f"\nT = {target!r}\n", "typed.py")
+    assert _typed_target_failures(planted)
+
+
+def test_pin_and_gate_are_byte_unchanged_for_phase41():
+    import hashlib
+
+    from test_phase37_routes import _GATE_ANCHOR, _PIN_ANCHOR, _git_quiet
+
+    probe = _json(_ROOT / "results" / "phase36_probe_e1.json")
+    pinned = probe["provenance"]["module_sha256"]["scripts/phase19_erasure.py"]
+    actual = hashlib.sha256((_SCRIPTS / "phase19_erasure.py").read_bytes()).hexdigest()
+    assert actual == pinned
+    for anchor, rel in (
+        (_PIN_ANCHOR, "scripts/phase19_erasure.py"),
+        (_GATE_ANCHOR, "scripts/erasure_gate.py"),
+    ):
+        assert _git_quiet("diff", "--quiet", anchor, "HEAD", "--", rel) == 0, rel
+        assert _git("status", "--porcelain", "--", rel) == "", rel
+        # Non-vacuity: the anchor commit itself DID change the file.
+        assert _git_quiet("diff", "--quiet", f"{anchor}~1", anchor, "--", rel) != 0, rel
+
+
+def test_census_helpers_called_directly(monkeypatch, tmp_path):
+    """Every driver helper the paths above reach only indirectly, called by name."""
+    import phase14_factset
+    import phase18_extraction
+    import phase19_erasure
+    import torch
+
+    from personacore import preflight as personacore_preflight
+
+    p = phase41_prereg
+    assert phase41_erasure._prove(True, "x") is None
+    with pytest.raises(SystemExit, match=r"^\[phase41_erasure\] boom$"):
+        phase41_erasure._prove(False, "boom")
+    assert phase41_erasure._now().endswith("+00:00")
+    assert phase41_erasure._rel(tmp_path / "a" / "b", tmp_path) == "a/b"
+    assert phase41_erasure._key("t", "o", 1) == "t|o|1"
+    assert phase41_erasure._counts([3, 27]) == "3/27"
+    assert phase41_erasure._table(("a", "b"), [["x|y", 1]]) == [
+        "| a | b |",
+        "|---|---|",
+        "| x\\|y | 1 |",
+        "",
+    ]
+    unit = p.CELL_UNITS[-1]
+    assert phase41_erasure._cell_section(
+        unit, {"verdict": p.NOT_RUN, "outcome": "dropped"}, {}
+    ) == [
+        f"### {unit}",
+        "",
+        "Verdict **NOT_RUN** (ledger outcome: dropped).",
+        "",
+    ]
+    assert phase41_erasure._prereg() is p
+    assert phase41_erasure._noise_floor() == _noise_floor()
+    path = _plant(tmp_path / "x.json", b'{"a": 1}')
+    assert phase41_erasure._load(path) == {"a": 1}
+    calls = []
+    monkeypatch.setattr(
+        personacore_preflight,
+        "preflight_device",
+        lambda **kw: calls.append(kw) or {"device": "cpu"},
+    )
+    assert phase41_erasure._device() == "cpu" and calls == [{"strict": True}]
+    emptied = []
+    monkeypatch.setattr(torch.mps, "empty_cache", lambda: emptied.append(1))
+    for available in (False, True):
+        monkeypatch.setattr(torch.backends.mps, "is_available", lambda a=available: a)
+        assert phase41_erasure._release() is None
+    assert emptied == [1]
+    phase41_erasure._import_modules()
+    assert all(
+        pathlib.PurePosixPath(rel).stem in sys.modules
+        for rel in phase41_erasure.MODULES
+        if rel.startswith("scripts/")
+    )
+    assert phase41_erasure._disclosed_digests() == {
+        r: phase41_erasure._sha256(_ROOT / r) for r in phase41_erasure.DISCLOSED_MODULES
+    }
+    assert phase41_erasure._root_ledger(phase41_erasure._ROOT) is True
+    with pytest.raises(SystemExit, match="rehearsal into a tmp root"):
+        phase41_erasure._root_ledger(phase41_erasure._ROOT, tmp_path / "l.jsonl")
+    with pytest.raises(SystemExit, match="explicit ledger_path"):
+        phase41_erasure._root_ledger(tmp_path, None)
+    assert phase41_erasure._root_ledger(tmp_path, tmp_path / "l.jsonl") is False
+    assert phase41_erasure._seed_first_prep_unit(p.SEEDS[0]) == p.PREP_UNITS[0]
+    assert phase41_erasure._stage1_records() == tuple(
+        rel
+        for u in p.PREP_UNITS
+        for rel in (p.calibration_record(*p.unit_key(u)[1:]), p.band_record(*p.unit_key(u)[:0:-1]))
+    )
+    cell = p.CELL_UNITS[0]
+    assert len(phase41_erasure._unit_records(cell)) == 1 + 2 * len(_GRID)
+    assert phase41_erasure._unit_records(p.PREP_UNITS[0]) == phase41_erasure._stage1_records()[:2]
+    stale = phase41_erasure._stale_outputs(cell, root=tmp_path)
+    assert phase41_erasure._ordering_path(tmp_path, cell) in stale
+    assert all(phase41_erasure._m1_path(tmp_path, cell, c) in stale for c in _GRID)
+    roots = phase41_erasure._output_roots(cell, root=tmp_path)
+    assert [path for _, path in roots] == [x for x in stale if x != tmp_path / p.unit_record(cell)]
+    assert {phase41_erasure._base(path, tmp_path) for _, path in roots} == {tmp_path}
+    fact = phase41_erasure.target_fact(p.TARGETS[0])
+    assert phase41_erasure.twin_references(fact) == phase19_erasure.reference_set_for_calibration(
+        fact.slot, fact
+    )
+    taught = {f.slot: f.value for f in phase14_factset.LOCKED_FACTS}
+    assert phase41_erasure.collateral() == {
+        s: (taught[s], phase18_extraction.reference_set_for(s))
+        for s in phase18_extraction.CORE_SLOTS
+    }
+
+    rig = _run_fakes(monkeypatch, _e1_rig(monkeypatch, tmp_path / "rig"))
+    identity = phase41_erasure.record_rehearsal(rig.identity, units=p.PREP_UNITS)
+    assert phase41_erasure._well_formed(
+        {k: identity[k] for k in phase41_erasure._REQUIRED_IDENTITY_KEYS}
+    )
+    assert not phase41_erasure._well_formed({"git_sha": "h1"})
+    assert phase41_erasure._kept_identity(rig.identity)["git_sha"] == "h1"
+    assert phase41_erasure._kept_identity(tmp_path / "missing.json") is None
+    with pytest.raises(SystemExit, match="variant.json is missing"):
+        phase41_erasure._variant_record(rig.root)
+    pf = phase41_erasure.preflight(**rig.kw)
+    run = phase41_erasure._run_provenance(pf, "2026-10-08T00:00:00+00:00")
+    assert (
+        set(run) == set(phase41_erasure.RUN_PROVENANCE_KEYS)
+        and run["head_moved_during_run"] is False
+    )
+    unit = p.PREP_UNITS[0]
+    rel = phase41_erasure.run_prep_unit(
+        unit,
+        pf=pf,
+        started_utc=run["started_utc"],
+        state={},
+        smoke=True,
+        cpu_seconds=None,
+        identity_path=rig.identity,
+    )
+    assert rel == p.unit_record(unit) and (rig.root / rel).is_file()
+    assert phase41_erasure._variant_record(rig.root)["variant"] in p.VARIANTS
+    lines = []
+    assert phase41_erasure._dropped_attempts(unit, lines, root=rig.root, launch_git_sha="h1") == []
+    assert phase41_erasure._compared_attempts(unit, [], root=rig.root) == []
+    with pytest.raises(SystemExit, match="only a crashed attempt"):
+        phase41_erasure._latest_dropped_dir(lines, unit, what="dropped")
+    assert (
+        phase41_erasure._pause_notices(rig.root) == []
+        and phase41_erasure._resume_declarations(rig.root) == []
+    )
+
+    rig = _stage2_rig(monkeypatch, tmp_path / "cells", {_GRID[0]: (True, True, 5)})
+    assert phase41_erasure._pause(p.CELL_UNITS[0], root=rig.root, ledger_path=rig.ledger) is None
+    phase41_erasure.record_rehearsal(rig.identity, units=p.PREP_UNITS)
+    pf = phase41_erasure.preflight(**rig.kw)
+    rel = phase41_erasure.write_cell(
+        p.CELL_UNITS[0], pf=pf, started_utc=phase41_erasure._now(), state={}
+    )
+    assert rel == p.unit_record(p.CELL_UNITS[0]) and _json(rig.root / rel)["stop"] == _GRID[0]
+
+
+def test_census_every_phase41_erasure_function_has_a_cpu_test(tmp_path):
+    import ast
+
+    from test_phase29_prereg import _planted
+    from test_phase36_prereg import _untested_functions
+
+    real = _SCRIPTS / "phase41_erasure.py"
+    before = real.read_bytes()
+    source = before.decode("utf-8")
+    test_source = pathlib.Path(__file__).read_text(encoding="utf-8")
+    defs = [n for n in ast.parse(source).body if isinstance(n, ast.FunctionDef)]
+    assert defs, "meta-guard: the driver defines no function, the census would be vacuous"
+    assert _untested_functions("phase41_erasure", source, test_source) == []
+    planted = source + '\n\ndef planted_untested():\n    """Planted."""\n'
+    copied = _planted(tmp_path, source, planted, "untested.py")
+    assert _untested_functions("phase41_erasure", copied, test_source) == ["planted_untested"]
+    assert real.read_bytes() == before
+
+
+def test_no_skips_in_this_file(tmp_path):
+    from test_phase29_prereg import _planted
+    from test_phase36_prereg import _skip_failures
+
+    source = pathlib.Path(__file__).read_text(encoding="utf-8")
+    assert _skip_failures(source) == []
+    planted = source + '\n\ndef test_planted():\n    pytest.skip("x")\n'
+    assert _skip_failures(_planted(tmp_path, source, planted, "skip.py"))
