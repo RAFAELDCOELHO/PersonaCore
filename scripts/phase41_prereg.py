@@ -25,6 +25,7 @@ mitigation_gate) are imported inside the functions that need them; plans 41-03 a
 of those functions.
 """
 
+import collections
 import collections.abc
 import fnmatch
 import fractions
@@ -575,11 +576,19 @@ _ENTRIES = {
     },
     "summary_line": {
         "value": (
-            "of the 8 (target, ordering) pairs, the count under each label; INCONCLUSIVE, "
-            "NOT_REACHED and NOT_RUN counted separately inside 'não replicado'; no threshold, no "
-            "aggregation beyond the count; the full 4 x 2 x 2 table published"
+            "of the 8 (target, ordering) pairs, the count under each label (the three labels sum "
+            "to 8); inside 'não replicado' each pair counted exactly once, under the combination "
+            "of its two seeds' verdicts in SEEDS order (e.g. 'SUCCESS + NOT_REACHED'), NOT_RUN a "
+            "verdict value in those combinations, so the sub-counts sum to the 'não replicado' "
+            "count with no double count; no threshold, no aggregation beyond the count; the full "
+            "4 x 2 x 2 table published"
         ),
-        "derivation": "D-17: a pre-registered summary line with no threshold.",
+        "derivation": (
+            "D-17: a pre-registered summary line with no threshold. WR-02 (Rafael 2026-10-08, "
+            "41-05 review): the counting unit is the pair; inside 'não replicado' each pair "
+            "appears exactly once, under the combination of the two seeds' verdicts, so the "
+            "sub-counts sum to the total."
+        ),
         "kind": "preference",
         "source": _CONTEXT.format("17"),
     },
@@ -1197,24 +1206,24 @@ def pair_label(verdicts):
 
 
 def summary_counts(pairs):
-    """D-17: of the (target, ordering) pairs, keyed by exactly TARGETS x ORDERINGS, the count under
-    each label; inside não replicado, the PAIRS carrying INCONCLUSIVE, NOT_REACHED or NOT_RUN at
-    either seed (a pair counts once under a sub-key, so the sub-counts may overlap). No
-    threshold."""
+    """D-17 / WR-02: of the (target, ordering) pairs, keyed by exactly TARGETS x ORDERINGS, the
+    count under each label; inside não replicado each pair counts exactly once, under the
+    combination of its two seeds' verdicts in SEEDS order ("SUCCESS + NOT_REACHED"; NOT_RUN a
+    verdict value), so the sub-counts sum to the não replicado count. No threshold."""
     expected = {(t, o) for t in TARGETS for o in ORDERINGS}
     _prove(
         set(pairs) == expected,
         f"pairs {sorted(set(pairs) ^ expected, key=repr)} are missing or extra",
     )
     counts = dict.fromkeys(PAIR_LABELS, 0)
-    inside = dict.fromkeys((INCONCLUSIVE, phase35_prereg.NOT_REACHED, NOT_RUN), 0)
+    inside = collections.Counter()
     for verdicts in pairs.values():
         label = pair_label(verdicts)["label"]
         counts[label] += 1
         if label == PAIR_LABELS[2]:
-            for outcome in inside:
-                inside[outcome] += outcome in verdicts.values()
-    return {**counts, "inside_nao_replicado": inside, "n_pairs": len(pairs)}
+            inside[" + ".join(verdicts[seed] for seed in SEEDS)] += 1
+    _prove(sum(inside.values()) == counts[PAIR_LABELS[2]], "a não replicado pair counted twice")
+    return {**counts, "inside_nao_replicado": dict(inside), "n_pairs": len(pairs)}
 
 
 def not_reached_sentence():

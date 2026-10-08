@@ -1213,14 +1213,36 @@ def test_summary_counts():
     )
     pairs = {key: {s1: v1, s2: v2} for key, (v1, v2) in zip(keys, combos, strict=True)}
     counts = phase41_prereg.summary_counts(pairs)
+    # WR-02 (Rafael 2026-10-08): pairs are the unit; inside não replicado each pair counts once,
+    # under the combination of its two seeds' verdicts in SEEDS order (NOT_RUN a verdict value).
     assert counts == {
         "PASS": 2,
         "FAILURE replicada": 1,
         "não replicado": 5,
-        "inside_nao_replicado": {"INCONCLUSIVE": 2, "NOT_REACHED": 2, "NOT_RUN": 1},
+        "inside_nao_replicado": {
+            "SUCCESS + INCONCLUSIVE": 1,
+            "INCONCLUSIVE + NOT_REACHED": 1,
+            "NOT_RUN + NOT_RUN": 1,
+            "FAILURE + SUCCESS": 1,
+            "NOT_REACHED + NOT_REACHED": 1,
+        },
         "n_pairs": 8,
     }
     assert sum(counts[label] for label in p.PAIR_LABELS) == len(keys) == counts["n_pairs"]
+    assert sum(counts["inside_nao_replicado"].values()) == counts["não replicado"]
+    # The review's example: (NR, NR), (INC, NR), six (S, S): no pair counted twice.
+    review = dict.fromkeys(keys, {s1: "SUCCESS", s2: "SUCCESS"})
+    review[keys[0]] = {s1: "NOT_REACHED", s2: "NOT_REACHED"}
+    review[keys[1]] = {s1: "INCONCLUSIVE", s2: "NOT_REACHED"}
+    out = phase41_prereg.summary_counts(review)
+    assert out["inside_nao_replicado"] == {
+        "NOT_REACHED + NOT_REACHED": 1,
+        "INCONCLUSIVE + NOT_REACHED": 1,
+    }
+    assert sum(out["inside_nao_replicado"].values()) == out["não replicado"] == 2
+    entry = p.ENTRIES["summary_line"]
+    for phrase in ("WR-02", "exactly once", "SUCCESS + NOT_REACHED", "NOT_RUN", "sum to"):
+        assert phrase in entry["value"] + entry["derivation"], phrase
     ninth = {**pairs, ("hometown", p.ORDERINGS[0]): {s1: "SUCCESS", s2: "SUCCESS"}}
     missing = {k: v for k, v in pairs.items() if k != keys[0]}
     for bad in (ninth, missing, {}):
