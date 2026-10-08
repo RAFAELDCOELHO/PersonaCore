@@ -27,14 +27,18 @@ import json
 import pathlib
 import re
 import shutil
+import subprocess
 import sys
 import time
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "src"))
 
-import phase25_run  # noqa: E402  — atomic_write_json (torch-free)
+import phase25_run  # noqa: E402  — atomic_write_json, beat, start_heartbeat (torch-free)
+import phase36_caps  # noqa: E402  (torch-free at import; the launch caps)
 import phase36_ledger  # noqa: E402  (torch-free; the per-unit attempt)
+
+from personacore.provenance import git_sha, refuse_if_dirty  # noqa: E402
 
 # FIXED: the cwd of every git call and the base of the module digests.
 _REPO = pathlib.Path(__file__).resolve().parent.parent
@@ -827,4 +831,437 @@ def d13_at_stop(m1_path, k48_record_path, device, state):
             "malformed_reading", f"d13_scores returned a {type(raw).__name__}: {defect}"
         ),
         "n_nlls": None,
+    }
+
+
+# =================================================================================================
+# The run inputs and ERASE-05's adapter digests
+# =================================================================================================
+
+
+def run_inputs():
+    """Every input file the run reads, from the constants its readers take them from:
+    ``refuse_if_dirty`` cannot see the gitignored ones, so a missing one refuses before the ledger
+    start line."""
+    import phase14_recall as recall  # torch at import: lazy
+    import phase19_erasure as pin  # same
+    import phase40_prereg
+    import teach_persona as tp  # same
+
+    prereg = _prereg()
+    adapters = _noise_floor()["phase41_adapters"]
+    return (
+        tp.CONVBASE_BEST,  # train_arm's base
+        tp.TOKENIZER_PATH,
+        tp.DIALOG_TRAIN_BIN,  # replay source
+        tp.DIALOG_TRAIN_MASK,
+        tp.DIALOG_VAL_BIN,  # dialogue PPL
+        tp.DIALOG_VAL_MASK,
+        recall.CONVBASE_SLIM,  # load_adapted_model
+        recall.ADAPTER_PATH,  # the production adapter, proved unchanged around each train
+        recall.TOKENIZER_PATH,
+        pin.RETENTION_BIN,  # run_erasure_arm's retention perplexity
+        pin.PHASE18_CORPUS_PATH,  # run_erasure_arm's corpus
+        pin.PHASE18_ARM_RECORD_PATH,  # run_erasure_arm's pre-erasure record
+        pin.CALIBRATION_CORPUS_PATH,  # cal_erase's corpus
+        tp.arm_outputs(pin.CALIBRATION_ARM, prefix=pin.RETRAIN_PREFIX)["adapter"],  # D-11
+        *(_REPO / adapters[str(s)][g]["path"] for s in prereg.SEEDS for g in adapters[str(s)]),
+        _REPO / prereg.NOISE_FLOOR_RECORD,
+        *(_REPO / phase40_prereg.a2_record(g, s) for s in prereg.SEEDS for g in adapters[str(s)]),
+    )
+
+
+def adapter_digest_failures():
+    """ERASE-05: ``[(path, expected, actual)]`` for every Phase 40 adapter of SEEDS whose sha256
+    is not the one ``NOISE_FLOOR_RECORD``::phase41_adapters records (actual None: missing)."""
+    adapters = _noise_floor()["phase41_adapters"]
+    failures = []
+    for seed in _prereg().SEEDS:
+        for entry in adapters[str(seed)].values():
+            path = _REPO / entry["path"]
+            actual = _sha256(path) if path.is_file() else None
+            if actual != entry["sha256"]:
+                failures.append((entry["path"], entry["sha256"], actual))
+    return failures
+
+
+# =================================================================================================
+# The rehearsal identity and its disclosure (Phase 40's shape, per unit)
+# =================================================================================================
+
+_REQUIRED_IDENTITY_KEYS = frozenset({"git_sha", "module_sha256", "units", "started_utc"})
+# The smoke's two keys: absent until the rehearsal's ordering_smoke ran, then both present.
+_IDENTITY_KEYS = _REQUIRED_IDENTITY_KEYS | {"cpu_ordering_seconds", "cpu_timings"}
+
+
+def _load(path):
+    return json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
+
+
+def rehearsal_identity_path():
+    """The gitignored rehearsal identity under the output root (``_ROOT`` read at call time)."""
+    return pathlib.Path(_ROOT) / "data" / "phase41_rehearsal.json"
+
+
+def _disclosed_digests():
+    return {rel: _sha256(_REPO / rel) for rel in DISCLOSED_MODULES}
+
+
+def _well_formed(identity):
+    return (
+        isinstance(identity, dict)
+        and set(identity) in (_REQUIRED_IDENTITY_KEYS, _IDENTITY_KEYS)
+        and isinstance(identity["module_sha256"], dict)
+        and set(identity["module_sha256"]) == set(DISCLOSED_MODULES)
+        and isinstance(identity["units"], list)
+    )
+
+
+def _kept_identity(path):
+    """The identity already at ``path`` (None when absent), refused when malformed or recorded at
+    other DISCLOSED_MODULES digests: a changed driver needs a fresh rehearsal (38-REVIEW DR-02)."""
+    path = pathlib.Path(path)
+    if not path.exists():
+        return None
+    kept = _load(path)
+    _prove(_well_formed(kept), f"{path} is malformed (38-REVIEW DR-03)")
+    _prove(
+        kept["module_sha256"] == _disclosed_digests(),
+        f"{path} was recorded at other {DISCLOSED_MODULES} digests: a changed driver needs a fresh "
+        "rehearsal (38-REVIEW DR-02); move the identity aside, never delete it",
+    )
+    return kept
+
+
+def record_rehearsal(path, *, units):
+    """The FIRST rehearsal attempt's identity, recorded once; a later rehearsal call at the same
+    digests appends its units (UNITS order, never removing one) and keeps every other key."""
+    path = pathlib.Path(path)
+    kept = _kept_identity(path)
+    if kept is None:
+        identity = {
+            "git_sha": git_sha(),
+            "module_sha256": _disclosed_digests(),
+            "units": [u for u in _prereg().UNITS if u in units],
+            "started_utc": _now(),
+        }
+        path.parent.mkdir(parents=True, exist_ok=True)
+        phase25_run.atomic_write_json(path, identity)
+        print(f"REHEARSAL RECORDED {identity['git_sha']}", flush=True)
+        return {"status": "recorded", **identity}
+    grown = [u for u in _prereg().UNITS if u in kept["units"] or u in units]
+    if grown != kept["units"]:
+        kept = {**kept, "units": grown}
+        phase25_run.atomic_write_json(path, kept)
+    print(f"REHEARSAL KEPT {kept['git_sha']}", flush=True)
+    return {"status": "kept", **kept}
+
+
+def record_rehearsal_seconds(path, seconds, timings):
+    """D-05: the rehearsal smoke's CPU ordering seconds and per-gradient timings, added once to
+    the identity; a present value is never overwritten."""
+    path = pathlib.Path(path)
+    kept = _kept_identity(path)
+    _prove(kept is not None, f"the rehearsal identity {path} is missing: record_rehearsal first")
+    if "cpu_ordering_seconds" in kept:
+        print(f"REHEARSAL SECONDS KEPT {kept['cpu_ordering_seconds']}", flush=True)
+        return kept
+    identity = {**kept, "cpu_ordering_seconds": seconds, "cpu_timings": list(timings)}
+    phase25_run.atomic_write_json(path, identity)
+    return identity
+
+
+def rehearsal_disclosure(identity, *, launch_git_sha, launch_module_sha256):
+    """Every commit touching a DISCLOSED_MODULES file between the rehearsal and the launch, its
+    subject as the reason, and per-module changed flags (the prereg's on its own)."""
+    log = subprocess.run(
+        (
+            "git",
+            "log",
+            "--format=%H%x09%s",
+            f"{identity['git_sha']}..{launch_git_sha}",
+            "--",
+            *DISCLOSED_MODULES,
+        ),
+        cwd=_REPO,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    commits = []
+    for line in log.splitlines():
+        sha, reason = line.split("\t", 1)
+        touched = subprocess.run(
+            ("git", "show", "--name-only", "--format=", sha),
+            cwd=_REPO,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.split()
+        commits.append(
+            {
+                "sha": sha,
+                "reason": reason,
+                "modules": [r for r in DISCLOSED_MODULES if r in touched],
+            }
+        )
+    changed = {
+        rel: launch_module_sha256[rel] != identity["module_sha256"][rel]
+        for rel in DISCLOSED_MODULES
+    }
+    driver_changed = any(changed.values())
+    _prove(
+        not driver_changed or commits,
+        "a disclosed module changed after the rehearsal without a commit",
+    )
+    since = (
+        f"{len(commits)} commit(s) touched a disclosed module since"
+        if commits
+        else "no commit touched a disclosed module since"
+    )
+    return {
+        "statement": (
+            f"The CPU rehearsal ran units {', '.join(identity['units'])} on this prereg before "
+            f"the MPS run; {since} it."
+        ),
+        "units_read": identity["units"],
+        "rehearsal_git_sha": identity["git_sha"],
+        "rehearsal_module_sha256": identity["module_sha256"],
+        "launch_git_sha": launch_git_sha,
+        "launch_module_sha256": {rel: launch_module_sha256[rel] for rel in DISCLOSED_MODULES},
+        "changed": changed,
+        "prereg_changed": changed[PREREG_FILE],
+        "driver_changed": driver_changed,
+        "commits": commits,
+    }
+
+
+# =================================================================================================
+# Preflight: every refusal before the first start line
+# =================================================================================================
+
+STAGE_1_DONE = "STAGE 1 DONE"
+
+
+def _variant_path(root):
+    return pathlib.Path(root) / "data" / WORK_DIR / "variant.json"
+
+
+def _tracked_and_clean(*rels):
+    """Every repo-relative path tracked by git and unmodified in the working tree."""
+    tracked = subprocess.run(
+        ("git", "ls-files", "--error-unmatch", "--", *rels), cwd=_REPO, capture_output=True
+    )
+    if tracked.returncode != 0:
+        return False
+    status = subprocess.run(
+        ("git", "status", "--porcelain", "--", *rels),
+        cwd=_REPO,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return status.stdout == ""
+
+
+def _stage1_records():
+    """The 8 stage-1 records: per prep unit its calibration record and its band record."""
+    prereg = _prereg()
+    return tuple(
+        rel
+        for unit in prereg.PREP_UNITS
+        for _, o, s in [prereg.unit_key(unit)]
+        for rel in (prereg.calibration_record(o, s), prereg.band_record(s, o))
+    )
+
+
+def _unit_records(unit):
+    """Every record a unit writes under results/: a prep unit's calibration and band records; a
+    cell's record and its K = 16 / K = 48 records at every grid checkpoint (a path that was never
+    written is harmless in a pathspec)."""
+    prereg = _prereg()
+    kind, *key = prereg.unit_key(unit)
+    if kind == "prep":
+        o, s = key
+        return (prereg.calibration_record(o, s), prereg.band_record(s, o))
+    grid = prereg.E1_CHECKPOINT_GRID["checkpoints"]
+    return (
+        prereg.cell_record(*key),
+        *(prereg.k16_record(*key, c) for c in grid),
+        *(prereg.k48_record(*key, c) for c in grid),
+    )
+
+
+def _launch_pathspec(outcomes):
+    """LAUNCH_PATHSPEC plus one ``:(exclude)`` per record of a whole or dropped unit: the run's
+    own untracked outputs, nothing else."""
+    excluded = [
+        rel
+        for unit in _prereg().UNITS
+        if outcomes.get(unit) in ("whole", "dropped")
+        for rel in _unit_records(unit)
+    ]
+    return LAUNCH_PATHSPEC + tuple(":(exclude)" + rel for rel in excluded)
+
+
+def _seed_first_prep_unit(seed):
+    """ENTRIES["prep_order"]: the seed's first prep unit trains the calibration adapter."""
+    prereg = _prereg()
+    return next(u for u in prereg.PREP_UNITS if prereg.unit_key(u)[2] == seed)
+
+
+def _stale_outputs(unit, *, root):
+    """Every output a pending unit writes, each of which must not exist before it runs."""
+    prereg = _prereg()
+    kind, *key = prereg.unit_key(unit)
+    paths = [root / rel for rel in _unit_records(unit)]
+    if kind == "prep":
+        o, s = key
+        paths.append(root / "data" / WORK_DIR / f"cal_erased_{o}_seed{s}.json")
+        if unit == _seed_first_prep_unit(s):
+            rehearsal = not _is_real(root)
+            arm = arm_paths(s, rehearsal=rehearsal)
+            paths += [arm[k] for k in ("adapter", "checkpoint", "bin", "mask", "csv")]
+            paths.append(root / "data" / WORK_DIR / arm_name(s, rehearsal=rehearsal) / "run.csv")
+    return paths
+
+
+def rerun_units(lines, outcomes, *, root):
+    """R-3 b: the dropped units whose re-run Rafael approved. Plan 41-09 implements it
+    (drop_attempt's manifest); until then no dropped unit is re-run."""
+    return frozenset()
+
+
+def preflight(*, root=None, ledger_path=None, heartbeat_path=None, device=None, units=None):
+    """Every refusal before the first ledger start line (ERASE-05 digests, D-22 stages, D-24,
+    D-26). Writes nothing."""
+    prereg = _prereg()
+    root = pathlib.Path(root) if root is not None else pathlib.Path(_ROOT)
+    real = _root_ledger(root, ledger_path, heartbeat_path)
+    device = _device() if device is None else device
+    if real:
+        _prove(device == "mps", f"E1 runs on MPS on the real root; resolved {device!r}")
+    else:
+        _prove(device == "cpu", f"a rehearsal runs on CPU: pass device='cpu', not {device!r}")
+    launch_git_sha = git_sha()
+    _prove(launch_git_sha != "unknown", "git_sha() could not read HEAD (run from the repo root)")
+    _import_modules()
+    launch_modules = module_sha256()
+    for path in run_inputs():
+        _prove(
+            pathlib.Path(path).exists(),
+            f"{path} is missing: the run reads it, so this refuses before the ledger start line",
+        )
+    failures = adapter_digest_failures()
+    _prove(
+        not failures,
+        "ERASE-05: a Phase 40 adapter is not the one "
+        f"{prereg.NOISE_FLOOR_RECORD}::phase41_adapters records: "
+        + "; ".join(f"{p} sha256 {a} != {e}" for p, e, a in failures),
+    )
+    lines = phase36_ledger.read_ledger(ledger_path)
+    still = set(phase36_ledger.open_runs(lines)) & {prereg.run_id(u) for u in prereg.UNITS}
+    for unit in prereg.UNITS:  # a reconcile here would make a finished unit unrecoverable
+        _prove(
+            prereg.run_id(unit) not in still or not (root / prereg.unit_record(unit)).exists(),
+            f"{prereg.run_id(unit)} is open and {prereg.unit_record(unit)} exists: append its end "
+            "line by command, NEVER reconcile (a lost line makes this finished unit unrecoverable)",
+        )
+    _prove(
+        not still,
+        f"the ledger holds an open attempt for {', '.join(sorted(still))} with no unit record: "
+        "once the run is dead, phase36_ledger.py reconcile first",
+    )
+    outcomes = prereg.unit_outcomes(lines, prereg.UNITS)
+    pending = prereg.pending_units(outcomes, rerun_units(lines, outcomes, root=root))
+    prep = tuple(u for u in pending if u in prereg.PREP_UNITS)
+    if prep:
+        stage = 1
+    else:
+        not_whole = [u for u in prereg.PREP_UNITS if outcomes[u] != "whole"]
+        _prove(
+            not not_whole,
+            f"prep units {not_whole} are dropped and not re-run: the floors and bands need every "
+            "(ordering, seed) (D-22); Rafael rules on each (R-3 b) before any cell",
+        )
+        if real and not _tracked_and_clean(FLOORS_FILE, *_stage1_records()):
+            print(STAGE_1_DONE, flush=True)
+            return {"stage": STAGE_1_DONE, "pending": ()}
+        stage = 2
+    pending = prep if stage == 1 else tuple(u for u in pending if u in prereg.CELL_UNITS)
+    if units is not None:
+        units = tuple(units)
+        _prove(
+            units and units == tuple(u for u in pending if u in units),
+            f"units {units!r} must be a non-empty subset of the pending stage-{stage} units "
+            f"{pending}, in UNITS order",
+        )
+        pending = units
+    _prove(pending, f"nothing to run at stage {stage}: {outcomes}")
+    for unit in pending:
+        if unit in prereg.PREP_UNITS:
+            first = _seed_first_prep_unit(prereg.unit_key(unit)[2])
+            _prove(
+                outcomes[first] == "whole" or first in pending,
+                f"{unit} reuses the adapter its seed's first prep unit {first} trains "
+                f"({outcomes[first]}): run that first prep unit first (ENTRIES['prep_order'])",
+            )
+    refuse_if_dirty(
+        who="phase41_erasure",
+        detail=(
+            "every unit record publishes git_sha and hashes its modules from the working tree; a "
+            "run launched from a dirty tree names a commit it cannot be regenerated from"
+        ),
+        pathspec=_launch_pathspec(outcomes) if real else LAUNCH_PATHSPEC,
+        cwd=_REPO,
+    )
+    for unit in pending:
+        for path in _stale_outputs(unit, root=root):
+            _prove(not path.exists(), f"{path} exists: an output of pending unit {unit}")
+    gate = phase36_ledger.require_launch(FRONT, ledger_path=ledger_path)
+    # D-26: the K = 48 confirmations are not a binding cap; never passed.
+    phase36_caps.check_unit_caps(
+        FRONT,
+        cells=len(prereg.CELL_UNITS),
+        checkpoints_per_cell=len(prereg.E1_CHECKPOINT_GRID["checkpoints"]),
+        calibrations=len(prereg.PREP_UNITS),
+    )
+    if real:
+        path = rehearsal_identity_path()
+        _prove(
+            path.exists(), f"the rehearsal identity {path} is missing: run the CPU rehearsal first"
+        )
+        identity = _load(path)
+        _prove(
+            _well_formed(identity) and set(identity) == _IDENTITY_KEYS,
+            f"{path} is malformed or lacks cpu_ordering_seconds / cpu_timings: the rehearsal's "
+            "ordering_smoke has not run (D-05)",
+        )
+        _prove(
+            identity["module_sha256"][PREREG_FILE] == launch_modules[PREREG_FILE],
+            f"{PREREG_FILE} changed after the rehearsal: the prereg is frozen",
+        )
+        disclosure = rehearsal_disclosure(
+            identity, launch_git_sha=launch_git_sha, launch_module_sha256=launch_modules
+        )
+    else:
+        disclosure = {"this_is_the_rehearsal": True}
+    variant = _load(_variant_path(root))["variant"] if _variant_path(root).exists() else "unset"
+    print(
+        f"PREFLIGHT OK {launch_git_sha} device={device} stage={stage} "
+        f"pending={','.join(pending)} variant={variant} "
+        f"spent_E1_h={gate['spent_seconds'][FRONT] / 3600:.4f}",
+        flush=True,
+    )
+    return {
+        "root": root,
+        "stage": stage,
+        "pending": pending,
+        "outcomes": outcomes,
+        "launch_git_sha": launch_git_sha,
+        "launch_modules": launch_modules,
+        "device": device,
+        "gate": gate,
+        "variant": variant,
+        "rehearsal_disclosure": disclosure,
     }
