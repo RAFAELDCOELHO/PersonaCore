@@ -1226,3 +1226,40 @@ def test_run_erasure_arm_always_has_a_record_path():
     assert calls >= 2  # cal_erase and k48_confirm: the census is not blind
     planted = "pin.run_erasure_arm('erased', 'cpu', adapter_path=a)\n"
     assert _record_path_failures(planted) == [1]
+
+
+# =================================================================================================
+# (5) Plan 41-07: the E1 LaunchAgent (D-25), a mirror of the proven E2 agent.
+# =================================================================================================
+
+
+def test_plist_mirrors_the_e2_agent():
+    import plistlib
+
+    ours = plistlib.loads((_ROOT / "artifacts" / "com.personacore.phase41.e1.plist").read_bytes())
+    e2 = plistlib.loads((_ROOT / "artifacts" / "com.personacore.phase40.e2.plist").read_bytes())
+    assert ours["Label"] == "com.personacore.phase41.e1"
+    args = e2["ProgramArguments"]
+    assert args[3].endswith("scripts/phase40_noise.py")
+    assert ours["ProgramArguments"] == [
+        *args[:3],
+        args[3].replace("scripts/phase40_noise.py", "scripts/phase41_erasure.py"),
+        *args[4:],
+    ]
+    assert ours["ProgramArguments"][:2] == ["/usr/bin/caffeinate", "-dims"]
+    assert ours["ProgramArguments"][4:] == ["run"]
+    assert ours["RunAtLoad"] is False and ours["KeepAlive"] is False
+    assert ours["StandardOutPath"] == e2["StandardOutPath"].replace(
+        "logs/phase40_e2.out", "logs/phase41_e1.out"
+    )
+    assert ours["StandardErrorPath"] == e2["StandardErrorPath"].replace(
+        "logs/phase40_e2.err", "logs/phase41_e1.err"
+    )
+    assert ours["StandardOutPath"].endswith("logs/phase41_e1.out")
+    assert ours["StandardErrorPath"].endswith("logs/phase41_e1.err")
+    changed = {"Label", "ProgramArguments", "StandardOutPath", "StandardErrorPath"}
+    assert set(ours) == set(e2)
+    assert {k for k in ours if ours[k] != e2[k]} == changed
+    assert {k: v for k, v in ours.items() if k not in changed} == {
+        k: v for k, v in e2.items() if k not in changed
+    }
