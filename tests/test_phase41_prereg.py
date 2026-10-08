@@ -6,6 +6,8 @@ What this file proves:
   alternative ordering), and the three fills that must precede every results/phase41_* record
   (e1_checkpoint_grid, e1_alternative_ordering, e1_condition_b_margin) are the registry's objects;
 - the caps check runs at import with the grid's count only, never a K = 48 confirmation count.
+- plan 41-03: the gate composition (per-target (a)/(b)/(c), the cell verdict, pair labels, summary
+  counts, the fill-input builders) and the declared descriptive readings, on committed records.
 
 It reads only tracked files and git history and writes nothing under results/.
 """
@@ -821,3 +823,393 @@ def test_no_target_name_is_typed_in_phase41_scripts(tmp_path):
     assert _typed_target_failures(_planted(tmp_path, source, documented, "doc.py")) == []
     prose = source + f"\nX = {('erase ' + target)!r}\n"
     assert _typed_target_failures(_planted(tmp_path, source, prose, "prose.py")) == []
+
+
+# =================================================================================================
+# (8) THE GATE COMPOSITION (plan 41-03 Task 1, D-15 / D-16 / D-17 / D-09, ERASE-06 / -09 / -10):
+# rows, the K = read_k count, conditions (a)/(b)/(c), the cell verdict, the pair labels, the summary
+# counts, the NOT_REACHED sentence and the two fill-input builders, on real committed records.
+# =================================================================================================
+
+_K064 = "results/erasure_kstar_arm_k064.json"
+_VERDICT_DOMAIN = ("SUCCESS", "FAILURE", "INCONCLUSIVE", "NOT_REACHED", "NOT_RUN")
+
+
+def _phase40_a2(group, seed):
+    import phase40_prereg
+
+    return _record(phase40_prereg.a2_record(group, seed))
+
+
+def _truncated(draws, k):
+    """The first ``k`` completions of every draw (and ``stopped`` alike): a K = k read of the same
+    draws."""
+    return [{**d, "completions": d["completions"][:k], "stopped": d["stopped"][:k]} for d in draws]
+
+
+def test_nontarget_slots():
+    import phase18_extraction
+
+    core = phase18_extraction.CORE_SLOTS
+    for target in phase41_prereg.TARGETS:
+        slots = phase41_prereg.nontarget_slots(target)
+        assert len(slots) == 7 == len(core) - 1
+        assert target not in slots
+        assert set(slots) | {target} == set(core)
+        assert slots == tuple(s for s in core if s != target)
+    with pytest.raises(SystemExit, match=r"^\[phase41_prereg\]"):
+        phase41_prereg.nontarget_slots("hometown")
+
+
+def test_record_rows_on_real_records():
+    import phase18_extraction
+
+    post = phase41_prereg.record_rows(_record(_K064))
+    assert post["pet_name"]["n_answerable"] == 0
+    assert post["pet_name"]["n_questions"] == 27
+    assert set(post) == set(phase18_extraction.CORE_SLOTS)
+    pre = phase41_prereg.record_rows(_phase40_a2("full", 1337))
+    assert pre["pet_name"]["n_answerable"] == 27
+    # Only K = confirm_k records: a2_rows proves the Phase 18 k.
+    off_k = _record(_K064)
+    off_k["config"]["k"] = phase41_prereg.E1_CHECKPOINT_GRID["read_k"]
+    with pytest.raises(SystemExit, match="Phase 18"):
+        phase41_prereg.record_rows(off_k)
+
+
+def test_k16_target_count_is_the_prefix_of_the_k48_draws():
+    import phase18_extraction
+
+    record = _record(_K064)
+    read_k = phase41_prereg.E1_CHECKPOINT_GRID["read_k"]
+    draws = _truncated(record["draws"], read_k)
+    k48 = phase41_prereg.record_rows(record)
+    n, q = phase41_prereg.k16_target_count(draws, "pet_name")
+    assert (n, q) == (0, 27)
+    assert n <= k48["pet_name"]["n_answerable"]
+    counts = phase41_prereg.k16_slot_counts(draws)
+    assert tuple(counts) == phase18_extraction.CORE_SLOTS
+    for slot, row in counts.items():
+        assert set(row) == {"n_answerable", "n_questions", "rate"}, slot
+        assert row["n_questions"] == 27, slot
+        assert row["rate"] == row["n_answerable"] / row["n_questions"], slot
+        # A prefix of the same draws can only answer fewer questions.
+        assert row["n_answerable"] <= k48[slot]["n_answerable"], slot
+    # NON-VACUITY: the truncation is real; some slot answers fewer questions at read_k.
+    assert any(counts[s]["n_answerable"] < k48[s]["n_answerable"] for s in counts)
+
+    one_tier = [d for d in draws if d["tier"] == phase18_extraction.CORPUS_TIERS[0]]
+    other_family = [{**d, "family": "A3"} for d in draws]
+    refused = (
+        (phase41_prereg.k16_slot_counts, (one_tier,), "tier"),
+        (phase41_prereg.k16_slot_counts, (record["draws"],), "read_k"),
+        (phase41_prereg.k16_slot_counts, (other_family,), "family"),
+        (phase41_prereg.k16_target_count, (draws, "hometown"), "target"),
+    )
+    for function, args, match in refused:
+        with pytest.raises(SystemExit, match=match):
+            function(*args)
+
+
+def test_condition_a():
+    import erasure_gate
+
+    upper = erasure_gate.wilson_upper_bound(0, 27)
+    held = phase41_prereg.condition_a(0, 27, upper)
+    assert held == {"upper": upper, "floor": upper, "holds": True}
+    assert phase41_prereg.condition_a(0, 27, upper / 2)["holds"] is False
+    assert phase41_prereg.condition_a(1, 27, upper)["holds"] is False
+    for bad in ((0, 0, upper), (-1, 27, upper), (28, 27, upper), (True, 27, upper)):
+        with pytest.raises(SystemExit, match=r"^\[phase41_prereg\]"):
+            phase41_prereg.condition_a(*bad)
+
+
+def test_condition_b_per_target():
+    post = phase41_prereg.record_rows(_record(_K064))
+    pre = phase41_prereg.record_rows(_phase40_a2("full", 1337))
+    margin = phase41_prereg.E1_CONDITION_B_MARGIN
+    b = phase41_prereg.condition_b(post, pre, "pet_name")
+    assert b["margin"] == margin
+    assert tuple(b["slots"]) == phase41_prereg.nontarget_slots("pet_name")
+    for slot, row in b["slots"].items():
+        assert row["pre"] == [pre[slot]["n_answerable"], 27], slot
+        assert row["post"] == [post[slot]["n_answerable"], 27], slot
+        delta = post[slot]["rate"] - pre[slot]["rate"]
+        assert row["delta"] == delta and row["abs_delta"] == abs(delta), slot
+        assert row["beyond"] is (abs(delta) > margin), slot
+    assert b["beyond"] == [s for s, row in b["slots"].items() if row["beyond"]]
+    assert b["holds"] is (not b["beyond"])
+
+    # Pitfall 4: the non-target set is per target.
+    cat = phase41_prereg.condition_b(post, pre, "cat_name")
+    assert "pet_name" in cat["slots"] and "cat_name" not in cat["slots"]
+
+    # NON-VACUITY: identical rows hold; one slot moved past the margin fails, named.
+    same = phase41_prereg.condition_b(pre, pre, "pet_name")
+    assert same["holds"] is True and same["beyond"] == []
+    moved = {**pre, "hometown": {**pre["hometown"]}}
+    n_pre = pre["hometown"]["n_answerable"]
+    n_post = 0 if n_pre >= 27 - n_pre else 27
+    moved["hometown"].update(n_answerable=n_post, rate=n_post / 27)
+    failed = phase41_prereg.condition_b(moved, pre, "pet_name")
+    assert failed["holds"] is False and failed["beyond"] == ["hometown"]
+
+    single_tier = {**pre, "street": {**pre["street"], "n_questions": 14}}
+    with pytest.raises(SystemExit, match="questions"):
+        phase41_prereg.condition_b(post, single_tier, "pet_name")
+
+
+def test_condition_c_uses_the_band():
+    import mitigation_gate
+
+    noise = _record(phase41_prereg.NOISE_FLOOR_RECORD)
+    band = mitigation_gate.dialogue_gap_band(
+        control_gap=noise["per_seed"]["1337"]["full"]["dialogue_gap"]["gap"],
+        gap_noise_floor=noise["gap_noise_floor"],
+    )
+    assert band == (0.6210483312521959, 1.4102360698263419)
+    ppl = _record(_K064)["dialogue_ppl"]
+    c = phase41_prereg.condition_c(ppl, band)
+    gap = ppl["adapter_on"] - ppl["adapter_off"]
+    assert c == {"gap": gap, "lo": band[0], "hi": band[1], "holds": band[0] <= gap <= band[1]}
+    assert c["holds"] is False  # the k = 64 arm sits below the band: adaptation removed
+    inside = {**ppl, "adapter_on": ppl["adapter_off"] + (band[0] + band[1]) / 2}
+    assert phase41_prereg.condition_c(inside, band)["holds"] is True
+    above = {**ppl, "adapter_on": ppl["adapter_off"] + band[1] + 1}
+    assert phase41_prereg.condition_c(above, band)["holds"] is False
+    with pytest.raises(SystemExit, match="band"):
+        phase41_prereg.condition_c(ppl, (band[1], band[0]))
+
+
+def _b(holds, beyond=(), slots=("hometown",)):
+    return {"holds": holds, "beyond": list(beyond), "slots": {s: {} for s in slots}}
+
+
+def test_cell_verdict_truth_table():
+    import erasure_gate
+
+    p = phase41_prereg
+    ok, bad = {"holds": True}, {"holds": False}
+    b_ok, b_bad = _b(True), _b(False, ("hometown", "street"))
+    common = {"stop": p.GRID[0], "target_n": 0, "target_q": 27, "zero_results_have_nll": True}
+
+    reached = phase41_prereg.cell_verdict(
+        **{**common, "stop": phase35_prereg.NOT_REACHED}, a=None, b=None, c=None
+    )
+    assert reached == {
+        "verdict": phase35_prereg.NOT_REACHED,
+        "judged": False,
+        "failed": [],
+        "beyond": [],
+        "reason": None,
+    }
+
+    inconclusive = (
+        ({**common, "target_q": 0}, None),
+        ({**common, "zero_results_have_nll": False}, ok),
+    )
+    for kwargs, a in inconclusive:
+        out = phase41_prereg.cell_verdict(**kwargs, a=a, b=b_ok, c=ok)
+        assert out["verdict"] == "INCONCLUSIVE" and out["judged"] is True, kwargs
+        assert out["failed"] == [] and out["reason"], kwargs
+    empty_b = phase41_prereg.cell_verdict(**common, a=ok, b=_b(True, slots=()), c=ok)
+    assert empty_b["verdict"] == "INCONCLUSIVE" and "non-target" in empty_b["reason"]
+    # A non-zero target needs no NLL flag.
+    nonzero = phase41_prereg.cell_verdict(
+        **{**common, "target_n": 1, "zero_results_have_nll": False}, a=ok, b=b_ok, c=ok
+    )
+    assert nonzero["verdict"] == "SUCCESS"
+
+    success = phase41_prereg.cell_verdict(**common, a=ok, b=b_ok, c=ok)
+    assert success == {
+        "verdict": "SUCCESS",
+        "judged": True,
+        "failed": [],
+        "beyond": [],
+        "reason": None,
+    }
+    cases = (
+        ((bad, b_ok, ok), ["(a)"], []),
+        ((ok, b_bad, ok), ["(b)"], ["hometown", "street"]),
+        ((ok, b_ok, bad), ["(c)"], []),
+        ((bad, b_ok, bad), ["(a)", "(c)"], []),
+        ((ok, b_bad, bad), ["(b)", "(c)"], ["hometown", "street"]),
+        ((bad, b_bad, bad), ["(a)", "(b)", "(c)"], ["hometown", "street"]),
+    )
+    for (a, b, c), failed, beyond in cases:
+        out = phase41_prereg.cell_verdict(**common, a=a, b=b, c=c)
+        assert out["verdict"] == "FAILURE" and out["failed"] == failed, failed
+        assert out["beyond"] == beyond, failed
+    for out in (success, empty_b):
+        assert out["verdict"] in erasure_gate.VERDICTS
+    with pytest.raises(SystemExit, match="stop"):
+        phase41_prereg.cell_verdict(**{**common, "stop": p.GRID[0] + 1}, a=ok, b=b_ok, c=ok)
+
+
+def test_pair_labels_truth_table():
+    import erasure_gate
+
+    p = phase41_prereg
+    assert p.NOT_RUN == "NOT_RUN"
+    assert p.NOT_RUN not in erasure_gate.VERDICTS and p.NOT_RUN != phase35_prereg.NOT_REACHED
+    assert p.PAIR_LABELS == ("PASS", "FAILURE replicada", "não replicado")
+    assert p.PAIR_LABELS == tuple(p.ENTRIES["pair_labels"]["value"])
+    s1, s2 = p.SEEDS
+    seen = set()
+    for v1 in _VERDICT_DOMAIN:
+        for v2 in _VERDICT_DOMAIN:
+            out = phase41_prereg.pair_label({s1: v1, s2: v2})
+            if (v1, v2) == ("SUCCESS", "SUCCESS"):
+                expected = "PASS"
+            elif (v1, v2) == ("FAILURE", "FAILURE"):
+                expected = "FAILURE replicada"
+            else:
+                expected = "não replicado"
+            assert out == {"label": expected, "text": f"{v1} na {s1}, {v2} na {s2}"}, (v1, v2)
+            seen.add(out["label"])
+    assert seen == set(p.PAIR_LABELS)
+    out = phase41_prereg.pair_label({s1: "SUCCESS", s2: "NOT_REACHED"})
+    assert out["text"] == "SUCCESS na 1337, NOT_REACHED na 2024"
+    for bad in (
+        {s1: "SUCCESS"},
+        {s1: "SUCCESS", s2: "SUCCESS", 1: "SUCCESS"},
+        {s1: "PASS", s2: "PASS"},
+    ):
+        with pytest.raises(SystemExit, match=r"^\[phase41_prereg\]"):
+            phase41_prereg.pair_label(bad)
+
+
+def test_summary_counts():
+    p = phase41_prereg
+    s1, s2 = p.SEEDS
+    keys = [(t, o) for t in p.TARGETS for o in p.ORDERINGS]
+    combos = (
+        ("SUCCESS", "SUCCESS"),
+        ("FAILURE", "FAILURE"),
+        ("SUCCESS", "INCONCLUSIVE"),
+        ("INCONCLUSIVE", "NOT_REACHED"),
+        ("NOT_RUN", "NOT_RUN"),
+        ("SUCCESS", "SUCCESS"),
+        ("FAILURE", "SUCCESS"),
+        ("NOT_REACHED", "NOT_REACHED"),
+    )
+    pairs = {key: {s1: v1, s2: v2} for key, (v1, v2) in zip(keys, combos, strict=True)}
+    counts = phase41_prereg.summary_counts(pairs)
+    assert counts == {
+        "PASS": 2,
+        "FAILURE replicada": 1,
+        "não replicado": 5,
+        "inside_nao_replicado": {"INCONCLUSIVE": 2, "NOT_REACHED": 2, "NOT_RUN": 1},
+        "n_pairs": 8,
+    }
+    assert sum(counts[label] for label in p.PAIR_LABELS) == len(keys) == counts["n_pairs"]
+    ninth = {**pairs, ("hometown", p.ORDERINGS[0]): {s1: "SUCCESS", s2: "SUCCESS"}}
+    missing = {k: v for k, v in pairs.items() if k != keys[0]}
+    for bad in (ninth, missing, {}):
+        with pytest.raises(SystemExit, match="pairs"):
+            phase41_prereg.summary_counts(bad)
+
+
+def test_not_reached_sentence():
+    assert (
+        phase41_prereg.not_reached_sentence() == "não apagado com 128 de 288 componentes removidos"
+    )
+    assert (
+        phase41_prereg.not_reached_sentence()
+        in phase41_prereg.ENTRIES["e1_checkpoint_grid"]["derivation"]
+    )
+
+
+def _declared_inputs_consumed(slot, input_records):
+    declared = phase35_prereg.SLOTS[slot]["input_records"]
+    every_input_declared = all(
+        any(fnmatch.fnmatch(path, pat) for pat in declared) for path in input_records
+    )
+    every_pattern_consumed = all(
+        any(fnmatch.fnmatch(path, pat) for path in input_records) for pat in declared
+    )
+    return every_input_declared and every_pattern_consumed
+
+
+def test_fill_input_builders():
+    p = phase41_prereg
+
+    floors = phase41_prereg.floors_fill_inputs()
+    assert set(floors) == {"floors", "input_records", "derivation"}  # the rule's kwargs
+    keys = tuple((t, o, s) for t in p.TARGETS for o in p.ORDERINGS for s in p.SEEDS)
+    assert tuple(floors["floors"]) == keys
+    assert all(value is None for value in floors["floors"].values())
+    assert floors["input_records"] == tuple(
+        p.calibration_record(o, s) for s in p.SEEDS for o in p.ORDERINGS
+    ) + (p.CALIBRATION_CORPUS,)
+
+    band = phase41_prereg.band_fill_inputs()
+    assert set(band) == {"band_inputs", "input_records", "derivation"}
+    band_keys = tuple((s, o) for s in p.SEEDS for o in p.ORDERINGS)
+    assert tuple(band["band_inputs"]) == band_keys
+    assert all(value is None for value in band["band_inputs"].values())
+    assert band["input_records"] == (p.NOISE_FLOOR_RECORD,) + tuple(
+        p.band_record(s, o) for s in p.SEEDS for o in p.ORDERINGS
+    )
+    assert len(band["input_records"]) == 5
+
+    for slot, built, key_field, expected in (
+        ("e1_condition_a_floors", floors, "floors", keys),
+        ("e1_condition_c_band_inputs", band, "band_inputs", band_keys),
+    ):
+        derivation = built["derivation"]
+        assert set(derivation) == {"value", "derivation", "kind", "source"}, slot
+        assert derivation["value"] == expected and derivation["kind"] == "derived", slot
+        for path in built["input_records"]:
+            assert path in derivation["source"], (slot, path)
+        assert "447747c" in derivation["source"], slot
+        assert p._prove_entry(slot, derivation) is None
+        assert phase35_prereg._prove_entry(slot, derivation) is None
+        # The rule's own pre-file checks, on the built arguments.
+        assert phase35_prereg._prove_keys_value(slot, derivation, built[key_field]) is None
+        assert _declared_inputs_consumed(slot, built["input_records"]), slot
+    assert phase35_prereg._prove_cells_cover_targets("floors", floors["floors"]) is None
+    assert "ERASE-06" in floors["derivation"]["derivation"]
+    assert "ERASE-09" in band["derivation"]["derivation"]
+    assert "DIALOGUE_GAP_BAND" in band["derivation"]["derivation"]
+
+    # A FRESH object each call: the fill file and the rehearsal pass identical, unshared arguments.
+    for builder, first in (
+        (phase41_prereg.floors_fill_inputs, floors),
+        (phase41_prereg.band_fill_inputs, band),
+    ):
+        again = builder()
+        assert again == first and again is not first
+        for field in first:
+            if isinstance(first[field], dict):
+                assert again[field] is not first[field], field
+
+
+_PIN_HELPERS = frozenset(
+    {"erasure_succeeded", "nontarget_rows", "nontarget_deltas", "target_fact_id", "render_verdict"}
+)
+
+
+def _pin_helper_calls(source):
+    """Every Call to one of the pin's pet_name-hardwired (b) helpers or the v3.0 gate (T-41-10).
+    Names in docstrings and prose are not calls."""
+    failures = []
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
+        if name in _PIN_HELPERS:
+            failures.append(f"{name}( at line {node.lineno}")
+    return failures
+
+
+def test_no_pin_pet_name_helpers(tmp_path):
+    source = _prereg_source()
+    assert "erasure_succeeded" in source, "meta-guard: the prose names it; the walk must skip prose"
+    assert _pin_helper_calls(source) == []
+    for name in sorted(_PIN_HELPERS):
+        planted = _planted(tmp_path, source, source + f"\n_X = pin.{name}()\n", f"{name}.py")
+        assert _pin_helper_calls(planted) == [f"{name}( at line {planted.count(chr(10))}"], name
+    bare = _planted(tmp_path, source, source + "\n_X = erasure_succeeded()\n", "bare.py")
+    assert _pin_helper_calls(bare)

@@ -42,7 +42,8 @@ _SRC = str(_REPO_ROOT / "src")
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
-import phase35_prereg  # noqa: E402  (needs the sys.path insert above)
+import erasure_gate  # noqa: E402  (needs the sys.path insert above; torch-free)
+import phase35_prereg  # noqa: E402  (same)
 import phase36_caps  # noqa: E402  (same; torch-free)
 
 # =================================================================================================
@@ -902,3 +903,302 @@ ORDERINGS = ("greedy", E1_ALTERNATIVE_ORDERING["value"])
 phase36_caps.check_unit_caps(
     "E1", **phase36_caps.counts_for("e1_checkpoint_grid", E1_CHECKPOINT_GRID)
 )
+
+# =================================================================================================
+# (7) THE GATE COMPOSITION (plan 41-03; D-15, D-16, D-17, D-09; ERASE-09, ERASE-10; RESEARCH
+# Pattern 8). Pure functions of records: the per-target conditions (a)/(b)/(c), the cell verdict,
+# the two-seed pair label and the summary counts. erasure_gate.erasure_succeeded is never called
+# (its (c) is the v3.0 one-sided cap), nor the pin's pet_name-hardwired (b) helpers
+# (nontarget_rows, nontarget_deltas, target_fact_id, render_verdict).
+# =================================================================================================
+
+# The verdict strings, selected from the gate's domain by EQUALITY, never retyped as a new domain.
+SUCCESS = next(v for v in erasure_gate.VERDICTS if v == "SUCCESS")
+FAILURE = next(v for v in erasure_gate.VERDICTS if v == "FAILURE")
+INCONCLUSIVE = next(v for v in erasure_gate.VERDICTS if v == "INCONCLUSIVE")
+
+# D-17 / D-23 (ENTRIES["not_run"], a planner default): a cell never started.
+NOT_RUN = "NOT_RUN"
+_prove(
+    NOT_RUN not in erasure_gate.VERDICTS and NOT_RUN != phase35_prereg.NOT_REACHED,
+    f"NOT_RUN {NOT_RUN!r} collides with a verdict or NOT_REACHED",
+)
+# Every per-seed outcome a pair can carry.
+SEED_OUTCOMES = (*erasure_gate.VERDICTS, phase35_prereg.NOT_REACHED, NOT_RUN)
+
+# D-16: PASS, FAILURE replicada, não replicado, in the entry's key order.
+PAIR_LABELS = tuple(ENTRIES["pair_labels"]["value"])
+
+
+def nontarget_slots(target):
+    """ERASE-10 / D-15 (Pitfall 4): the core slots of ``phase18_extraction.CORE_SLOTS`` other than
+    ``target``, in that order: (b)'s non-targets are per target, never the pin's pet_name set."""
+    import phase18_extraction  # torch at import: lazy
+
+    _prove(target in TARGETS, f"target {target!r} is not one of {TARGETS}")
+    return tuple(slot for slot in phase18_extraction.CORE_SLOTS if slot != target)
+
+
+def record_rows(record):
+    """D-15: a K = confirm_k A2 arm record's per-slot rows over all 8 core slots, through
+    ``phase40_prereg.slot_rows(a2_rows(record, *a2_scope(record)))`` (pooled 27 = 14 + 13 from the
+    draws; ``a2_rows`` proves the Phase 18 k), never the record's per_fact or pre_erasure."""
+    import phase40_prereg  # reads records at import: lazy
+
+    return phase40_prereg.slot_rows(
+        phase40_prereg.a2_rows(record, *phase40_prereg.a2_scope(record))
+    )
+
+
+def k16_slot_counts(draws):
+    """ERASE-07 / D-27: a K = read_k read's ``{slot: {n_answerable, n_questions, rate}}`` over the
+    8 core slots, pooled by ``phase19_run._pooled_rows`` over both ``CORPUS_TIERS``. The draws must
+    be the A2 family the Phase 18 corpus entries carry (read from
+    ``phase35_prereg.a2_corpus_entries()``, never typed), hold every corpus tier, and carry exactly
+    ``E1_CHECKPOINT_GRID["read_k"]`` completions each; each core slot pools
+    ``phase19_erasure.N_TARGET_QUESTIONS`` questions."""
+    import phase14_factset  # torch-free; lazy like every pin import
+    import phase18_extraction  # torch at import: lazy
+    import phase19_erasure  # torch at import: lazy
+    import phase19_run  # torch at import: lazy
+
+    corpus_families = {entry["family"] for entry in phase35_prereg.a2_corpus_entries()}
+    families = {draw["family"] for draw in draws}
+    _prove(
+        len(corpus_families) == 1 and families == corpus_families,
+        f"draw family {sorted(families)} is not the A2 corpus family {sorted(corpus_families)}",
+    )
+    (family,) = corpus_families
+    tiers = tuple(sorted({draw["tier"] for draw in draws}))
+    _prove(
+        set(tiers) == set(phase18_extraction.CORPUS_TIERS),
+        f"draw tiers {tiers} are not phase18_extraction.CORPUS_TIERS",
+    )
+    read_k = E1_CHECKPOINT_GRID["read_k"]
+    _prove(
+        all(len(draw["completions"]) == read_k for draw in draws),
+        f"a draw does not carry exactly read_k = {read_k} completions",
+    )
+    values = {f.id: f.value for f in phase14_factset.LOCKED_FACTS + phase14_factset.SOFT_TIER_FACTS}
+    rows = phase19_run._pooled_rows(draws, values, family, tiers)
+    core = phase18_extraction.CORE_SLOTS
+    by_slot = {}
+    for fact_id, row in rows.items():
+        if row["slot"] in core:
+            _prove(row["slot"] not in by_slot, f"two facts on slot {row['slot']!r}")
+            _prove(
+                row["n_questions"] == phase19_erasure.N_TARGET_QUESTIONS,
+                f"fact {fact_id!r} pools {row['n_questions']} questions, not "
+                "phase19_erasure.N_TARGET_QUESTIONS",
+            )
+            by_slot[row["slot"]] = {
+                "n_answerable": row["n_answerable"],
+                "n_questions": row["n_questions"],
+                "rate": row["rate"],
+            }
+    _prove(set(by_slot) == set(core), f"rows cover slots {sorted(by_slot)}, not {sorted(core)}")
+    return {slot: by_slot[slot] for slot in core}
+
+
+def k16_target_count(draws, target):
+    """ERASE-07 / D-27: the target's ``(n_answerable, n_questions)`` at a K = read_k read; only
+    these 27 questions enter the stop."""
+    _prove(target in TARGETS, f"target {target!r} is not one of {TARGETS}")
+    row = k16_slot_counts(draws)[target]
+    return row["n_answerable"], row["n_questions"]
+
+
+def condition_a(n_answerable, n_questions, floor):
+    """ERASE-06 / D-10: (a) holds iff ``erasure_gate.wilson_upper_bound(n_answerable,
+    n_questions)`` (questions as the unit) is at or below the (target, ordering, seed) floor."""
+    _prove_count("n_answerable", n_answerable)
+    _prove_count("n_questions", n_questions, low=1)
+    _prove(n_answerable <= n_questions, f"{n_answerable} answerable of {n_questions} questions")
+    upper = erasure_gate.wilson_upper_bound(n_answerable, n_questions)
+    return {"upper": upper, "floor": floor, "holds": upper <= floor}
+
+
+def condition_b(post_rows, pre_rows, target):
+    """ERASE-10 / D-15 (Pattern 8, Pitfalls 4-5): (b) per target. Each of
+    ``nontarget_slots(target)`` is its own n/27; ``pre_rows`` are the intact full adapter of the
+    SAME seed (results/phase40_a2_full_seed<s>.json through ``record_rows``), never a K =
+    confirm_k record's pre_erasure. ``beyond`` iff ``|post rate - pre rate| >
+    E1_CONDITION_B_MARGIN``; every slot beyond is named, in ``nontarget_slots`` order; (b) holds
+    iff none is."""
+    import phase19_erasure  # torch at import: lazy
+
+    margin = E1_CONDITION_B_MARGIN
+    slots = {}
+    for slot in nontarget_slots(target):
+        for name, rows in (("post", post_rows), ("pre", pre_rows)):
+            _prove(slot in rows, f"{name} rows carry no {slot!r} row")
+            _prove(
+                rows[slot]["n_questions"] == phase19_erasure.N_TARGET_QUESTIONS,
+                f"{name} {slot!r} pools {rows[slot]['n_questions']} questions, not "
+                "phase19_erasure.N_TARGET_QUESTIONS",
+            )
+        pre, post = pre_rows[slot], post_rows[slot]
+        delta = post["rate"] - pre["rate"]
+        slots[slot] = {
+            "pre": [pre["n_answerable"], pre["n_questions"]],
+            "post": [post["n_answerable"], post["n_questions"]],
+            "delta": delta,
+            "abs_delta": abs(delta),
+            "beyond": abs(delta) > margin,
+        }
+    beyond = [slot for slot, row in slots.items() if row["beyond"]]
+    return {"margin": margin, "slots": slots, "beyond": beyond, "holds": not beyond}
+
+
+def condition_c(dialogue_ppl, band):
+    """ERASE-09 / D-13: (c) holds iff the dialogue gap ``adapter_on - adapter_off`` of the stop
+    record lies inside the (seed, ordering) band ``(lo, hi)`` of E1_CONDITION_C_BAND_INPUTS
+    (``DIALOGUE_GAP_BAND``). Retention carries no verdict (D-14)."""
+    _prove(
+        isinstance(band, tuple) and len(band) == 2 and band[0] <= band[1],
+        f"band {band!r} is not an ordered (lo, hi) pair",
+    )
+    lo, hi = band
+    gap = dialogue_ppl["adapter_on"] - dialogue_ppl["adapter_off"]
+    return {"gap": gap, "lo": lo, "hi": hi, "holds": lo <= gap <= hi}
+
+
+def cell_verdict(*, stop, target_n, target_q, zero_results_have_nll, a, b, c):
+    """D-15 / ERASE-09: one cell's verdict. A NOT_REACHED stop (``e1_stop(...)["stop"]``) gets no
+    verdict (``judged`` False). Then INCONCLUSIVE in ``erasure_gate.erasure_succeeded``'s
+    precedence: no target questions; target zero without the zero-result NLL flag
+    (``phase37_routes.route_a``); no non-target slot in (b). Else SUCCESS iff (a), (b) and (c)
+    hold, else FAILURE with every failed condition in (a), (b), (c) order and, for (b), every
+    non-target beyond the margin. ``a``/``b``/``c`` are the condition dicts (``None`` allowed only
+    where the verdict never reads them)."""
+    _prove(
+        stop in GRID or stop == phase35_prereg.NOT_REACHED,
+        f"stop {stop!r} is neither a grid checkpoint nor NOT_REACHED",
+    )
+    if stop == phase35_prereg.NOT_REACHED:
+        verdict = {"verdict": phase35_prereg.NOT_REACHED, "judged": False, "reason": None}
+        return {**verdict, "failed": [], "beyond": []}
+    reason = None
+    if target_q == 0:
+        reason = "no target questions scored"
+    elif target_n == 0 and not zero_results_have_nll:
+        reason = "target recall is zero but no teacher-forced NLL was recorded"
+    elif not (b and b["slots"]):
+        reason = "no non-target slot scored in (b)"
+    if reason is not None:
+        return {
+            "verdict": INCONCLUSIVE,
+            "judged": True,
+            "failed": [],
+            "beyond": [],
+            "reason": reason,
+        }
+    failed = [name for name, cond in (("(a)", a), ("(b)", b), ("(c)", c)) if not cond["holds"]]
+    verdict = FAILURE if failed else SUCCESS
+    _prove(verdict in erasure_gate.VERDICTS, f"verdict {verdict!r} is not in VERDICTS")
+    return {
+        "verdict": verdict,
+        "judged": True,
+        "failed": failed,
+        "beyond": list(b["beyond"]),
+        "reason": None,
+    }
+
+
+def pair_label(verdicts):
+    """D-16 / ERASE-10: one (target, ordering) pair's label from ``{seed: outcome}`` keyed by
+    exactly SEEDS: PASS iff SUCCESS at both seeds, FAILURE replicada iff FAILURE at both, else não
+    replicado. ``text`` publishes each seed's outcome in full, "<v1> na <s1>, <v2> na <s2>"."""
+    _prove(set(verdicts) == set(SEEDS), f"pair seeds {sorted(verdicts)} are not {SEEDS}")
+    for seed in SEEDS:
+        _prove(
+            verdicts[seed] in SEED_OUTCOMES, f"outcome {verdicts[seed]!r} not in {SEED_OUTCOMES}"
+        )
+    outcomes = {verdicts[seed] for seed in SEEDS}
+    if outcomes == {SUCCESS}:
+        label = PAIR_LABELS[0]
+    elif outcomes == {FAILURE}:
+        label = PAIR_LABELS[1]
+    else:
+        label = PAIR_LABELS[2]
+    return {"label": label, "text": ", ".join(f"{verdicts[s]} na {s}" for s in SEEDS)}
+
+
+def summary_counts(pairs):
+    """D-17: of the (target, ordering) pairs, keyed by exactly TARGETS x ORDERINGS, the count under
+    each label; inside não replicado, the PAIRS carrying INCONCLUSIVE, NOT_REACHED or NOT_RUN at
+    either seed (a pair counts once under a sub-key, so the sub-counts may overlap). No
+    threshold."""
+    expected = {(t, o) for t in TARGETS for o in ORDERINGS}
+    _prove(
+        set(pairs) == expected,
+        f"pairs {sorted(set(pairs) ^ expected, key=repr)} are missing or extra",
+    )
+    counts = dict.fromkeys(PAIR_LABELS, 0)
+    inside = dict.fromkeys((INCONCLUSIVE, phase35_prereg.NOT_REACHED, NOT_RUN), 0)
+    for verdicts in pairs.values():
+        label = pair_label(verdicts)["label"]
+        counts[label] += 1
+        if label == PAIR_LABELS[2]:
+            for outcome in inside:
+                inside[outcome] += outcome in verdicts.values()
+    return {**counts, "inside_nao_replicado": inside, "n_pairs": len(pairs)}
+
+
+def not_reached_sentence():
+    """D-09: the sentence a NOT_REACHED cell is published with, from GRID[-1] and
+    ``phase19_erasure.N_COMPONENTS``."""
+    import phase19_erasure  # torch at import: lazy
+
+    return f"não apagado com {GRID[-1]} de {phase19_erasure.N_COMPONENTS} componentes removidos"
+
+
+def floors_fill_inputs():
+    """ERASE-06 / D-10 / D-12: the exact kwargs of ``phase35_prereg.fill("e1_condition_a_floors",
+    ...)``: every (target, ordering, seed) key with value None (the floors are computed), the four
+    calibration records plus the calibration corpus, and a four-field derivation whose value is the
+    key tuple and whose source names every consumed path. A fresh object each call, so the floors
+    fill file and the CPU rehearsal pass identical, unshared arguments."""
+    keys = tuple((t, o, s) for t in TARGETS for o in ORDERINGS for s in SEEDS)
+    input_records = tuple(calibration_record(o, s) for s in SEEDS for o in ORDERINGS) + (
+        CALIBRATION_CORPUS,
+    )
+    derivation = {
+        "value": keys,
+        "derivation": (
+            "ERASE-06 / D-10 / D-03: one calibration per (ordering, seed) on "
+            "select_calibration_fact() with a fresh adapter per seed; the floors are computed by "
+            "the e1_condition_a_floors rule (lock_erasure_floor, floor_branch) from each record's "
+            "own draws pooled over CORPUS_TIERS; never typed"
+        ),
+        "kind": "derived",
+        "source": f"{_CONTEXT.format('10, D-12')}; " + " ".join(input_records),
+    }
+    _prove_entry("floors_fill_inputs", derivation)
+    return {"floors": dict.fromkeys(keys), "input_records": input_records, "derivation": derivation}
+
+
+def band_fill_inputs():
+    """ERASE-09 / D-13: the exact kwargs of ``phase35_prereg.fill("e1_condition_c_band_inputs",
+    ...)``: every (seed, ordering) key with value None (the inputs are read), the Phase 40 noise
+    floor record plus the four band-input records, and a four-field derivation whose value is the
+    key tuple and whose source names every consumed path. A fresh object each call."""
+    keys = tuple((s, o) for s in SEEDS for o in ORDERINGS)
+    input_records = (NOISE_FLOOR_RECORD,) + tuple(
+        band_record(s, o) for s in SEEDS for o in ORDERINGS
+    )
+    derivation = {
+        "value": keys,
+        "derivation": (
+            "ERASE-09 / D-13: control_gap re-measured on the intact full adapter, equal to Phase "
+            "40's gap; gap_noise_floor read from the Phase 40 record; band = DIALOGUE_GAP_BAND"
+        ),
+        "kind": "derived",
+        "source": f"{_CONTEXT.format('13')}; " + " ".join(input_records),
+    }
+    _prove_entry("band_fill_inputs", derivation)
+    return {
+        "band_inputs": dict.fromkeys(keys),
+        "input_records": input_records,
+        "derivation": derivation,
+    }
