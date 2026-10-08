@@ -13,9 +13,12 @@ It reads only tracked files and git history and writes nothing under results/.
 import ast
 import collections.abc
 import fnmatch
+import inspect
 import json
+import os
 import pathlib
 import re
+import subprocess
 import sys
 
 import pytest
@@ -35,7 +38,20 @@ import phase35_prereg  # noqa: E402  (scripts/ is not a package)
 import phase36_caps  # noqa: E402  (same)
 import phase41_prereg  # noqa: E402  (same)
 
-from test_phase29_prereg import _git  # noqa: E402
+from test_phase29_prereg import _assert_frozen_before, _git, _planted  # noqa: E402
+from test_phase35_prereg import (  # noqa: E402
+    _docstring_nodes,
+    _insert_at,
+    _literal_failures,
+    _slot_census_failures,
+)
+from test_phase36_prereg import (  # noqa: E402
+    _entries_node,
+    _entry_string_failures,
+    _first_inner,
+    _skip_failures,
+    _untested_functions,
+)
 
 PREREG = "scripts/phase41_prereg.py"
 
@@ -60,19 +76,23 @@ def test_record_paths_from_the_registry():
     assert p.CALIBRATION_CORPUS == slots["e1_condition_a_floors"]["input_records"][1]
     assert p.NOISE_FLOOR_RECORD == slots["e1_condition_c_band_inputs"]["input_records"][0]
     assert (
-        p.calibration_record("greedy", 1337) == "results/phase41_calibration_greedy_seed1337.json"
+        phase41_prereg.calibration_record("greedy", 1337)
+        == "results/phase41_calibration_greedy_seed1337.json"
     )
-    assert p.band_record(2024, "gradient") == "results/phase41_band_inputs_gradient_seed2024.json"
     assert (
-        p.cell_record("cat_name", "greedy", 1337)
+        phase41_prereg.band_record(2024, "gradient")
+        == "results/phase41_band_inputs_gradient_seed2024.json"
+    )
+    assert (
+        phase41_prereg.cell_record("cat_name", "greedy", 1337)
         == "results/phase41_cell_cat_name_greedy_seed1337.json"
     )
     assert (
-        p.k16_record("pet_name", "gradient", 2024, 48)
+        phase41_prereg.k16_record("pet_name", "gradient", 2024, 48)
         == "results/phase41_k16_pet_name_gradient_seed2024_k048.json"
     )
     assert (
-        p.k48_record("street", "greedy", 1337, 128)
+        phase41_prereg.k48_record("street", "greedy", 1337, 128)
         == "results/phase41_a2_street_greedy_seed1337_k128.json"
     )
     assert p.ERASURE_RECORD == "results/phase41_erasure.json"
@@ -403,3 +423,401 @@ def test_defaults_are_labelled():
             assert _UNCONFIRMED[name] in entry["derivation"], name
         else:
             assert _LABEL not in entry["derivation"], name
+
+
+# =================================================================================================
+# (3) ANCESTRY (SC5, T-41-04): frozen before every results/phase41_* record. Honest at zero records
+# and after them. Plan 41-12's floors test imports _strictly_before and _first_add from here.
+# =================================================================================================
+
+
+def _strictly_before(x, y):
+    run = subprocess.run(("git", "merge-base", "--is-ancestor", x, y), cwd=_ROOT, check=False)
+    return x != y and run.returncode == 0
+
+
+def _first_add(path):
+    return _git("log", "--diff-filter=A", "--format=%H", "--", path).split()[-1]
+
+
+def _phase41_records():
+    return sorted(_git("ls-files", "results/phase41_*").split())
+
+
+def test_phase41_prereg_is_frozen_before_every_phase41_record():
+    _assert_frozen_before(PREREG, _phase41_records())
+    # NON-VACUITY (natural RED): the v6.0 pre-registration was added before this one existed.
+    with pytest.raises(subprocess.CalledProcessError):
+        _assert_frozen_before(PREREG, ["scripts/phase35_prereg.py"])
+
+
+def test_this_test_file_is_first_added_before_every_phase41_record():
+    # Only the FIRST add: a later fix to this file must not redden the guard forever.
+    mine = _first_add("tests/test_phase41_prereg.py")
+    for record in _phase41_records():
+        assert _strictly_before(mine, _first_add(record)), record
+    # NON-VACUITY: the same check against a file added long before this one is False.
+    assert not _strictly_before(mine, _first_add("scripts/phase35_prereg.py"))
+
+
+def test_records_at_commit_is_true_at_the_first_commit():
+    first = _git("log", "--format=%H", "--", PREREG).split()[-1]
+    at_first = _git("ls-tree", "-r", "--name-only", first, "--", "results/").split()
+    assert at_first, "meta-guard: the first commit's results/ tree is empty, the check is vacuous"
+    assert not [path for path in at_first if path.startswith("results/phase41_")]
+    assert phase41_prereg.RECORDS_AT_COMMIT == 0
+
+
+# =================================================================================================
+# (4) NOTHING DERIVED IS TYPED (T-41-05): the GRID node is the one exemption (D-07).
+# =================================================================================================
+
+
+def _grid_node(tree):
+    (node,) = [
+        n
+        for n in tree.body
+        if isinstance(n, ast.Assign)
+        and len(n.targets) == 1
+        and isinstance(n.targets[0], ast.Name)
+        and n.targets[0].id == "GRID"
+    ]
+    return node
+
+
+def _without_grid(source):
+    """``source`` with the GRID assignment's value replaced by ``None`` (same line count)."""
+    node = _grid_node(ast.parse(source))
+    lines = source.splitlines(keepends=True)
+    blank = ["\n"] * (node.end_lineno - node.lineno)
+    lines[node.lineno - 1 : node.end_lineno] = [" " * node.col_offset + "GRID = None\n", *blank]
+    return "".join(lines)
+
+
+def _k_literals_outside_grid(source):
+    """Every int constant equal to CURVE_K or FULL_FIDELITY_K that lies outside the GRID node."""
+    tree = ast.parse(source)
+    grid = _grid_node(tree)
+    inside = {id(n) for n in ast.walk(grid)}
+    ks = {phase35_prereg.CURVE_K, phase35_prereg.FULL_FIDELITY_K}
+    return [
+        n.lineno
+        for n in ast.walk(tree)
+        if isinstance(n, ast.Constant) and type(n.value) is int and n.value in ks
+        if id(n) not in inside
+    ]
+
+
+def _census_sets():
+    import phase19_erasure as pin
+
+    p = phase41_prereg
+    noise = _record(p.NOISE_FLOOR_RECORD)
+    budget = _record(p.BUDGET_RECORD)
+    retention = _record("results/phase20_retention_floor.json")
+    floor = noise["gap_noise_floor"]
+    gaps = [noise["per_seed"][str(s)]["full"]["dialogue_gap"]["gap"] for s in p.SEEDS]
+    bands = [
+        edge
+        for gap in gaps
+        for edge in phase35_prereg.DIALOGUE_GAP_BAND(control_gap=gap, gap_noise_floor=floor)
+    ]
+    seeds = {
+        phase35_prereg.CURVE_K,
+        phase35_prereg.FULL_FIDELITY_K,
+        pin.N_TARGET_QUESTIONS,
+        pin.N_COMPONENTS,
+        *phase35_prereg.e1_teaching_seeds(),
+        len(p.TARGETS) * len(p.ORDERINGS) * len(p.SEEDS),
+        len(p.TARGETS) * len(p.ORDERINGS),
+    }
+    floats = {
+        p.E1_CONDITION_B_MARGIN,
+        floor,
+        *gaps,
+        *bands,
+        budget["front_hours"]["E1"],
+        *(budget["unit_prices"][k] for k in p.ENTRIES["e1_unit_prices"]["value"]),
+        retention["cap"],
+        retention["retention_ppl_noise_floor"],
+        p.VALUE_NLL_SECONDS,
+        p.GRADIENT_HEADROOM,
+    }
+    assert len(bands) == 2 * len(gaps) and len(gaps) == len(p.SEEDS), "meta-guard: bands"
+    assert all(type(f) is float for f in floats), "meta-guard: a census value is not a float"
+    assert all(type(i) is int for i in seeds), "meta-guard: a census value is not an int"
+    return seeds, floats
+
+
+def test_no_derived_value_is_typed_in_the_prereg(tmp_path):
+    seeds, floats = _census_sets()
+    real = _ROOT / PREREG
+    before = real.read_bytes()
+    source = before.decode("utf-8")
+    # The GRID literal holds 16 and 48 by design (D-07); without it nothing derived is typed.
+    assert _literal_failures(source, seeds, floats, set()), "meta-guard: GRID is not scanned"
+    scanned = _without_grid(source)
+    assert scanned.count("\n") == source.count("\n")
+    assert _literal_failures(scanned, seeds, floats, set()) == []
+    assert _k_literals_outside_grid(source) == []
+    plants = [
+        ("k48.py", f"\nX = {phase35_prereg.FULL_FIDELITY_K!r}\n"),
+        ("margin.py", f"\nX = {phase41_prereg.E1_CONDITION_B_MARGIN!r}\n"),
+        ("hours.py", f"\nX = {phase41_prereg.ENTRIES['e1_share_hours']['value']!r}\n"),
+    ]
+    for name, line in plants:
+        planted = _planted(tmp_path, source, source + line, name)
+        assert _literal_failures(_without_grid(planted), seeds, floats, set()), name
+    planted = _planted(tmp_path, source, source + plants[0][1], "k48_outside.py")
+    assert _k_literals_outside_grid(planted)
+    assert real.read_bytes() == before
+
+
+# =================================================================================================
+# (5) ENTRIES: EXACTLY FOUR FIELDS, NO PROPOSER; THE PRIVATE HELPERS.
+# =================================================================================================
+
+
+def _good_entry():
+    return {"value": 1, "derivation": "d", "kind": "derived", "source": "s"}
+
+
+def test_entries_have_exactly_four_fields_and_no_proposer(tmp_path):
+    assert phase41_prereg.ENTRY_FIELDS is phase35_prereg.ENTRY_FIELDS
+    assert phase41_prereg.KINDS is phase35_prereg.KINDS
+    assert phase41_prereg.FORBIDDEN_PHRASE is phase35_prereg.FORBIDDEN_PHRASE
+    for name, entry in phase41_prereg.ENTRIES.items():
+        assert set(entry) == {"value", "derivation", "kind", "source"}, name
+    assert phase41_prereg._prove_entries() is None
+
+    phase41_prereg._prove_entry("ok", _good_entry())
+    refused = (
+        {**_good_entry(), "proposer": "Rafael"},
+        {**_good_entry(), "adopted_by": "Rafael"},
+        {k: v for k, v in _good_entry().items() if k != "source"},
+        {**_good_entry(), "kind": "guess"},
+        {**_good_entry(), "derivation": ""},
+        {**_good_entry(), "value": phase41_prereg.FORBIDDEN_PHRASE},
+        [1],
+    )
+    for entry in refused:
+        with pytest.raises(SystemExit, match=r"^\[phase41_prereg\]"):
+            phase41_prereg._prove_entry("x", entry)
+
+    real = _ROOT / PREREG
+    before = real.read_bytes()
+    source = before.decode("utf-8")
+    entries = _entries_node(ast.parse(source))
+    assert entries is not None, "meta-guard: _ENTRIES not found, the walk would be vacuous"
+    assert _entry_string_failures(source) == []
+
+    kind_key, _ = _first_inner(entries, "kind")
+    planted_key = _insert_at(source, kind_key.lineno, kind_key.col_offset, '"proposer": "Rafael", ')
+    ast.parse(planted_key)
+    assert _entry_string_failures(_planted(tmp_path, source, planted_key, "key.py"))
+
+    _, derivation = _first_inner(entries, "derivation")
+    first = next(n for n in ast.walk(derivation) if isinstance(n, ast.Constant))
+    planted_phrase = _insert_at(
+        source, first.lineno, first.col_offset + 1, phase41_prereg.FORBIDDEN_PHRASE
+    )
+    ast.parse(planted_phrase)
+    assert _entry_string_failures(_planted(tmp_path, source, planted_phrase, "phrase.py"))
+    assert real.read_bytes() == before
+
+
+def test_prove_count_read_and_path_helpers():
+    with pytest.raises(SystemExit, match=r"^\[phase41_prereg\] x$"):
+        phase41_prereg._prove(False, "x")
+    assert phase41_prereg._prove(True, "x") is None
+    assert phase41_prereg._prove_count("n", 0) is None
+    for bad in (True, -1, 1.0):
+        with pytest.raises(SystemExit, match=r"^\[phase41_prereg\]"):
+            phase41_prereg._prove_count("n", bad)
+    read = phase41_prereg._read(phase41_prereg.BUDGET_RECORD)
+    assert isinstance(read, dict) and "unit_caps" in read
+
+    glob = phase41_prereg.RECORD_GLOB
+    calibration = phase41_prereg.calibration_record(*phase41_prereg.ORDERINGS[:1], 1337)
+    assert phase41_prereg._prove_path(calibration, glob) == calibration
+    with pytest.raises(SystemExit, match="prep record"):
+        phase41_prereg._prove_path(calibration, glob, unit=True)
+    with pytest.raises(SystemExit, match="does not match"):
+        phase41_prereg._prove_path("results/phase40_x.json", glob)
+    assert phase41_prereg._prove_unit() is None
+    assert phase41_prereg._prove_unit(seed=2024, checkpoint=phase41_prereg.GRID[-1]) is None
+    with pytest.raises(SystemExit, match="checkpoint"):
+        phase41_prereg._prove_unit(checkpoint=phase41_prereg.GRID[-1] + 1)
+
+
+# =================================================================================================
+# (6) IMPORTING THE PREREG OPENS NO CHECKPOINT; THE SLOT CENSUS, ZERO SKIPS, EVERY FUNCTION CALLED.
+# =================================================================================================
+
+
+def _opens_a_checkpoint(path, repo):
+    """True for a path under the repo's checkpoints/ or data/, or with a .pt / .safetensors
+    suffix. Repo-relative, never a substring test: torch's own torch/utils/data is not data/."""
+    if not isinstance(path, (str, os.PathLike)):
+        return False
+    resolved = pathlib.Path(path).resolve()
+    return (
+        resolved.is_relative_to(repo / "checkpoints")
+        or resolved.is_relative_to(repo / "data")
+        or resolved.suffix in (".pt", ".safetensors")
+    )
+
+
+_PROBE = """
+import json, os, pathlib, sys
+
+{predicate}
+
+_REPO = pathlib.Path(sys.argv[1]).resolve()
+_FLAGGED = []
+
+
+def _hook(event, args):
+    if event == "open" and args and _opens_a_checkpoint(args[0], _REPO):
+        _FLAGGED.append(os.fspath(args[0]))
+
+
+sys.addaudithook(_hook)
+sys.path[:0] = [str(_REPO / "scripts"), str(_REPO / "src")]
+import phase41_prereg
+
+imported = list(_FLAGGED)
+_FLAGGED.clear()
+planted = [_REPO / "checkpoints" / "planted", _REPO / "data" / "planted", *sys.argv[2:]]
+for path in planted:
+    try:
+        open(path, encoding="utf-8")
+    except FileNotFoundError:
+        pass
+print(json.dumps({{
+    "import_flagged": imported,
+    "safetensors_loaded": "safetensors" in sys.modules,
+    "grid": list(phase41_prereg.E1_CHECKPOINT_GRID["checkpoints"]),
+    "planted": [os.fspath(p) for p in planted],
+    "planted_flagged": list(_FLAGGED),
+}}))
+"""
+
+
+def test_importing_the_prereg_opens_no_checkpoint(tmp_path):
+    """This file loads torch through e1_teaching_seeds() by design; an "open" audit hook watches
+    the import. Blind spot: safetensors opens files in Rust without a Python "open" audit event,
+    so a safetensors read is invisible to the hook; the sys.modules leg covers it."""
+    import torch.utils.data
+
+    pt, st = tmp_path / "planted.pt", tmp_path / "planted.safetensors"
+    script = _PROBE.format(predicate=inspect.getsource(_opens_a_checkpoint))
+    out = subprocess.run(
+        [sys.executable, "-c", script, str(_ROOT), str(pt), str(st)],
+        cwd=_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    result = json.loads(out.stdout.strip().splitlines()[-1])
+    assert result["import_flagged"] == []
+    assert result["safetensors_loaded"] is False
+    assert tuple(result["grid"]) == phase41_prereg.GRID
+    # NON-VACUITY: one planted open per predicate branch, each flagged by the hook.
+    assert len(result["planted"]) == 4
+    assert result["planted_flagged"] == result["planted"]
+    repo = _ROOT.resolve()
+    assert _opens_a_checkpoint(repo / "checkpoints" / "planted", repo)
+    assert _opens_a_checkpoint(repo / "data" / "planted", repo)
+    assert _opens_a_checkpoint(pt, repo) and _opens_a_checkpoint(st, repo)
+    assert not _opens_a_checkpoint(3, repo)
+    # A site-packages torch/utils/data path is never flagged.
+    assert not _opens_a_checkpoint(pathlib.Path(torch.utils.data.__file__), repo)
+
+
+def _phase41_script_sources():
+    paths = sorted(_SCRIPTS.glob("phase41_*.py"))
+    sources = [(p.relative_to(_ROOT).as_posix(), p.read_text(encoding="utf-8")) for p in paths]
+    assert PREREG in {rel for rel, _ in sources}, "meta-guard: the census would miss the prereg"
+    return sources
+
+
+def test_phase41_scripts_pass_the_slot_census():
+    assert _slot_census_failures(_phase41_script_sources()) == []
+    assert fnmatch.fnmatch(PREREG, phase35_prereg.owner_prereg_glob("e1_checkpoint_grid"))
+
+
+def test_no_skips_in_this_file(tmp_path):
+    source = pathlib.Path(__file__).read_text(encoding="utf-8")
+    assert _skip_failures(source) == []
+    planted = source + '\n\ndef test_planted():\n    pytest.skip("x")\n'
+    assert _skip_failures(_planted(tmp_path, source, planted, "skip.py"))
+
+
+def test_census_every_phase41_prereg_function_has_a_cpu_test(tmp_path):
+    real = _ROOT / PREREG
+    before = real.read_bytes()
+    source = before.decode("utf-8")
+    test_source = pathlib.Path(__file__).read_text(encoding="utf-8")
+    defs = [n for n in ast.parse(source).body if isinstance(n, ast.FunctionDef)]
+    assert defs, "meta-guard: the prereg defines no function, the census would be vacuous"
+    assert _untested_functions("phase41_prereg", source, test_source) == []
+
+    planted = source + '\n\ndef planted_untested():\n    """Planted."""\n'
+    copied = _planted(tmp_path, source, planted, "untested.py")
+    assert _untested_functions("phase41_prereg", copied, test_source) == ["planted_untested"]
+    assert real.read_bytes() == before
+
+
+# =================================================================================================
+# (7) D-26 AND ERASE-03 GATES OVER EVERY scripts/phase41_*.py (the driver and the floors file join
+# when they exist). Plan 41-10's driver test imports _typed_target_failures.
+# =================================================================================================
+
+
+def _k48_caps_call_failures(source):
+    """Every check_unit_caps call carrying a k48_confirms_per_cell keyword (D-26)."""
+    return [
+        f"check_unit_caps(k48_confirms_per_cell=...) at line {node.lineno}"
+        for node in _caps_calls(source)
+        if any(k.arg == "k48_confirms_per_cell" for k in node.keywords)
+    ]
+
+
+def test_no_check_unit_caps_with_k48_confirms_in_phase41_scripts(tmp_path):
+    for rel, source in _phase41_script_sources():
+        assert _k48_caps_call_failures(source) == [], rel
+    source = _prereg_source()
+    plant = '\nphase36_caps.check_unit_caps("E1", k48_confirms_per_cell=2)\n'
+    planted = _planted(tmp_path, source, source + plant, "k48_call.py")
+    assert _k48_caps_call_failures(planted)
+
+
+def _typed_target_failures(source):
+    """Every non-docstring str constant EQUAL to a member of phase35_prereg.e1_targets() (a typed
+    target name). Containment inside longer prose is allowed."""
+    tree = ast.parse(source)
+    docstrings = _docstring_nodes(tree)
+    targets = set(phase35_prereg.e1_targets())
+    assert targets, "meta-guard: no targets, the scan would be vacuous"
+    return [
+        f"typed target {n.value!r} at line {n.lineno}"
+        for n in ast.walk(tree)
+        if isinstance(n, ast.Constant)
+        and isinstance(n.value, str)
+        and id(n) not in docstrings
+        and n.value in targets
+    ]
+
+
+def test_no_target_name_is_typed_in_phase41_scripts(tmp_path):
+    for rel, source in _phase41_script_sources():
+        assert _typed_target_failures(source) == [], rel
+    source = _prereg_source()
+    target = phase35_prereg.e1_targets()[-2]
+    planted = _planted(tmp_path, source, source + f"\nX = {target!r}\n", "typed.py")
+    assert _typed_target_failures(planted)
+    documented = source + f'\n\ndef planted():\n    """Names {target}."""\n'
+    assert _typed_target_failures(_planted(tmp_path, source, documented, "doc.py")) == []
+    prose = source + f"\nX = {('erase ' + target)!r}\n"
+    assert _typed_target_failures(_planted(tmp_path, source, prose, "prose.py")) == []
