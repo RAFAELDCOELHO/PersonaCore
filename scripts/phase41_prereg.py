@@ -245,6 +245,8 @@ BACKWARD_FORWARD_CEILING = GRADIENT_HEADROOM - 2
 _CONTEXT = "41-CONTEXT D-{} (447747c)"
 _RULINGS = "41-CONTEXT D-{} (3787b9d)"
 _DEFAULT = "default taken at plan time, not yet confirmed by Rafael"
+# Plan 41-05: Rafael's reply at the 41-05 checkpoint accepted all nine planner defaults.
+_CONFIRMED = "confirmed by Rafael 2026-10-08"
 
 # D-11 (Rafael 2026-10-08, 41-01 checkpoint): checkpoints/phase19_erase_calibration_adapter.pt is
 # untracked, so the prediction's expected sha256 is read from the committed record that carries
@@ -781,7 +783,7 @@ _ENTRIES = {
             "measured first inside each prep attempt whose end line names the calibration record, "
             "and carrying no provenance.run"
         ),
-        "derivation": f"D-04, D-13, D-22: {_DEFAULT}.",
+        "derivation": f"D-04, D-13, D-22: {_CONFIRMED}.",
         "kind": "preference",
         "source": f"{_CONTEXT.format('04, D-13, D-22')}; Claude's Discretion",
     },
@@ -793,7 +795,7 @@ _ENTRIES = {
             "(CPU or MPS) decided the variant (IN-02, Rafael 2026-10-08: a known limitation, the "
             "CPU rehearsal's seconds are read against an MPS-priced line)"
         ),
-        "derivation": f"D-05: {_DEFAULT}.",
+        "derivation": f"D-05: {_CONFIRMED}.",
         "kind": "preference",
         "source": _CONTEXT.format("05"),
     },
@@ -802,7 +804,7 @@ _ENTRIES = {
             "a cell never started (the D-23 pause or a stop) reads NOT_RUN in its pair and is "
             "counted separately in D-17"
         ),
-        "derivation": f"D-17, D-23: {_DEFAULT}.",
+        "derivation": f"D-17, D-23: {_CONFIRMED}.",
         "kind": "preference",
         "source": _CONTEXT.format("17, D-23"),
     },
@@ -813,7 +815,7 @@ _ENTRIES = {
         ),
         "derivation": (
             f"D-23 (Claude's Discretion: mirrors phase40_prereg.RELAUNCH_DECLARATION_KEYS): "
-            f"{_DEFAULT}."
+            f"{_CONFIRMED}."
         ),
         "kind": "preference",
         "source": f"{_CONTEXT.format('23')}; Claude's Discretion",
@@ -823,7 +825,13 @@ _ENTRIES = {
             "the grad-path value must equal value_span_nll_mean exactly on every device, at every "
             "gradient; a non-zero difference stops for Rafael, never a tolerance"
         ),
-        "derivation": f"D-02 (Claude's Discretion: equality on MPS): {_DEFAULT}.",
+        "derivation": (
+            f"D-02 (Claude's Discretion: equality on MPS): {_CONFIRMED}. Rafael's note, verbatim: "
+            '"No d02_equality, a igualdade é exercitada no smoke do MPS antes de qualquer '
+            "registro, para uma diferença sistemática aparecer antes da rodada e não no meio "
+            'dela." Plan 41-08 runs d02_check at every gradient of the MPS launch-gate ordering '
+            "smoke, the first step of the first prep attempt, before any record."
+        ),
         "kind": "preference",
         "source": f"{_CONTEXT.format('02')}; Claude's Discretion",
     },
@@ -832,7 +840,7 @@ _ENTRIES = {
             "D-13's equality refuses on mps; on the CPU rehearsal the reading is recorded, "
             "labelled rehearsal, and never refused"
         ),
-        "derivation": f"D-13: {_DEFAULT}.",
+        "derivation": f"D-13: {_CONFIRMED}.",
         "kind": "preference",
         "source": _CONTEXT.format("13"),
     },
@@ -842,7 +850,7 @@ _ENTRIES = {
             "file committed under it; stage-2 records under three approved: ledger and cell "
             "records, the erasure record, the report"
         ),
-        "derivation": f"ERASE-06, ERASE-10 SC5 (41-CONTEXT Approvals): {_DEFAULT}.",
+        "derivation": f"ERASE-06, ERASE-10 SC5 (41-CONTEXT Approvals): {_CONFIRMED}.",
         "kind": "preference",
         "source": "41-CONTEXT Approvals (447747c)",
     },
@@ -851,7 +859,7 @@ _ENTRIES = {
             "seed-major: the calibration adapter is trained in the first prep unit of its seed "
             "and reused, digest-checked, by the second"
         ),
-        "derivation": f"D-10, D-22: {_DEFAULT}.",
+        "derivation": f"D-10, D-22: {_CONFIRMED}.",
         "kind": "preference",
         "source": _CONTEXT.format("10, D-22"),
     },
@@ -860,7 +868,7 @@ _ENTRIES = {
             "an in-run STOP writes its evidence under data/phase41_e1/stops/ and raises "
             "SystemExit; the attempt is then reconciled lost and Rafael rules"
         ),
-        "derivation": f"D-13, D-23, D-24: {_DEFAULT}.",
+        "derivation": f"D-13, D-23, D-24: {_CONFIRMED}.",
         "kind": "preference",
         "source": _CONTEXT.format("13, D-23, D-24"),
     },
@@ -995,7 +1003,7 @@ SUCCESS = next(v for v in erasure_gate.VERDICTS if v == "SUCCESS")
 FAILURE = next(v for v in erasure_gate.VERDICTS if v == "FAILURE")
 INCONCLUSIVE = next(v for v in erasure_gate.VERDICTS if v == "INCONCLUSIVE")
 
-# D-17 / D-23 (ENTRIES["not_run"], a planner default): a cell never started.
+# D-17 / D-23 (ENTRIES["not_run"], confirmed by Rafael 2026-10-08): a cell never started.
 NOT_RUN = "NOT_RUN"
 _prove(
     NOT_RUN not in erasure_gate.VERDICTS and NOT_RUN != phase35_prereg.NOT_REACHED,

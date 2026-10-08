@@ -276,8 +276,10 @@ _DECISION_ENTRIES = frozenset(
 
 _LABEL = "default taken at plan time, not yet confirmed by Rafael"
 # Keyed by ENTRY NAME: the decision id its derivation cites. Plan 41-05 removes each name once
-# Rafael confirms or changes that default.
-_UNCONFIRMED = {
+# Rafael confirms or changes that default: all nine confirmed at the 41-05 checkpoint.
+_UNCONFIRMED = {}
+_CONFIRMED_LABEL = "confirmed by Rafael 2026-10-08"
+_CONFIRMED = {
     "record_layout": "D-22",
     "alternative_variant": "D-05",
     "not_run": "D-17",
@@ -306,8 +308,8 @@ def _no_mutable_containers(value):
 
 def test_entries_names_kinds_and_d_ids():
     entries = phase41_prereg.ENTRIES
-    assert set(entries) == _DECISION_ENTRIES | set(_UNCONFIRMED)
-    assert len(entries) == len(_DECISION_ENTRIES) + len(_UNCONFIRMED)
+    assert set(entries) == _DECISION_ENTRIES | set(_UNCONFIRMED) | set(_CONFIRMED)
+    assert len(entries) == len(_DECISION_ENTRIES) + len(_UNCONFIRMED) + len(_CONFIRMED)
     for name, entry in entries.items():
         assert re.search(r"\b(D-\d\d|ERASE-\d\d)\b", entry["derivation"]), name
         assert _D01_D25 in entry["source"] or _D26_D28 in entry["source"], name
@@ -439,6 +441,19 @@ def test_defaults_are_labelled():
             assert _UNCONFIRMED[name] in entry["derivation"], name
         else:
             assert _LABEL not in entry["derivation"], name
+        if name in _CONFIRMED:
+            assert _CONFIRMED_LABEL in entry["derivation"], name
+            assert _CONFIRMED[name] in entry["derivation"], name
+    assert len(_CONFIRMED) == 9 and not _UNCONFIRMED
+    # Rafael's d02_equality note, verbatim (41-05 checkpoint reply, 2026-10-08).
+    d02 = phase41_prereg.ENTRIES["d02_equality"]["derivation"]
+    for phrase in (
+        "a igualdade é exercitada no smoke do MPS antes de qualquer registro, para uma diferença "
+        "sistemática aparecer antes da rodada e não no meio dela",
+        "41-08",
+        "d02_check",
+    ):
+        assert phrase in d02, phrase
 
 
 # =================================================================================================
