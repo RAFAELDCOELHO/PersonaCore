@@ -15,6 +15,9 @@ checkpoints/
 *.pt
 logs/
 data/
+# Phase 41 E1 calibration training CSVs (teach_persona.arm_outputs csv lands under results/;
+# the Phase 35 ordering legs would count it as a phase-41 record; 41-05 WR-03)
+results/phase41_e1_calibration_seed*/
 
 # Tooling caches
 .pytest_cache/

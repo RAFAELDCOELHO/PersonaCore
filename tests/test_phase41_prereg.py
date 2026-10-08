@@ -2263,3 +2263,33 @@ def test_prove_units_helper():
     for bad in (("cell_x",), (None,), (phase41_prereg.UNITS[0], 1)):
         with pytest.raises(SystemExit, match="not in UNITS"):
             phase41_prereg._prove_units(bad)
+
+
+# =================================================================================================
+# WR-03 (41-05 review, Rafael 2026-10-08): the calibration training CSV lands under results/phase41_*
+# (teach_persona.arm_outputs), where the Phase 35 ordering legs would count it as a record; it is
+# gitignored, while the calibration and band records stay trackable.
+# =================================================================================================
+
+
+def _ignored(rel):
+    run = subprocess.run(("git", "check-ignore", "-q", rel), cwd=_ROOT, check=False)
+    assert run.returncode in (0, 1), run
+    return run.returncode == 0
+
+
+def test_calibration_csv_directory_is_gitignored():
+    import teach_persona
+
+    p = phase41_prereg
+    for seed in p.SEEDS:
+        csv = teach_persona.arm_outputs(f"e1_calibration_seed{seed}", prefix="phase41")["csv"]
+        rel = csv.relative_to(_ROOT).as_posix()
+        assert fnmatch.fnmatch(rel, p.RECORD_GLOB), rel  # meta-guard: the legs would count it
+        assert _ignored(rel), rel
+    # NON-VACUITY: the records the legs must see are not ignored.
+    for ordering in p.ORDERINGS:
+        for seed in p.SEEDS:
+            assert not _ignored(p.calibration_record(ordering, seed))
+            assert not _ignored(p.band_record(seed, ordering))
+    assert not _ignored(p.cell_record(p.TARGETS[0], p.ORDERINGS[0], p.SEEDS[0]))
