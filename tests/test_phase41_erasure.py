@@ -1753,7 +1753,9 @@ def test_preflight_ok_prints_the_line(monkeypatch, tmp_path, capsys):
         "gate",
         "variant",
         "rehearsal_disclosure",
+        "dropped_attempts",
     }
+    assert pf["dropped_attempts"] == {}
     assert pf["root"] == rig.root and pf["launch_git_sha"] == "h1" and pf["variant"] == "unset"
     assert pf["launch_modules"] == phase41_erasure.module_sha256()
     assert pf["gate"]["front"] == "E1"
@@ -2754,9 +2756,9 @@ def test_pet_name_stop_scores_d13_and_keeps_the_cell_whole(monkeypatch, tmp_path
     assert not [e for e in rig.cell_log if e[0] in ("m1", "d13")]
 
 
-def _stage2_rig(monkeypatch, tmp_path, script, **kw):
+def _stage2_rig(monkeypatch, tmp_path, script, *, crash_at=None, **kw):
     """A rig whose four prep units are whole and whose variant is fixed: preflight is at stage 2."""
-    rig = _cell_fakes(monkeypatch, _e1_rig(monkeypatch, tmp_path, **kw), script)
+    rig = _cell_fakes(monkeypatch, _e1_rig(monkeypatch, tmp_path, **kw), script, crash_at=crash_at)
     ledger = rig.ledger if rig.identity is not None else None
     _whole(ledger, *phase41_prereg.PREP_UNITS)
     _plant_variant(rig.root)
@@ -2804,3 +2806,429 @@ def test_run_stage2_on_the_real_root(monkeypatch, tmp_path):
     assert record["provenance"]["run"]["device"] == "mps" and record["rehearsal"] is False
     assert record["rehearsal_disclosure"]["commits"] == []
     assert ("load", pathlib.Path(rig.adapters[str(s)]["full"]["path"]).name, "mps") in rig.cell_log
+
+
+# =================================================================================================
+# (9) Plan 41-09: the D-23 pause and resume, R-3 b per unit (drop_attempt, declare_relaunch,
+# rerun_units), the crash between a record and its end line, no deletion in the driver.
+# =================================================================================================
+
+
+def _spent(monkeypatch, rig, *, bump):
+    """phase36_ledger.spent behind its real signature, asserting no attempt is open at each call
+    and counting the calls; ``bump`` adds E1's share to the E1 seconds (the pause is due)."""
+    import math
+
+    import phase36_ledger
+
+    real = phase36_ledger.spent
+    share = phase41_prereg.ENTRIES["e1_share_hours"]["value"] * 3600 if bump else 0.0
+    rig.spent_calls = 0
+
+    def recorded(tracked=None, *, ledger_path=None, fronts=None):
+        lines = phase36_ledger.read_ledger(ledger_path)
+        assert not phase36_ledger.open_runs(lines), "spent called while an attempt is open"
+        rig.spent_calls += 1
+        out = real(tracked, ledger_path=ledger_path, fronts=fronts)
+        by_front = {**out["by_front"], "E1": out["by_front"]["E1"] + share}
+        return {**out, "by_front": by_front, "total_seconds": math.fsum(by_front.values())}
+
+    monkeypatch.setattr(phase36_ledger, "spent", _checked(real, recorded))
+
+
+def _pauses(rig):
+    return sorted((rig.root / "data" / phase41_erasure.WORK_DIR).glob("pause_*.json"))
+
+
+def test_pause_before_a_cell_writes_no_start_line(monkeypatch, tmp_path, capsys):
+    import phase36_ledger
+
+    rig = _stage2_rig(monkeypatch, tmp_path, {_GRID[0]: (True, True, 5)})
+    _spent(monkeypatch, rig, bump=True)
+    cells = phase41_prereg.CELL_UNITS
+    before = _lines(rig.ledger)
+    assert _run(rig) == {"stage": 2, "whole": [], "paused": cells[0]}
+    assert _lines(rig.ledger) == before and not rig.heartbeat.exists()
+    assert not [e for e in rig.cell_log if e[0] == "ordering"]
+    (path,) = _pauses(rig)
+    totals = phase36_ledger.spent(ledger_path=rig.ledger)
+    expected = phase41_prereg.pause_notice(
+        by_front_seconds=totals["by_front"],
+        total_seconds=totals["total_seconds"],
+        outcomes=phase41_prereg.unit_outcomes(
+            phase36_ledger.read_ledger(rig.ledger), phase41_prereg.UNITS
+        ),
+    )
+    notice = _json(path)
+    assert notice == {**json.loads(json.dumps(expected)), "next_cell": cells[0]}
+    out = capsys.readouterr().out.splitlines()
+    assert any(
+        line.startswith(f"PAUSE e1_h={notice['e1_hours']:.4f} next={cells[0]}") for line in out
+    )
+    # Rafael's resume declaration naming the next two cells lets exactly those two run.
+    phase41_erasure.declare_resume(
+        cells[:2], approved="approved", e1_hours_at_pause=notice["e1_hours"], root=rig.root
+    )
+    assert _run(rig) == {"stage": 2, "whole": list(cells[:2]), "paused": cells[2]}
+    assert len(_pauses(rig)) == 2 and _json(_pauses(rig)[-1])["next_cell"] == cells[2]
+    lines = phase36_ledger.read_ledger(rig.ledger)
+    assert phase41_prereg.unit_outcomes(lines, cells[:3]) == {
+        cells[0]: "whole",
+        cells[1]: "whole",
+        cells[2]: "not_run",
+    }
+
+
+def test_declare_resume_refuses_without_approved(monkeypatch, tmp_path):
+    rig = _stage2_rig(monkeypatch, tmp_path, {_GRID[0]: (True, True, 5)})
+    cells = phase41_prereg.CELL_UNITS
+    resume = rig.root / phase41_prereg.RESUME_ROOT
+    with pytest.raises(SystemExit, match="no pause notice"):
+        phase41_erasure.declare_resume(
+            cells[:1], approved="approved", e1_hours_at_pause=1.0, root=rig.root
+        )
+    _spent(monkeypatch, rig, bump=True)
+    _run(rig)
+    hours = _json(_pauses(rig)[-1])["e1_hours"]
+    for change, match in (
+        ({"approved": "ok"}, "lacks Rafael's 'approved'"),
+        ({"approved": "not approved"}, "lacks Rafael's 'approved'"),
+        ({"cells": ("prep_greedy_seed1337",)}, "distinct CELL_UNITS"),
+        ({"cells": (cells[0], cells[0])}, "distinct CELL_UNITS"),
+        ({"e1_hours_at_pause": hours + 1}, "e1_hours_at_pause"),
+    ):
+        args = {"cells": cells[:1], "approved": "approved", "e1_hours_at_pause": hours, **change}
+        with pytest.raises(SystemExit, match=match):
+            phase41_erasure.declare_resume(args.pop("cells"), root=rig.root, **args)
+        assert not resume.exists()
+    first = phase41_erasure.declare_resume(
+        cells[:1], approved="approved", e1_hours_at_pause=hours, root=rig.root
+    )
+    assert first == {"e1_hours_at_pause": hours, "cells": list(cells[:1]), "approved": "approved"}
+    assert _json(rig.root / phase41_prereg.resume_declaration_name(1)) == first
+    phase41_erasure.declare_resume(
+        cells[1:2], approved="approved", e1_hours_at_pause=hours, root=rig.root
+    )
+    assert sorted(p.name for p in resume.iterdir()) == [
+        pathlib.Path(phase41_prereg.resume_declaration_name(n)).name for n in (1, 2)
+    ]
+
+
+def test_pause_checked_between_attempts_only(monkeypatch, tmp_path):
+    rig = _stage2_rig(monkeypatch, tmp_path, {_GRID[0]: (True, True, 5)})
+    _spent(monkeypatch, rig, bump=False)
+    cells = phase41_prereg.CELL_UNITS[:2]
+    assert _run(rig, units=cells) == {"stage": 2, "whole": list(cells)}
+    # preflight's require_launch, then per cell the pause check and its require_launch.
+    assert rig.spent_calls == 1 + 2 * len(cells)
+    assert not _pauses(rig)
+
+
+def _drop(rig, unit, **kw):
+    args = {
+        "cause_note": "x",
+        "approved": "approved",
+        "head_at_dropped_attempt": rig.head,
+        "root": rig.root,
+        "ledger_path": rig.ledger,
+    }
+    return phase41_erasure.drop_attempt(unit, **{**args, **kw})
+
+
+def _lost_utc(rig, unit):
+    import phase36_ledger
+
+    return phase41_prereg.lost_attempts(phase36_ledger.read_ledger(rig.ledger), unit)[-1]
+
+
+def _crashed_cell(monkeypatch, tmp_path):
+    """A cell attempt crashed after two K = 16 records and one K = 48 record, reconciled lost; an
+    M1 export is planted too (a pet_name stop's)."""
+    import phase36_ledger
+
+    script = {_GRID[0]: (False, None, 5), _GRID[1]: (True, False, 5)}
+    rig = _stage2_rig(monkeypatch, tmp_path, script, crash_at=_GRID[2])
+    cell = phase41_prereg.CELL_UNITS[2]
+    with pytest.raises(RuntimeError, match="planted crash"):
+        _run(rig, units=(cell,))
+    (lost,) = phase36_ledger.reconcile(ledger_path=rig.ledger, heartbeat_path=rig.heartbeat)
+    assert (lost["event"], lost["run_id"]) == ("lost", phase41_prereg.run_id(cell))
+    _plant(phase41_erasure._m1_path(rig.root, cell, _GRID[1]), b"m1")
+    return rig, cell
+
+
+def test_crash_drop_attempt_moves_and_lists_per_unit(monkeypatch, tmp_path, capsys):
+    rig, cell = _crashed_cell(monkeypatch, tmp_path)
+    _, t, o, s = phase41_prereg.unit_key(cell)
+    planted = [
+        rig.root / phase41_prereg.k16_record(t, o, s, _GRID[0]),
+        rig.root / phase41_prereg.k16_record(t, o, s, _GRID[1]),
+        rig.root / phase41_prereg.k48_record(t, o, s, _GRID[1]),
+        phase41_erasure._ordering_path(rig.root, cell),
+        phase41_erasure._m1_path(rig.root, cell, _GRID[1]),
+    ]
+    listed = phase41_erasure.partial_outputs(cell, root=rig.root)
+    assert listed == sorted((p.relative_to(rig.root).as_posix(), p) for p in planted)
+    digests = {rel: phase41_erasure._sha256(path) for rel, path in listed}
+    utc = _lost_utc(rig, cell)
+    rel_dir = phase41_prereg.dropped_attempt_dir(cell, utc)
+    manifest = _drop(rig, cell)
+    assert f"DROPPED {cell} {rel_dir} kept={len(listed)}" in capsys.readouterr().out
+    assert tuple(manifest) == phase41_prereg.DROPPED_MANIFEST_KEYS
+    assert manifest["kept"] == [
+        {"from": rel, "path": f"{rel_dir}/{rel}", "sha256": digests[rel]} for rel, _ in listed
+    ]
+    for item in manifest["kept"]:  # moved, never deleted
+        assert phase41_erasure._sha256(rig.root / item["path"]) == item["sha256"]
+        assert not (rig.root / item["from"]).exists()
+    assert phase41_erasure.partial_outputs(cell, root=rig.root) == []
+    assert _json(rig.root / rel_dir / phase41_prereg.DROPPED_MANIFEST) == manifest
+    assert phase41_prereg.dropped_manifest_failures(manifest, unit=cell, lost_utc=utc) == []
+    with pytest.raises(SystemExit, match="write-once"):
+        _drop(rig, cell)
+
+    # The seed's FIRST prep unit (its training unit) owns the calibration adapter outputs.
+    rig = _e1_rig(monkeypatch, tmp_path / "prep")
+    unit = phase41_prereg.PREP_UNITS[0]
+    _, o, s = phase41_prereg.unit_key(unit)
+    _ledger(rig.ledger, ("start", unit), ("lost", unit))
+    arm = phase41_erasure.arm_paths(s, rehearsal=True)
+    work = rig.root / "data" / phase41_erasure.WORK_DIR
+    record = rig.root / phase41_prereg.calibration_record(o, s)
+    planted = [
+        rig.root / phase41_prereg.band_record(s, o),
+        work / f"cal_erased_{o}_seed{s}.json",
+        *(arm[k] for k in ("adapter", "checkpoint", "bin", "mask", "csv")),
+        work / phase41_erasure.arm_name(s, rehearsal=True) / "run.csv",
+        record.parent / f".{record.name}.abc123.tmp",
+    ]
+    for path in planted:
+        _plant(path, str(path).encode())
+    listed = phase41_erasure.partial_outputs(unit, root=rig.root)
+    assert listed == sorted((p.relative_to(rig.root).as_posix(), p) for p in planted)
+    manifest = _drop(rig, unit)
+    assert sorted(i["from"] for i in manifest["kept"]) == [rel for rel, _ in listed]
+    assert all(not p.exists() for p in planted)
+    assert all((rig.root / i["path"]).is_file() for i in manifest["kept"])
+
+
+def test_drop_second_prep_unit_keeps_the_seed_adapter(monkeypatch, tmp_path):
+    rig = _run_fakes(monkeypatch, _e1_rig(monkeypatch, tmp_path))
+    prep = phase41_prereg.PREP_UNITS
+    _run(rig, units=prep[:1])
+    _ledger(rig.ledger, ("start", prep[1]), ("lost", prep[1]))
+    _, o, s = phase41_prereg.unit_key(prep[1])
+    work = rig.root / "data" / phase41_erasure.WORK_DIR
+    planted = [
+        _plant(rig.root / phase41_prereg.band_record(s, o)),
+        _plant(work / f"cal_erased_{o}_seed{s}.json"),
+    ]
+    arm = phase41_erasure.arm_paths(s, rehearsal=True)
+    seed_files = [arm[k] for k in ("adapter", "checkpoint", "bin", "mask")]
+    seed_files.append(work / phase41_erasure.arm_name(s, rehearsal=True) / "run.csv")
+    digests = {p: phase41_erasure._sha256(p) for p in seed_files}
+    manifest = _drop(rig, prep[1])
+    assert sorted(i["from"] for i in manifest["kept"]) == sorted(
+        p.relative_to(rig.root).as_posix() for p in planted
+    )
+    assert {p: phase41_erasure._sha256(p) for p in seed_files} == digests
+    cited = _json(rig.root / phase41_prereg.unit_record(prep[0]))["adapter"]["sha256"]
+    assert cited == digests[arm["adapter"]]
+    # The re-run digest-checks the same adapter against the first unit's record: no training.
+    rig.log.clear()
+    rig.trained.clear()
+    assert _run(rig, units=prep[1:2])["whole"] == [prep[1]]
+    assert not [e for e in rig.log if e[0] == "train"] and rig.trained == []
+    record = _json(rig.root / phase41_prereg.unit_record(prep[1]))
+    assert record["adapter"]["sha256"] == cited
+    (attempt,) = record["dropped_attempts"]
+    assert attempt["lost_utc"] == _lost_utc(rig, prep[1])
+    assert attempt["adapter_identity"] == phase41_erasure.NOT_PRODUCED
+
+
+def test_drop_attempt_refusals(monkeypatch, tmp_path):
+    rig, cell = _crashed_cell(monkeypatch, tmp_path)
+    listed = phase41_erasure.partial_outputs(cell, root=rig.root)
+    dropped_root = rig.root / phase41_prereg.DROPPED_ROOT
+    ledger = _lines(rig.ledger)
+
+    def refused(match, unit=cell, **kw):
+        with pytest.raises(SystemExit, match=match):
+            _drop(rig, unit, **kw)
+        assert phase41_erasure.partial_outputs(cell, root=rig.root) == listed
+        assert not dropped_root.exists()
+        assert _lines(rig.ledger) == ledger
+
+    refused("only a crashed attempt", unit=phase41_prereg.PREP_UNITS[0])  # whole
+    refused("only a crashed attempt", unit=phase41_prereg.CELL_UNITS[5])  # not run
+    still_open = tmp_path / "open.jsonl"
+    _ledger(still_open, ("start", cell), ("lost", cell), ("start", cell))
+    refused("reconcile first", ledger_path=still_open)
+    record = _plant(rig.root / phase41_prereg.unit_record(cell))
+    refused("crash rule [(]i[)]")
+    record.unlink()
+    monkeypatch.setattr(phase41_erasure, "git_sha", lambda: "unknown")
+    refused("could not read HEAD")
+    monkeypatch.setattr(phase41_erasure, "git_sha", lambda: "h1")
+    refused("cause_note is empty", cause_note=" ")
+    refused("lacks Rafael's 'approved'", approved="ok")
+    refused("lacks Rafael's 'approved'", approved="not approved")
+    refused("head_change_declared None: HEAD h0 -> h1", head_at_dropped_attempt="h0")
+    _drop(rig, cell)
+    rel_dir = rig.root / phase41_prereg.dropped_attempt_dir(cell, _lost_utc(rig, cell))
+    args = {
+        "head_change_declared": "y",
+        "approved": "approved",
+        "root": rig.root,
+        "ledger_path": rig.ledger,
+    }
+
+    def declarations():
+        return sorted(p.name for p in rel_dir.glob(phase41_prereg.relaunch_declaration_name("*")))
+
+    with pytest.raises(SystemExit, match="drop-time HEAD"):  # the HEAD did not move
+        phase41_erasure.declare_relaunch(cell, **args)
+    monkeypatch.setattr(phase41_erasure, "git_sha", lambda: "h2")
+    for change in ({"approved": "ok"}, {"approved": "not approved"}):
+        with pytest.raises(SystemExit, match="lacks Rafael's 'approved'"):
+            phase41_erasure.declare_relaunch(cell, **{**args, **change})
+    with pytest.raises(SystemExit, match="only a crashed attempt"):
+        phase41_erasure.declare_relaunch(phase41_prereg.PREP_UNITS[0], **args)
+    assert declarations() == []
+    declaration = phase41_erasure.declare_relaunch(cell, **args)
+    assert declaration == {
+        "launch_git_sha": "h2",
+        "head_change_declared": "y",
+        "approved": "approved",
+    }
+    assert declarations() == [phase41_prereg.relaunch_declaration_name("h2")]
+
+
+def test_rerun_needs_the_manifest_and_compares_attempts(monkeypatch, tmp_path):
+    import phase36_ledger
+    import phase40_noise
+
+    rig, cell = _crashed_cell(monkeypatch, tmp_path)
+
+    def rerun():
+        lines = phase36_ledger.read_ledger(rig.ledger)
+        outcomes = phase41_prereg.unit_outcomes(lines, phase41_prereg.UNITS)
+        return phase41_erasure.rerun_units(lines, outcomes, root=rig.root)
+
+    assert rerun() == frozenset()  # no manifest: not re-run, so not pending
+    assert cell not in phase41_erasure.preflight(**rig.kw)["pending"]
+    manifest = _drop(rig, cell)
+    utc = _lost_utc(rig, cell)
+    rel_dir = phase41_prereg.dropped_attempt_dir(cell, utc)
+    path = rig.root / rel_dir / phase41_prereg.DROPPED_MANIFEST
+    assert rerun() == frozenset({cell})
+    original = path.read_bytes()
+    path.write_text(json.dumps({**manifest, "approved": "ok"}), encoding="utf-8")
+    assert rerun() == frozenset()  # a failing manifest is no re-run
+    path.write_bytes(original)
+    kept = rig.root / manifest["kept"][0]["path"]
+    kept_bytes = kept.read_bytes()
+    kept.write_bytes(b"changed")
+    with pytest.raises(SystemExit, match="sha256"):
+        phase41_erasure.preflight(**rig.kw)
+    kept.write_bytes(kept_bytes)
+    # The re-run of the cell: its record lists the dropped attempt and compares the orderings.
+    _cell_fakes(monkeypatch, rig, {_GRID[0]: (True, True, 5)})
+    assert _run(rig, units=(cell,)) == {"stage": 2, "whole": [cell]}
+    record = _json(rig.root / phase41_prereg.unit_record(cell))
+    (attempt,) = record["dropped_attempts"]
+    assert attempt["lost_utc"] == utc and attempt["kept"] == manifest["kept"]
+    assert attempt["manifest"] == f"{rel_dir}/{phase41_prereg.DROPPED_MANIFEST}"
+    assert attempt["manifest_sha256"] == phase41_erasure._sha256(path)
+    assert attempt["relaunch_declarations"] == []
+    assert attempt["ordering_equal"] is True
+    for item in attempt["kept"]:
+        assert phase41_erasure._sha256(rig.root / item["path"]) == item["sha256"]
+
+    # A prep unit crashed after training: its re-run trains again and compares the adapters.
+    rig = _run_fakes(monkeypatch, _e1_rig(monkeypatch, tmp_path / "prep"))
+    unit = phase41_prereg.PREP_UNITS[0]
+    current = phase41_erasure.calibration_identity
+    crash = {"on": True}
+
+    def identity(new_adapter):
+        if crash["on"]:
+            raise RuntimeError("planted crash after training")
+        return current(new_adapter)
+
+    monkeypatch.setattr(phase41_erasure, "calibration_identity", identity)
+    with pytest.raises(RuntimeError, match="planted crash"):
+        _run(rig, units=(unit,))
+    phase36_ledger.reconcile(ledger_path=rig.ledger, heartbeat_path=rig.heartbeat)
+    _, o, s = phase41_prereg.unit_key(unit)
+    adapter = phase41_erasure.arm_paths(s, rehearsal=True)["adapter"]
+    manifest = _drop(rig, unit)
+    (item,) = [i for i in manifest["kept"] if i["from"] == adapter.relative_to(rig.root).as_posix()]
+    seen = []
+
+    def compared(new_path, committed_path):
+        seen.append((pathlib.Path(new_path), pathlib.Path(committed_path)))
+        return {"tensors_identical": True, "planted": "identity"}
+
+    monkeypatch.setattr(
+        phase40_noise, "adapter_identity", _checked(phase40_noise.adapter_identity, compared)
+    )
+    crash["on"] = False
+    assert _run(rig, units=(unit,))["whole"] == [unit]
+    assert [e for e in rig.log if e[0] == "train"]
+    assert seen == [(adapter, rig.root / item["path"])]
+    (attempt,) = _json(rig.root / phase41_prereg.unit_record(unit))["dropped_attempts"]
+    assert attempt["adapter_identity"] == {"tensors_identical": True, "planted": "identity"}
+
+
+def test_crash_between_record_and_end_line(monkeypatch, tmp_path):
+    import phase36_ledger
+
+    rig = _stage2_rig(monkeypatch, tmp_path, {_GRID[0]: (True, True, 5)})
+    cell = phase41_prereg.CELL_UNITS[0]
+    append = phase36_ledger.append
+
+    def crash_at_end(event, **kw):
+        if event == "end":
+            raise RuntimeError("planted crash before the end line")
+        return append(event, **kw)
+
+    monkeypatch.setattr(phase36_ledger, "append", crash_at_end)
+    with pytest.raises(RuntimeError, match="planted crash"):
+        _run(rig, units=(cell,))
+    assert (rig.root / phase41_prereg.unit_record(cell)).exists()
+    lines = phase36_ledger.read_ledger(rig.ledger)
+    assert lines[-1]["event"] == "start" and lines[-1]["run_id"] == phase41_prereg.run_id(cell)
+    monkeypatch.setattr(phase36_ledger, "append", append)
+    with pytest.raises(SystemExit, match="NEVER reconcile"):
+        phase41_erasure.preflight(**rig.kw)
+    with pytest.raises(SystemExit, match="reconcile first"):
+        _drop(rig, cell)
+    assert phase36_ledger.read_ledger(rig.ledger) == lines
+
+
+_DELETERS = ("remove", "unlink", "rmtree", "rmdir", "removedirs")
+
+
+def _deletion_calls(source):
+    """``[(top-level name, call)]`` of every call named like a file deletion."""
+    import ast
+
+    found = []
+    for top in ast.parse(source).body:
+        name = getattr(top, "name", "<module>")
+        for node in ast.walk(top):
+            if isinstance(node, ast.Call):
+                func = node.func
+                called = getattr(func, "attr", None) or getattr(func, "id", None)
+                if called in _DELETERS:
+                    found.append((name, called))
+    return found
+
+
+def test_no_file_deletion_in_the_driver():
+    source = (_SCRIPTS / "phase41_erasure.py").read_text(encoding="utf-8")
+    allowed = [("train_calibration_adapter", "rmdir")]  # the emptied csv dir (Phase 40 IN-02)
+    assert _deletion_calls(source) == allowed
+    planted = source + "\n\ndef planted(path):\n    pathlib.Path(path).unlink()\n"
+    assert _deletion_calls(planted) == allowed + [("planted", "unlink")]

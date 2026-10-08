@@ -1123,13 +1123,257 @@ def _stale_outputs(unit, *, root):
             arm = arm_paths(s, rehearsal=rehearsal)
             paths += [arm[k] for k in ("adapter", "checkpoint", "bin", "mask", "csv")]
             paths.append(root / "data" / WORK_DIR / arm_name(s, rehearsal=rehearsal) / "run.csv")
+    else:
+        paths.append(_ordering_path(root, unit))
+        paths += [_m1_path(root, unit, c) for c in prereg.E1_CHECKPOINT_GRID["checkpoints"]]
     return paths
 
 
+# =================================================================================================
+# R-3 b per unit (D-24): a crashed attempt's outputs moved aside (never deleted), its re-run
+# =================================================================================================
+
+NOT_PRODUCED = "not produced by the dropped attempt"
+
+
+def _base(path, root):
+    """The root a unit output is listed relative to: ``root``, or teach_persona's repository root
+    for a calibration arm path outside it (a rehearsal root)."""
+    import teach_persona as tp  # torch at import: lazy
+
+    return root if pathlib.Path(path).is_relative_to(root) else tp._REPO_ROOT
+
+
+def _output_roots(unit, *, root):
+    """``[(base, path)]``: every file or directory a crashed attempt of ``unit`` can leave: its
+    stale outputs, each one's atomic-write temp, and for the seed's FIRST prep unit (its training
+    unit) the trainer's csv directory and the moved csv's directory. A seed's second prep unit
+    never owns the adapter: the first unit's calibration record cites it."""
+    prereg = _prereg()
+    root = pathlib.Path(root)
+    record = root / prereg.unit_record(unit)  # present: drop_attempt refuses; its temp is listed
+    paths = [p for p in _stale_outputs(unit, root=root) if p != record]
+    kind, *key = prereg.unit_key(unit)
+    if kind == "prep" and unit == _seed_first_prep_unit(key[1]):
+        rehearsal = not _is_real(root)
+        paths += [
+            arm_paths(key[1], rehearsal=rehearsal)["csv"].parent,
+            root / "data" / WORK_DIR / arm_name(key[1], rehearsal=rehearsal),
+        ]
+    paths += [
+        tmp
+        for path in [*paths, record]
+        if path.parent.is_dir()
+        for tmp in sorted(path.parent.glob(f".{path.name}.*.tmp"))
+    ]
+    return [(_base(path, root), path) for path in paths]
+
+
+def partial_outputs(unit, *, root):
+    """R-3 b (c): sorted ``(rel, path)`` of every existing file a crashed attempt of ``unit`` left
+    (``rel`` relative to the root it lives under)."""
+    found = {}
+    for base, path in _output_roots(unit, root=root):
+        files = [path] if path.is_file() else sorted(p for p in path.rglob("*") if p.is_file())
+        found.update((_rel(f, base), f) for f in files)
+    return sorted(found.items())
+
+
+def _latest_dropped_dir(lines, unit, *, what):
+    prereg = _prereg()
+    _prove(
+        prereg.unit_outcomes(lines, (unit,))[unit] == "dropped",
+        f"R-3 b: {unit}: only a crashed attempt (closed by a lost line) is {what}, never a whole "
+        "or not-run unit",
+    )
+    utc = prereg.lost_attempts(lines, unit)[-1]
+    return utc, prereg.dropped_attempt_dir(unit, utc)
+
+
+def drop_attempt(
+    unit,
+    *,
+    cause_note,
+    approved,
+    head_at_dropped_attempt,
+    head_change_declared=None,
+    root=None,
+    ledger_path=None,
+):
+    """R-3 b: move the latest crashed attempt's partial outputs under
+    ``phase41_prereg.dropped_attempt_dir`` (never deleted; emptied directories stay) and write
+    its write-once manifest. Run by Claude with ``.venv/bin/python -c`` only after Rafael's
+    approved; never from run or main."""
+    root = pathlib.Path(root) if root is not None else pathlib.Path(_ROOT)
+    _root_ledger(root, ledger_path)
+    prereg = _prereg()
+    lines = phase36_ledger.read_ledger(ledger_path)
+    _prove(
+        prereg.run_id(unit) not in phase36_ledger.open_runs(lines),
+        f"{unit} has an open attempt: phase36_ledger.py reconcile first",
+    )
+    lost_utc, rel_dir = _latest_dropped_dir(lines, unit, what="dropped")
+    _prove(
+        not (root / prereg.unit_record(unit)).exists(),
+        f"crash rule (i): {prereg.unit_record(unit)} exists; append its end line, never drop it",
+    )
+    _prove(not (root / rel_dir).exists(), f"{root / rel_dir} exists: write-once")
+    relaunch = git_sha()
+    _prove(relaunch != "unknown", "git_sha() could not read HEAD (run from the repo root)")
+    outputs = partial_outputs(unit, root=root)
+    manifest = {
+        "unit": unit,
+        "run_id": prereg.run_id(unit),
+        "lost_utc": lost_utc,
+        "cause_note": cause_note,
+        "approved": approved,
+        "head_at_dropped_attempt": head_at_dropped_attempt,
+        "relaunch_git_sha": relaunch,
+        "head_change_declared": head_change_declared,
+        "kept": [
+            {"from": rel, "path": f"{rel_dir}/{rel}", "sha256": _sha256(path)}
+            for rel, path in outputs
+        ],
+    }
+    failures = prereg.dropped_manifest_failures(manifest, unit=unit, lost_utc=lost_utc)
+    _prove(not failures, f"R-3 b: the manifest fails: {'; '.join(failures)}")
+    for (_, path), item in zip(outputs, manifest["kept"]):
+        new = root / item["path"]
+        new.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(path), str(new))
+        _prove(_sha256(new) == item["sha256"], f"{new} changed in the move")
+    _write_once(root / rel_dir / prereg.DROPPED_MANIFEST, manifest)
+    print(f"DROPPED {unit} {rel_dir} kept={len(manifest['kept'])}", flush=True)
+    return manifest
+
+
+def declare_relaunch(unit, *, head_change_declared, approved, root=None, ledger_path=None):
+    """R-3 b (b): declare a HEAD that moved after drop_attempt, only on Rafael's approved naming
+    the move; write-once in the latest dropped attempt's directory."""
+    root = pathlib.Path(root) if root is not None else pathlib.Path(_ROOT)
+    _root_ledger(root, ledger_path)
+    prereg = _prereg()
+    lines = phase36_ledger.read_ledger(ledger_path)
+    _utc, rel_dir = _latest_dropped_dir(lines, unit, what="re-launched")
+    path = root / rel_dir / prereg.DROPPED_MANIFEST
+    _prove(path.exists(), f"R-3 b: {unit} has no manifest {path}: drop_attempt never ran")
+    manifest = _load(path)
+    launch = git_sha()
+    declaration = {
+        "launch_git_sha": launch,
+        "head_change_declared": head_change_declared,
+        "approved": approved,
+    }
+    failures = prereg.relaunch_declaration_failures(
+        declaration, relaunch_git_sha=manifest["relaunch_git_sha"]
+    )
+    _prove(not failures, f"R-3 b: the declaration fails: {'; '.join(failures)}")
+    _write_once(root / rel_dir / prereg.relaunch_declaration_name(launch), declaration)
+    print(f"DECLARED {unit} {launch}", flush=True)
+    return declaration
+
+
 def rerun_units(lines, outcomes, *, root):
-    """R-3 b: the dropped units whose re-run Rafael approved. Plan 41-09 implements it
-    (drop_attempt's manifest); until then no dropped unit is re-run."""
-    return frozenset()
+    """R-3 b: the dropped units a relaunch re-runs: those whose LATEST lost attempt has a
+    drop_attempt manifest on disk that passes ``dropped_manifest_failures`` (Rafael's approved).
+    Without one a dropped unit is not pending."""
+    prereg = _prereg()
+    root = pathlib.Path(root)
+    rerun = set()
+    for unit, outcome in outcomes.items():
+        if outcome != "dropped":
+            continue
+        utc = prereg.lost_attempts(lines, unit)[-1]
+        path = root / prereg.dropped_attempt_dir(unit, utc) / prereg.DROPPED_MANIFEST
+        if path.exists() and not prereg.dropped_manifest_failures(
+            _load(path), unit=unit, lost_utc=utc
+        ):
+            rerun.add(unit)
+    return frozenset(rerun)
+
+
+def _dropped_attempts(unit, lines, *, root, launch_git_sha):
+    """R-3 b, for a re-run unit: every lost attempt's manifest (oldest first) proved whole, every
+    kept file's sha256, every relaunch declaration; the launch HEAD checked on the latest only."""
+    prereg = _prereg()
+    utcs = prereg.lost_attempts(lines, unit)
+    attempts = []
+    for utc in utcs:
+        rel_dir = prereg.dropped_attempt_dir(unit, utc)
+        rel = f"{rel_dir}/{prereg.DROPPED_MANIFEST}"
+        _prove(
+            (root / rel).exists(),
+            f"R-3 b: {unit}'s dropped attempt {utc} has no manifest {rel}: every lost attempt of "
+            "a re-run unit is listed",
+        )
+        manifest = _load(root / rel)
+        failures = prereg.dropped_manifest_failures(manifest, unit=unit, lost_utc=utc)
+        _prove(not failures, f"R-3 b: {rel} fails: {'; '.join(failures)}")
+        for item in manifest["kept"]:
+            kept = root / item["path"]
+            _prove(
+                kept.is_file() and _sha256(kept) == item["sha256"],
+                f"R-3 b: kept file {item['path']} is missing or its sha256 differs from {rel}'s",
+            )
+        declarations = []
+        for path in sorted((root / rel_dir).glob(prereg.relaunch_declaration_name("*"))):
+            declaration = _load(path)
+            failures = prereg.relaunch_declaration_failures(
+                declaration, relaunch_git_sha=manifest["relaunch_git_sha"]
+            )
+            _prove(not failures, f"R-3 b: {path} fails: {'; '.join(failures)}")
+            declarations.append({**declaration, "path": _rel(path, root), "sha256": _sha256(path)})
+        if utc == utcs[-1]:
+            own = root / rel_dir / prereg.relaunch_declaration_name(launch_git_sha)
+            failures = prereg.latest_head_failures(
+                manifest, _load(own) if own.exists() else None, launch_git_sha=launch_git_sha
+            )
+            _prove(
+                not failures,
+                f"R-3 b: HEAD moved after drop_attempt ({manifest['relaunch_git_sha']} -> "
+                f"{launch_git_sha}): STOP — take it to Rafael; only on his approved "
+                f"phase41_erasure.declare_relaunch, never a relaunch otherwise "
+                f"({'; '.join(failures)})",
+            )
+        attempts.append(
+            {
+                **manifest,
+                "manifest": rel,
+                "manifest_sha256": _sha256(root / rel),
+                "relaunch_declarations": declarations,
+            }
+        )
+    return attempts
+
+
+def _compared_attempts(unit, attempts, *, root):
+    """R-3 b (d): each dropped attempt of a re-run unit against this attempt's output: the
+    calibration adapter tensor by tensor (prep, ``phase40_noise.adapter_identity``) or the cell
+    ordering's equality (cell); NOT_PRODUCED when the dropped attempt left none."""
+    import phase40_noise
+
+    prereg = _prereg()
+    root = pathlib.Path(root)
+    kind, *key = prereg.unit_key(unit)
+    if kind == "prep":
+        new, field = arm_paths(key[1], rehearsal=not _is_real(root))["adapter"], "adapter_identity"
+    else:
+        new, field = _ordering_path(root, unit), "ordering_equal"
+    rel = _rel(new, _base(new, root))
+    compared = []
+    for attempt in attempts:
+        item = next((i for i in attempt["kept"] if i["from"] == rel), None)
+        if item is None:
+            value = NOT_PRODUCED
+        elif kind == "prep":
+            value = phase40_noise.adapter_identity(new, root / item["path"])
+        else:
+            value = (
+                _load(root / item["path"])["ordering"]["ordered"]
+                == _load(new)["ordering"]["ordered"]
+            )
+        compared.append({**attempt, field: value})
+    return compared
 
 
 def preflight(*, root=None, ledger_path=None, heartbeat_path=None, device=None, units=None):
@@ -1173,7 +1417,8 @@ def preflight(*, root=None, ledger_path=None, heartbeat_path=None, device=None, 
         "once the run is dead, phase36_ledger.py reconcile first",
     )
     outcomes = prereg.unit_outcomes(lines, prereg.UNITS)
-    pending = prereg.pending_units(outcomes, rerun_units(lines, outcomes, root=root))
+    rerun = rerun_units(lines, outcomes, root=root)
+    pending = prereg.pending_units(outcomes, rerun)
     prep = tuple(u for u in pending if u in prereg.PREP_UNITS)
     if prep:
         stage = 1
@@ -1218,6 +1463,11 @@ def preflight(*, root=None, ledger_path=None, heartbeat_path=None, device=None, 
     for unit in pending:
         for path in _stale_outputs(unit, root=root):
             _prove(not path.exists(), f"{path} exists: an output of pending unit {unit}")
+    dropped_attempts = {
+        unit: _dropped_attempts(unit, lines, root=root, launch_git_sha=launch_git_sha)
+        for unit in pending
+        if unit in rerun
+    }
     gate = phase36_ledger.require_launch(FRONT, ledger_path=ledger_path)
     # D-26: the K = 48 confirmations are not a binding cap; never passed.
     phase36_caps.check_unit_caps(
@@ -1264,6 +1514,7 @@ def preflight(*, root=None, ledger_path=None, heartbeat_path=None, device=None, 
         "gate": gate,
         "variant": variant,
         "rehearsal_disclosure": disclosure,
+        "dropped_attempts": dropped_attempts,
     }
 
 
@@ -1500,6 +1751,9 @@ def run_prep_unit(unit, *, pf, started_utc, state, smoke, cpu_seconds, identity_
             "cal_erased_record": {"path": erased["record"], "sha256": erased["record_sha256"]},
             "rehearsal": rehearsal,
             "rehearsal_disclosure": pf["rehearsal_disclosure"],
+            "dropped_attempts": _compared_attempts(
+                unit, pf["dropped_attempts"].get(unit, []), root=root
+            ),
             "provenance": {
                 "run": _run_provenance(pf, started_utc),
                 "module_sha256_at_launch": pf["launch_modules"],
@@ -1695,6 +1949,9 @@ def write_cell(unit, *, pf, started_utc, state):
             **blob,
             "rehearsal": not _is_real(root),
             "rehearsal_disclosure": pf["rehearsal_disclosure"],
+            "dropped_attempts": _compared_attempts(
+                unit, pf["dropped_attempts"].get(unit, []), root=root
+            ),
             "provenance": {
                 "run": _run_provenance(pf, started_utc),
                 "module_sha256_at_launch": pf["launch_modules"],
@@ -1702,6 +1959,83 @@ def write_cell(unit, *, pf, started_utc, state):
         },
     )
     return rel
+
+
+# =================================================================================================
+# The D-23 pause before every cell and its resume declaration (ENTRIES["e1_pause"],
+# ["resume_declaration"])
+# =================================================================================================
+
+
+def _pause_notices(root):
+    """Every pause notice written, oldest first (the utc is in the name)."""
+    return sorted((pathlib.Path(root) / "data" / WORK_DIR).glob("pause_*.json"))
+
+
+def _resume_declarations(root):
+    """D-23: every resume declaration under root/RESUME_ROOT that holds against a written pause
+    notice's e1_hours (``resume_declaration_failures``); e1_pause_due reads only these."""
+    prereg = _prereg()
+    hours = [_load(path)["e1_hours"] for path in _pause_notices(root)]
+    held = []
+    for path in sorted((pathlib.Path(root) / prereg.RESUME_ROOT).glob("resume_*.json")):
+        declaration = _load(path)
+        if any(
+            not prereg.resume_declaration_failures(declaration, e1_hours_at_pause=h) for h in hours
+        ):
+            held.append(declaration)
+    return held
+
+
+def declare_resume(cells, *, approved, e1_hours_at_pause, root=None):
+    """D-23: Rafael's resume declaration answering the latest pause notice, written write-once as
+    the next free resume_<n>.json only when ``resume_declaration_failures`` is []. Run by Claude
+    with ``.venv/bin/python -c`` only on his approved; never from run or main."""
+    prereg = _prereg()
+    root = pathlib.Path(root) if root is not None else pathlib.Path(_ROOT)
+    notices = _pause_notices(root)
+    _prove(notices, "D-23: no pause notice: a resume declaration answers a pause")
+    declaration = {
+        "e1_hours_at_pause": e1_hours_at_pause,
+        "cells": list(cells),
+        "approved": approved,
+    }
+    failures = prereg.resume_declaration_failures(
+        declaration, e1_hours_at_pause=_load(notices[-1])["e1_hours"]
+    )
+    _prove(not failures, f"D-23: the resume declaration fails: {'; '.join(failures)}")
+    n = 1
+    while (root / prereg.resume_declaration_name(n)).exists():
+        n += 1
+    path = root / prereg.resume_declaration_name(n)
+    _write_once(path, declaration)
+    print(f"RESUME DECLARED {_rel(path, root)} cells={','.join(cells)}", flush=True)
+    return declaration
+
+
+def _pause(unit, *, root, ledger_path):
+    """D-23 before a cell's require_launch, between attempts only (spent refuses while one is
+    open): when ``e1_pause_due``, the pause notice written write-once and its path returned;
+    else None."""
+    prereg = _prereg()
+    totals = phase36_ledger.spent(ledger_path=ledger_path)
+    if not prereg.e1_pause_due(
+        totals["by_front"][FRONT], cell=unit, declarations=_resume_declarations(root)
+    ):
+        return None
+    notice = prereg.pause_notice(
+        by_front_seconds=totals["by_front"],
+        total_seconds=totals["total_seconds"],
+        outcomes=prereg.unit_outcomes(phase36_ledger.read_ledger(ledger_path), prereg.UNITS),
+    )
+    path = pathlib.Path(root) / "data" / WORK_DIR / f"pause_{_now().replace(':', '')}.json"
+    _write_once(path, {**notice, "next_cell": unit})
+    print(
+        f"PAUSE e1_h={notice['e1_hours']:.4f} next={unit} notice={_rel(path, root)}: take it to "
+        "Rafael; only his approved resume declaration (declare_resume) lifts it",
+        flush=True,
+    )
+    return path
 
 
 # =================================================================================================
@@ -1747,6 +2081,8 @@ def run(
         cpu_seconds = _load(rehearsal_identity_path())["cpu_ordering_seconds"]
     whole = []
     for i, unit in enumerate(pf["pending"]):
+        if unit in prereg.CELL_UNITS and _pause(unit, root=root, ledger_path=ledger_path):
+            return {"stage": pf["stage"], "whole": whole, "paused": unit}
         phase36_ledger.require_launch(FRONT, ledger_path=ledger_path)
         rid = prereg.run_id(unit)
         phase36_ledger.append("start", run_id=rid, phase=41, front=FRONT, ledger_path=ledger_path)
