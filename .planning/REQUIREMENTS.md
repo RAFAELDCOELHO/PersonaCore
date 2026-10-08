@@ -745,8 +745,8 @@ reproducible by an outsider. No closed verdict is reopened; v6.0 publishes besid
 
 ### M2 seed noise floor (NOISE) — E2
 
-- [ ] **NOISE-01**: The full taught adapter and the M2 adapter without `pet_name` are retrained at S seeds imported from Phase 35's `seed_list` (S fixed from COST-01 and pre-registered; S = 5 acceptable) — Phase 40 runs before Phase 41, so E1 reuses these adapters, not the reverse — and each non-target's A2 recall is reported per seed with its denominator
-- [ ] **NOISE-02**: The training-seed noise floor is published beside v3.0's sampling floor (0.14814814814814814) without amending v3.0's (b) margin
+- [x] **NOISE-01**: The full taught adapter and the M2 adapter without `pet_name` are retrained at S seeds imported from Phase 35's `seed_list` (S fixed from COST-01 and pre-registered; S = 5 acceptable) — Phase 40 runs before Phase 41, so E1 reuses these adapters, not the reverse — and each non-target's A2 recall is reported per seed with its denominator
+- [x] **NOISE-02**: The training-seed noise floor is published beside v3.0's sampling floor (0.14814814814814814) without amending v3.0's (b) margin
 
 ### DP-SGD recipe search (RECIPE) — E3
 
@@ -825,8 +825,8 @@ reproducible by an outsider. No closed verdict is reopened; v6.0 publishes besid
 | ERASE-08 | Phase 41 | Pending |
 | ERASE-09 | Phase 41 | Pending |
 | ERASE-10 | Phase 41 | Pending |
-| NOISE-01 | Phase 40 | Pending |
-| NOISE-02 | Phase 40 | Pending |
+| NOISE-01 | Phase 40 | Complete |
+| NOISE-02 | Phase 40 | Complete |
 | RECIPE-01 | Phase 42 | Pending |
 | RECIPE-02 | Phase 42 | Pending |
 | RECIPE-04 | Phase 42 | Pending |
