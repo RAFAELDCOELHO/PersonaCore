@@ -24,6 +24,7 @@ import gc
 import hashlib
 import pathlib
 import re
+import shutil
 import sys
 import time
 
@@ -379,3 +380,220 @@ def model_gradient_ordering(
     finally:
         load_adapter_weights(model, snapshot)
     return {**out, "variant": variant}
+
+
+# =================================================================================================
+# The calibration (D-10, D-11, D-03; ERASE-06): the ONE training helper and both orderings.
+# =================================================================================================
+
+
+def arm_name(seed, *, rehearsal=False):
+    """``e1_calibration_seed<seed>`` (``e1rh_`` for the rehearsal): never Phase 19's
+    ``erase_calibration``, never a teach_persona arm."""
+    seeds = _prereg().SEEDS
+    _prove(seed in seeds, f"seed {seed!r} is not one of {seeds}")
+    return f"{'e1rh' if rehearsal else 'e1'}_calibration_seed{seed}"
+
+
+def arm_paths(seed, *, rehearsal=False):
+    """teach_persona's write targets for one calibration arm, under the phase41 / phase41rh
+    prefix."""
+    import teach_persona as tp  # torch at import: lazy
+
+    prefix = REHEARSAL_PREFIX if rehearsal else ARM_PREFIX
+    return tp.arm_outputs(arm_name(seed, rehearsal=rehearsal), prefix=prefix)
+
+
+def train_calibration_adapter(seed, *, root, rehearsal=False):
+    """D-10: one fresh calibration adapter at ``seed``; the driver's ONE call of teach_persona's
+    arm trainer (registered in tests/test_phase23_resume.py; no resume_from). The recipe is
+    ``phase19_erasure._cmd_cal_train``'s, ``arm_spec("cal_first_person_replay")``; that command is
+    never called (it takes no seed and writes Phase 19's paths). The csv moves under
+    ``root``/data/phase41_e1/<arm>/ and the emptied results/ directory is removed; the shippable
+    persona_adapter.pt is proved byte-unchanged around the call."""
+    import phase14_factset
+    import phase14_recall as recall  # torch at import: lazy
+    import teach_persona as tp  # same
+
+    root = pathlib.Path(root)
+    arm = arm_name(seed, rehearsal=rehearsal)
+    prefix = REHEARSAL_PREFIX if rehearsal else ARM_PREFIX
+    paths = arm_paths(seed, rehearsal=rehearsal)
+    csv_dst = root / "data" / WORK_DIR / arm / "run.csv"
+    for path in (paths["adapter"], paths["checkpoint"], paths["bin"], paths["mask"], csv_dst):
+        _prove(not path.exists(), f"{path} exists: stale output. Move it in a reviewed step")
+    facts, second_person, replay_ratio = tp.arm_spec("cal_first_person_replay")
+    production = _sha256(recall.ADAPTER_PATH)
+    result = tp.train_arm(
+        arm,
+        facts=facts,
+        family_ids=phase14_factset.TAUGHT_FAMILY_IDS,
+        second_person=second_person,
+        replay_ratio=replay_ratio,
+        seed=seed,
+        prefix=prefix,
+    )
+    csv_dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(paths["csv"]), str(csv_dst))
+    try:
+        paths["csv"].parent.rmdir()  # empty after the move
+    except OSError as exc:  # IN-02: a stray file never costs the trained seed; dirty checks see it
+        print(f"CSV DIR KEPT {paths['csv'].parent}: {exc.strerror}", flush=True)
+    _prove(
+        _sha256(recall.ADAPTER_PATH) == production,
+        f"{recall.ADAPTER_PATH} (persona_adapter.pt) changed during training",
+    )
+    return {
+        "seed": seed,
+        "arm": arm,
+        "prefix": prefix,
+        "adapter": _rel(paths["adapter"], tp._REPO_ROOT),
+        "adapter_sha256": _sha256(paths["adapter"]),
+        "checkpoint": _rel(paths["checkpoint"], tp._REPO_ROOT),
+        "csv": _rel(csv_dst, root),
+        "csv_sha256": _sha256(csv_dst),
+        "train": {
+            k: result[k]
+            for k in ("final_train_loss", "ppl_adapter_on", "ppl_adapter_off", "scored_targets")
+        },
+    }
+
+
+def calibration_identity(new_adapter):
+    """D-11 (descriptive, never an input of the floors): the new calibration adapter against
+    Phase 19's, tensor by tensor (``phase40_noise.adapter_identity``, torch.equal). Amendment
+    (Rafael 2026-10-08): first the reference file's sha256, at its original path, against the
+    digest the prereg reads from ``D11_REFERENCE_RECORD``; a mismatch is a finding, never a
+    refusal."""
+    import phase19_erasure as pin  # torch at import: lazy
+    import phase40_noise
+    import teach_persona as tp  # same
+
+    prereg = _prereg()
+    reference = tp.arm_outputs(pin.CALIBRATION_ARM, prefix=pin.RETRAIN_PREFIX)["adapter"]
+    reference_sha256 = _sha256(reference)
+    matches = reference_sha256 == prereg.D11_REFERENCE_SHA256
+    return {
+        **phase40_noise.adapter_identity(new_adapter, reference),
+        "reference": _rel(reference, tp._REPO_ROOT),
+        "reference_sha256": reference_sha256,
+        "reference_record": prereg.D11_REFERENCE_RECORD,
+        "reference_record_sha256": prereg.D11_REFERENCE_SHA256,
+        "reference_sha256_matches_record": matches,
+        "finding": None
+        if matches
+        else (
+            f"the reference adapter's sha256 {reference_sha256} is not the "
+            f"{prereg.D11_REFERENCE_RECORD}::{prereg.D11_REFERENCE_KEY} digest "
+            f"{prereg.D11_REFERENCE_SHA256}"
+        ),
+    }
+
+
+def twin_references(fact):
+    """The calibration twin reference set of ``fact`` (the pin's, siblings removed)."""
+    import phase19_erasure as pin  # torch at import: lazy
+
+    return pin.reference_set_for_calibration(fact.slot, fact)
+
+
+def collateral():
+    """``_selected_components``' collateral argument: every core slot's taught value and its
+    reference set."""
+    import phase14_factset
+    import phase18_extraction  # torch at import: lazy
+
+    taught = {f.slot: f.value for f in phase14_factset.LOCKED_FACTS}
+    return {
+        slot: (taught[slot], phase18_extraction.reference_set_for(slot))
+        for slot in phase18_extraction.CORE_SLOTS
+    }
+
+
+def greedy_calibration(model, tok, device, forbid, artifact, fact):
+    """D-03: the current ordering on the calibration fact, ``select_ablation_prefix`` with
+    ``_selected_components``' argument set (never that function); the applied prefix is
+    ``ordered[:k]``."""
+    import phase19_erasure as pin  # torch at import: lazy
+
+    out = pin.select_ablation_prefix(
+        model,
+        tok,
+        device,
+        artifact,
+        slot=fact.slot,
+        value=fact.value,
+        references=twin_references(fact),
+        collateral=collateral(),
+        dialogue_ppl=lambda: pin.dialogue_ppl_pair(model, device, forbid),
+    )
+    return {
+        "ordered": out["ordered"],
+        "k": out["k"],
+        "stopped": out["stopped"],
+        "applied": out["ordered"][: out["k"]],
+        "curve": out["curve"],
+    }
+
+
+def gradient_calibration(model, tok, device, artifact, fact, *, variant, unit, root):
+    """D-03: the gradient ordering on the calibration fact, then the pin's ABLATION_STOP_RULE
+    clause (``select_ablation_prefix``' rank scan) with the same twin references: k is the first
+    prefix whose rank is not 1, else the whole index. Snapshot first; the model is left intact."""
+    import phase19_erasure as pin  # torch at import: lazy
+
+    from personacore.lora import load_adapter_weights
+
+    ordering = model_gradient_ordering(
+        model,
+        tok,
+        device,
+        artifact,
+        slot=fact.slot,
+        value=fact.value,
+        variant=variant,
+        calibration=True,
+        unit=unit,
+        root=root,
+    )
+    ordered = ordering["ordered"]
+    snapshot = pin.ablate_components(artifact, [])
+    references = twin_references(fact)
+    k, stopped = len(pin.component_index()), False
+    try:
+        for prefix in range(1, k + 1):
+            load_adapter_weights(model, pin.ablate_components(snapshot, list(ordered[:prefix])))
+            rank, _ = pin._rank_of(
+                model, tok, device, slot=fact.slot, value=fact.value, references=references
+            )
+            if rank != 1:
+                k, stopped = prefix, True
+                break
+    finally:
+        load_adapter_weights(model, snapshot)
+    return {"ordering": ordering, "k": k, "stopped": stopped, "applied": ordered[:k]}
+
+
+def cal_erase(ordering, seed, adapter_path, components, *, root, device):
+    """D-10: the cal-erased arm over the calibration corpus at the applied prefix, through the
+    pin's ``run_erasure_arm``, into the raw write-once record under ``root``/data/phase41_e1/
+    (never results/phase41_*: the floors are filled from it later)."""
+    import phase19_erasure as pin  # torch at import: lazy
+
+    prereg = _prereg()
+    _prove(ordering in prereg.ORDERINGS, f"ordering {ordering!r} is not one of {prereg.ORDERINGS}")
+    _prove(seed in prereg.SEEDS, f"seed {seed!r} is not one of {prereg.SEEDS}")
+    root = pathlib.Path(root)
+    record = root / "data" / WORK_DIR / f"cal_erased_{ordering}_seed{seed}.json"
+    _prove(not record.exists(), f"{record} exists: the cal-erased records are write-once")
+    record.parent.mkdir(parents=True, exist_ok=True)
+    pin.run_erasure_arm(
+        "cal-erased",
+        device,
+        corpus_path=pin.CALIBRATION_CORPUS_PATH,
+        adapter_path=adapter_path,
+        components=list(components),
+        record_path=record,
+    )
+    _release()
+    return {"record": _rel(record, root), "record_sha256": _sha256(record)}

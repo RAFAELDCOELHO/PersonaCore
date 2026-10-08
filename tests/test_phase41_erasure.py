@@ -479,3 +479,364 @@ def test_model_gradient_ordering_on_the_tiny_fixture(monkeypatch, tmp_path):
     assert all(torch.equal(v, intact[k]) for k, v in artifact["adapter"].items())
     assert out["rankings"][0]["d02"]["equal"]
     assert phase19_erasure.ablate_components(artifact, [])["adapter"].keys() == intact.keys()
+
+
+# =================================================================================================
+# (3) Plan 41-07: the calibration adapter (the ONE training helper), D-11, both calibration
+# orderings and cal_erase. teach_persona's arm trainer and the pin's scorers are faked.
+# =================================================================================================
+
+
+def _cal_rig(monkeypatch, tmp_path):
+    """A tmp repository root: teach_persona._REPO_ROOT and phase14_recall.ADAPTER_PATH point into
+    it, so every arm path and the production adapter are tmp files."""
+    import phase14_recall
+    import teach_persona
+
+    root = tmp_path / "repo"
+    for sub in ("checkpoints", "data", "results"):
+        (root / sub).mkdir(parents=True)
+    monkeypatch.setattr(teach_persona, "_REPO_ROOT", root)
+    production = teach_persona.arm_outputs("real")["adapter"]
+    production.write_bytes(b"production adapter stand-in")
+    monkeypatch.setattr(phase14_recall, "ADAPTER_PATH", production)
+    return root
+
+
+def _fake_trainer(calls, *, mutate=None):
+    """A stand-in for teach_persona's arm trainer: writes its five outputs, returns the fields."""
+    import teach_persona
+
+    def fake(arm, *, facts, family_ids, second_person, replay_ratio, seed, prefix, **kw):
+        calls.append(
+            {
+                "arm": arm,
+                "facts": list(facts),
+                "family_ids": family_ids,
+                "second_person": second_person,
+                "replay_ratio": replay_ratio,
+                "seed": seed,
+                "prefix": prefix,
+                "kw": kw,
+            }
+        )
+        paths = teach_persona.arm_outputs(arm, prefix=prefix)
+        for key in ("bin", "mask", "csv", "checkpoint", "adapter"):
+            paths[key].parent.mkdir(parents=True, exist_ok=True)
+            paths[key].write_bytes(f"{arm}:{key}".encode())
+        if mutate is not None:
+            mutate()
+        return {
+            "arm": arm,
+            "final_train_loss": 0.5,
+            "ppl_adapter_on": 3.0,
+            "ppl_adapter_off": 4.0,
+            "scored_targets": 123,
+        }
+
+    return fake
+
+
+def test_arm_names_never_collide(monkeypatch, tmp_path):
+    import phase19_erasure
+    import teach_persona
+
+    d = phase41_erasure
+    assert d.arm_name(1337) == "e1_calibration_seed1337"
+    assert d.arm_name(2024, rehearsal=True) == "e1rh_calibration_seed2024"
+    names = {d.arm_name(s, rehearsal=r) for s in phase41_prereg.SEEDS for r in (False, True)}
+    assert len(names) == 2 * len(phase41_prereg.SEEDS)
+    assert names.isdisjoint({phase19_erasure.CALIBRATION_ARM, *teach_persona.ARMS})
+    with pytest.raises(SystemExit, match="seed"):
+        d.arm_name(1339)
+    root = _cal_rig(monkeypatch, tmp_path)
+    for seed in phase41_prereg.SEEDS:
+        for rehearsal, prefix in ((False, "phase41"), (True, "phase41rh")):
+            paths = d.arm_paths(seed, rehearsal=rehearsal)
+            arm = d.arm_name(seed, rehearsal=rehearsal)
+            assert paths == teach_persona.arm_outputs(arm, prefix=prefix)
+            assert paths["adapter"] == root / "checkpoints" / f"{prefix}_{arm}_adapter.pt"
+
+
+@pytest.mark.parametrize("rehearsal", [False, True])
+def test_train_calibration_adapter_order_and_csv_move(monkeypatch, tmp_path, rehearsal):
+    import phase14_factset
+    import phase14_recall
+    import teach_persona
+
+    root = _cal_rig(monkeypatch, tmp_path)
+    calls = []
+    monkeypatch.setattr(teach_persona, "train_arm", _fake_trainer(calls))
+    production = phase14_recall.ADAPTER_PATH.read_bytes()
+    out = phase41_erasure.train_calibration_adapter(2024, root=root, rehearsal=rehearsal)
+    (call,) = calls
+    prefix = "phase41rh" if rehearsal else "phase41"
+    arm = phase41_erasure.arm_name(2024, rehearsal=rehearsal)
+    facts, second_person, replay_ratio = teach_persona.arm_spec("cal_first_person_replay")
+    assert call["facts"] == list(facts)
+    assert (call["second_person"], call["replay_ratio"]) == (second_person, replay_ratio)
+    assert call["family_ids"] == phase14_factset.TAUGHT_FAMILY_IDS
+    assert (call["arm"], call["seed"], call["prefix"]) == (arm, 2024, prefix)
+    assert call["kw"] == {}  # no resume_from, no DP, no adversarial ratio
+    paths = teach_persona.arm_outputs(arm, prefix=prefix)
+    dst = root / "data" / "phase41_e1" / arm / "run.csv"
+    assert dst.read_bytes() == f"{arm}:csv".encode()
+    assert not paths["csv"].parent.exists()
+    assert phase14_recall.ADAPTER_PATH.read_bytes() == production
+    assert out == {
+        "seed": 2024,
+        "arm": arm,
+        "prefix": prefix,
+        "adapter": f"checkpoints/{prefix}_{arm}_adapter.pt",
+        "adapter_sha256": phase41_erasure._sha256(paths["adapter"]),
+        "checkpoint": f"checkpoints/{prefix}_{arm}_latest.pt",
+        "csv": f"data/phase41_e1/{arm}/run.csv",
+        "csv_sha256": phase41_erasure._sha256(dst),
+        "train": {
+            "final_train_loss": 0.5,
+            "ppl_adapter_on": 3.0,
+            "ppl_adapter_off": 4.0,
+            "scored_targets": 123,
+        },
+    }
+
+
+@pytest.mark.parametrize("key", ["adapter", "checkpoint", "bin", "mask", "csv_destination"])
+def test_train_calibration_adapter_refuses_an_existing_output(monkeypatch, tmp_path, key):
+    import teach_persona
+
+    root = _cal_rig(monkeypatch, tmp_path)
+    calls = []
+    monkeypatch.setattr(teach_persona, "train_arm", _fake_trainer(calls))
+    arm = phase41_erasure.arm_name(1337)
+    path = (
+        root / "data" / "phase41_e1" / arm / "run.csv"
+        if key == "csv_destination"
+        else phase41_erasure.arm_paths(1337)[key]
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"stale")
+    with pytest.raises(SystemExit, match="exists"):
+        phase41_erasure.train_calibration_adapter(1337, root=root)
+    assert calls == []
+
+
+def test_train_calibration_adapter_refuses_a_changed_production_adapter(monkeypatch, tmp_path):
+    import phase14_recall
+    import teach_persona
+
+    root = _cal_rig(monkeypatch, tmp_path)
+    calls = []
+    fake = _fake_trainer(calls, mutate=lambda: phase14_recall.ADAPTER_PATH.write_bytes(b"x"))
+    monkeypatch.setattr(teach_persona, "train_arm", fake)
+    with pytest.raises(SystemExit, match="persona_adapter"):
+        phase41_erasure.train_calibration_adapter(1337, root=root)
+    assert len(calls) == 1
+
+
+def _adapter_file(path, *, bump=False):
+    import torch
+
+    from personacore.checkpoint import export_adapter
+
+    tensors = {
+        "blocks.0.attn.q_proj.lora_A": torch.arange(6, dtype=torch.float32).reshape(2, 3),
+        "blocks.0.attn.q_proj.lora_B": torch.ones(3, 2),
+    }
+    if bump:
+        t = tensors["blocks.0.attn.q_proj.lora_B"]
+        t[0, 0] = torch.nextafter(t[0, 0], torch.tensor(2.0))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    export_adapter(path, adapter=tensors, lora_config={"r": 2}, base_fingerprint={"git_sha": "x"})
+    return path
+
+
+@pytest.mark.parametrize("record_matches", [True, False])
+def test_calibration_identity_uses_tensor_equality(monkeypatch, tmp_path, record_matches):
+    import ast
+    import inspect
+    import textwrap
+
+    import phase19_erasure
+    import teach_persona
+
+    _cal_rig(monkeypatch, tmp_path)
+    reference = teach_persona.arm_outputs(
+        phase19_erasure.CALIBRATION_ARM, prefix=phase19_erasure.RETRAIN_PREFIX
+    )["adapter"]
+    _adapter_file(reference)
+    # D-11 amendment: the reference digest is the prereg's, read from the committed record.
+    assert (
+        phase41_prereg.D11_REFERENCE_SHA256
+        == json.loads((_ROOT / phase41_prereg.D11_REFERENCE_RECORD).read_text(encoding="utf-8"))[
+            phase41_prereg.D11_REFERENCE_KEY
+        ]
+    )
+    if record_matches:
+        monkeypatch.setattr(
+            phase41_prereg, "D11_REFERENCE_SHA256", phase41_erasure._sha256(reference)
+        )
+    same = _adapter_file(tmp_path / "new" / "e1_calibration_seed1337_adapter.pt")
+    other = _adapter_file(tmp_path / "new" / "bumped.pt", bump=True)
+    assert phase41_erasure._sha256(same) != phase41_erasure._sha256(reference)  # the stem effect
+
+    out = phase41_erasure.calibration_identity(same)
+    assert out["tensors_identical"] is True and out["n_equal"] == out["n_tensors"] == 2
+    assert out["reference_sha256"] == phase41_erasure._sha256(reference)
+    assert out["reference_sha256_matches_record"] is record_matches
+    assert out["reference_record"] == phase41_prereg.D11_REFERENCE_RECORD
+    assert out["criterion"] is False
+    assert (out["finding"] is None) is record_matches  # a mismatch is a finding, never a refusal
+    off = phase41_erasure.calibration_identity(other)
+    assert off["tensors_identical"] is False and off["n_equal"] == 1
+    assert off["reference_sha256_matches_record"] is record_matches
+
+    # AST: no hashlib in the function; the one digest taken is the reference file's (its original
+    # path), never the new adapter's.
+    fn = ast.parse(textwrap.dedent(inspect.getsource(phase41_erasure.calibration_identity)))
+    names = {n.id for n in ast.walk(fn) if isinstance(n, ast.Name)}
+    assert "hashlib" not in names
+    digests = [
+        n
+        for n in ast.walk(fn)
+        if isinstance(n, ast.Call) and getattr(n.func, "id", None) == "_sha256"
+    ]
+    assert [ast.unparse(n.args[0]) for n in digests] == ["reference"]
+
+
+class _Recorder:
+    def __init__(self, result):
+        self.calls, self.result = [], result
+
+    def __call__(self, *args, **kwargs):
+        self.calls.append((args, kwargs))
+        return self.result
+
+
+def test_greedy_calibration_passes_the_twin_references(monkeypatch):
+    import phase14_factset
+    import phase18_extraction
+    import phase19_erasure
+
+    index = phase19_erasure.component_index()
+    ordered = tuple(reversed(index))
+    rec = _Recorder({"k": 7, "stopped": True, "cap": 288, "ordered": ordered, "curve": ("c",)})
+    monkeypatch.setattr(phase19_erasure, "select_ablation_prefix", rec)
+    dialogue = []
+    monkeypatch.setattr(
+        phase19_erasure, "dialogue_ppl_pair", lambda *a: dialogue.append(a) or {"d": 1}
+    )
+    fact = phase19_erasure.select_calibration_fact()
+    model, tok, artifact = object(), object(), {"adapter": {}}
+    out = phase41_erasure.greedy_calibration(model, tok, "cpu", "forbid", artifact, fact)
+    ((args, kw),) = rec.calls
+    assert args == (model, tok, "cpu", artifact)
+    assert (kw["slot"], kw["value"]) == (fact.slot, fact.value)
+    assert kw["references"] == phase19_erasure.reference_set_for_calibration(fact.slot, fact)
+    taught = {f.slot: f.value for f in phase14_factset.LOCKED_FACTS}
+    assert kw["collateral"] == {
+        slot: (taught[slot], phase18_extraction.reference_set_for(slot))
+        for slot in phase18_extraction.CORE_SLOTS
+    }
+    assert kw["dialogue_ppl"]() == {"d": 1} and dialogue == [(model, "cpu", "forbid")]
+    assert out == {
+        "ordered": ordered,
+        "k": 7,
+        "stopped": True,
+        "applied": ordered[:7],
+        "curve": ("c",),
+    }
+
+
+@pytest.mark.parametrize("stop_at", [3, None])
+def test_gradient_calibration_rank_stop(monkeypatch, tmp_path, stop_at):
+    import dataclasses
+
+    import phase19_erasure
+    import torch
+
+    from personacore.lora import LoRAConfig, lora_state_dict
+
+    _, index = _layer0(monkeypatch)
+    model = _tiny()
+    artifact = {
+        "adapter": lora_state_dict(model),
+        "lora_config": dataclasses.asdict(LoRAConfig(r=8)),
+    }
+    intact = {k: v.detach().clone() for k, v in artifact["adapter"].items()}
+    ordered = tuple(reversed(index))
+    orderings = _Recorder({"ordered": ordered, "rankings": [], "variant": "adaptive"})
+    monkeypatch.setattr(phase41_erasure, "model_gradient_ordering", orderings)
+    ranks = []
+
+    def fake_rank(m, tok, device, *, slot, value, references):
+        ranks.append((slot, value, references))
+        return (2 if stop_at is not None and len(ranks) >= stop_at else 1), 0.5
+
+    monkeypatch.setattr(phase19_erasure, "_rank_of", fake_rank)
+    fact = phase19_erasure.select_calibration_fact()
+    out = phase41_erasure.gradient_calibration(
+        model, "tok", "cpu", artifact, fact, variant="adaptive", unit="cal_u", root=tmp_path
+    )
+    ((args, kw),) = orderings.calls
+    assert args == (model, "tok", "cpu", artifact)
+    assert kw == {
+        "slot": fact.slot,
+        "value": fact.value,
+        "variant": "adaptive",
+        "calibration": True,
+        "unit": "cal_u",
+        "root": tmp_path,
+    }
+    twin = phase19_erasure.reference_set_for_calibration(fact.slot, fact)
+    assert all(r == (fact.slot, fact.value, twin) for r in ranks)
+    k = stop_at if stop_at is not None else len(index)
+    assert len(ranks) == k
+    assert out["k"] == k and out["stopped"] is (stop_at is not None)
+    assert out["applied"] == ordered[:k] and out["ordering"] is orderings.result
+    # The model is left with the intact adapter.
+    assert all(torch.equal(v, intact[k2]) for k2, v in lora_state_dict(model).items())
+
+
+def test_cal_erase_writes_under_data_only(monkeypatch, tmp_path):
+    import fnmatch
+
+    import phase19_erasure
+
+    calls = []
+
+    def fake(arm, device, **kw):
+        calls.append((arm, device, kw))
+        kw["record_path"].write_text('{"arm": "cal-erased"}', encoding="utf-8")
+
+    monkeypatch.setattr(phase19_erasure, "run_erasure_arm", fake)
+    adapter = tmp_path / "checkpoints" / "cal_adapter.pt"
+    components = ((0, "q_proj", 1), (1, "fc_in", 3))
+    out = phase41_erasure.cal_erase(
+        "gradient", 2024, adapter, components, root=tmp_path, device="cpu"
+    )
+    record = tmp_path / "data" / "phase41_e1" / "cal_erased_gradient_seed2024.json"
+    assert calls == [
+        (
+            "cal-erased",
+            "cpu",
+            {
+                "corpus_path": phase19_erasure.CALIBRATION_CORPUS_PATH,
+                "adapter_path": adapter,
+                "components": list(components),
+                "record_path": record,
+            },
+        )
+    ]
+    assert out == {
+        "record": "data/phase41_e1/cal_erased_gradient_seed2024.json",
+        "record_sha256": phase41_erasure._sha256(record),
+    }
+    assert not fnmatch.fnmatch(out["record"], phase41_prereg.RECORD_GLOB)
+    with pytest.raises(SystemExit, match="exists"):
+        phase41_erasure.cal_erase(
+            "gradient", 2024, adapter, components, root=tmp_path, device="cpu"
+        )
+    assert len(calls) == 1
+    with pytest.raises(SystemExit, match="ordering"):
+        phase41_erasure.cal_erase("random", 2024, adapter, components, root=tmp_path, device="cpu")

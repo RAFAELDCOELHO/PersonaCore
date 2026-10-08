@@ -122,6 +122,12 @@ _TRAIN_ARM_CALL_SITES = (
         "call",
         "train_adapter (Phase 40's E2 noise-floor driver, NOISE-01)",
     ),
+    # Plan 41-07's E1 calibration adapters: one per teaching seed, no `resume_from`.
+    (
+        "scripts/phase41_erasure.py",
+        "call",
+        "train_calibration_adapter (Phase 41's E1 calibration adapters, ERASE-06)",
+    ),
     ("scripts/teach_persona.py", "call", "main"),
     ("scripts/teach_persona.py", "call", "run_calibration"),
     ("scripts/teach_persona.py", "def", "the definition itself"),
@@ -331,19 +337,21 @@ def test_resume_from_none_is_inert():
     # NINETEEN from 40-05 (2026-10-06), which added `phase40_noise.train_adapter` — the E2
     # noise-floor driver's full and M2 adapters at each seed under `phase40` arm names, no
     # `resume_from`.
+    # TWENTY from 41-07 (2026-10-08), which added `phase41_erasure.train_calibration_adapter` —
+    # the E1 calibration adapter per teaching seed under `phase41` arm names, no `resume_from`.
     # The literal is a tripwire against a site vanishing
     # unnoticed, so it is BUMPED with its reason rather than derived from the register — that would
     # make the check restate the register instead of pinning a count against it. Every number is
     # spelled so a reader can see the ledger move rather than only its current total.
     assert (
         sum(1 for path, kind, _s in _TRAIN_ARM_CALL_SITES if kind == "call" and path != _THIS_FILE)
-        == 8 + 1 + 1 + 1 + 1 + 2 + 1 + 1 + 1 + 1 + 1
+        == 8 + 1 + 1 + 1 + 1 + 2 + 1 + 1 + 1 + 1 + 1 + 1
     ), (
         "the register no longer holds the 8 pre-23-08 call sites plus 23-08's control scheduling "
         "plus 23-10's σ=0 diagnostic plus 23-11's noised sweep point plus 25-10's 44-point "
         "frontier driver plus 25-11's two calibration probes plus 25-12's anchor probe plus "
         "25-13's PROBE 2 control leg plus 30-01's seam probe plus 36-05's E2 timing probe plus "
-        "40-05's E2 noise-floor driver"
+        "40-05's E2 noise-floor driver plus 41-07's E1 calibration adapters"
     )
 
     # ...and the AST agrees with the register about which of them are real CALLS.
