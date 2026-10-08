@@ -1202,3 +1202,284 @@ def band_fill_inputs():
         "input_records": input_records,
         "derivation": derivation,
     }
+
+
+# =================================================================================================
+# (8) THE DECLARED DESCRIPTIVE READINGS (plan 41-03; D-06, D-12, D-14, D-18, D-19, D-20, D-21,
+# D-28): rules on committed records, written before any record. None of them feeds cell_verdict.
+# =================================================================================================
+
+V4_CAP_LABEL = "passaria no teto do v4.0"
+VARIES_LABEL = "varia entre seeds"
+INSIDE, OUTSIDE = "dentro da faixa", "fora da faixa"
+NO_M2 = "sem M2, comparação não feita"
+
+
+def spearman_rho(order_a, order_b):
+    """D-06: Spearman's rho in closed form, ``1 - 6 sum d^2 / (n (n^2 - 1))``, between two full
+    permutations of the same ``phase19_erasure.N_COMPONENTS`` addresses (JSON lists are read as
+    tuples); a prefix, a duplicate or a different address set is refused. Descriptive."""
+    import phase19_erasure  # torch at import: lazy
+
+    index = set(phase19_erasure.component_index())
+    n = phase19_erasure.N_COMPONENTS
+    orders = []
+    for name, order in (("order_a", order_a), ("order_b", order_b)):
+        order = tuple(tuple(address) for address in order)
+        _prove(len(order) == n, f"{name} has {len(order)} addresses, not N_COMPONENTS = {n}")
+        _prove(len(set(order)) == n, f"{name} repeats an address")
+        _prove(set(order) == index, f"{name} is not a permutation of component_index()")
+        orders.append(order)
+    first, second = orders
+    rank = {address: i for i, address in enumerate(second)}
+    d2 = sum((i - rank[address]) ** 2 for i, address in enumerate(first))
+    return 1 - 6 * d2 / (n * (n * n - 1))
+
+
+def d12_rows(floors):
+    """D-12: the e1_condition_a_floors mapping, one row per (ordering, seed) in ORDERINGS x SEEDS
+    order: calibration rate (successes / questions), floor and floor_branch side by side. Every
+    target of an (ordering, seed) carries the same calibration row, or it is refused."""
+    expected = {(t, o, s) for t in TARGETS for o in ORDERINGS for s in SEEDS}
+    _prove(
+        set(floors) == expected,
+        f"floor keys {sorted(set(floors) ^ expected, key=repr)} are missing or extra",
+    )
+    rows = []
+    for ordering in ORDERINGS:
+        for seed in SEEDS:
+            group = [dict(floors[(t, ordering, seed)]) for t in TARGETS]
+            _prove(
+                all(row == group[0] for row in group),
+                f"targets disagree on the calibration row of ({ordering!r}, {seed})",
+            )
+            rows.append({"ordering": ordering, "seed": seed, **group[0]})
+    return rows
+
+
+def retention_floor_record():
+    """D-14: ``(repo-relative path, record)`` of ``phase20_run.RETENTION_FLOOR_PATH`` (the v4.0
+    cap and the retention noise floor)."""
+    import phase20_run  # torch at import: lazy
+
+    rel = phase20_run.RETENTION_FLOOR_PATH.relative_to(_REPO_ROOT).as_posix()
+    return rel, _read(rel)
+
+
+def retention_rows(stop_record, full_record, m2_record, *, cap):
+    """D-14 (descriptive, no verdict): retention_ppl at the cell's stop, of the same seed's intact
+    full adapter and, for pet_name cells, of its M2 (``m2_record`` None otherwise), each read by
+    ``phase37_routes.route_d``; beside the v4.0 cap with "passaria no teto do v4.0: sim/não"."""
+    import phase37_routes  # torch at import: lazy
+
+    stop = phase37_routes.route_d(stop_record)
+    return {
+        "stop": stop,
+        "intact_full": phase37_routes.route_d(full_record),
+        "m2": None if m2_record is None else phase37_routes.route_d(m2_record),
+        "cap": cap,
+        V4_CAP_LABEL: "sim" if stop <= cap else "não",
+    }
+
+
+def retention_spread(full_records, m2_records, *, floor):
+    """D-14: the retention_ppl spread per group over Phase 40's seeds (``{seed: A2 record}``, the
+    same seeds in both groups), min, max and range beside the two-seed retention noise floor."""
+    import phase37_routes  # torch at import: lazy
+
+    _prove(
+        full_records and list(full_records) == list(m2_records),
+        f"full seeds {list(full_records)} != m2 seeds {list(m2_records)}",
+    )
+    spread = {}
+    for group, records in (("full", full_records), ("m2", m2_records)):
+        values = [phase37_routes.route_d(record) for record in records.values()]
+        spread[group] = {
+            "min": min(values),
+            "max": max(values),
+            "range": max(values) - min(values),
+            "n": len(values),
+        }
+    return {**spread, "seeds": list(full_records), "retention_ppl_noise_floor": floor}
+
+
+def _group_range(counts):
+    """One group's min-max of ``[[n, q], ...]`` counts and its rate range (max - min of n / q)."""
+    import phase19_erasure  # torch at import: lazy
+
+    _prove(counts, "a group has no counts")
+    _prove(
+        all(q == phase19_erasure.N_TARGET_QUESTIONS for _, q in counts),
+        "a count's denominator is not phase19_erasure.N_TARGET_QUESTIONS",
+    )
+    rates = [n / q for n, q in counts]
+    ns = tuple(n for n, _ in counts)
+    return {"counts": ns, "min": min(ns), "max": max(ns), "range": max(rates) - min(rates)}
+
+
+def slot_ranges(noise_floor, full_rows_by_seed):
+    """D-19 / D-28: per core slot, the min-max of each group's counts in
+    ``recall_floor.<group>.per_slot[slot]`` and its rate range (the recorded range is proved equal
+    to the counts'); a slot absent from both groups (pet_name: no row in recall_floor) takes the
+    full group from ``full_rows_by_seed`` (``record_rows`` of the five Phase 40 full A2 records,
+    seeds == phase40_prereg.SEEDS) with basis "full only"; a slot in one group only is refused.
+    ``range`` = the larger group range, the published floor's convention."""
+    import phase18_extraction  # torch at import: lazy
+    import phase40_prereg  # reads records at import: lazy
+
+    _prove(
+        list(full_rows_by_seed) == list(phase40_prereg.SEEDS),
+        f"full rows seeds {list(full_rows_by_seed)} are not phase40_prereg.SEEDS",
+    )
+    recall = noise_floor["recall_floor"]
+    groups = ("full", "m2")
+    ranges = {}
+    for slot in phase18_extraction.CORE_SLOTS:
+        present = [g for g in groups if slot in recall[g]["per_slot"]]
+        if not present:
+            counts = [
+                [rows[slot]["n_answerable"], rows[slot]["n_questions"]]
+                for rows in full_rows_by_seed.values()
+            ]
+            full = _group_range(counts)
+            ranges[slot] = {"basis": "full only", "full": full, "range": full["range"]}
+            continue
+        _prove(present == list(groups), f"slot {slot!r} is in one group only ({present})")
+        entry = {"basis": "full and m2"}
+        for group in groups:
+            row = recall[group]["per_slot"][slot]
+            entry[group] = _group_range(row["counts"])
+            _prove(
+                entry[group]["range"] == row["range"],
+                f"{group} {slot!r}: recorded range {row['range']!r} is not its counts' range",
+            )
+        entry["range"] = max(entry[group]["range"] for group in groups)
+        ranges[slot] = entry
+    return ranges
+
+
+def varies_labels(ranges):
+    """D-19: the slots labelled "varia entre seeds", those whose range is at least
+    E1_CONDITION_B_MARGIN. Computed, never typed; the label never discounts a delta."""
+    return frozenset(slot for slot, row in ranges.items() if row["range"] >= E1_CONDITION_B_MARGIN)
+
+
+def nontarget_damage(condition_b_result, labels):
+    """D-19: of (b)'s slots beyond the margin, how many carry the label and how many do not, and
+    whether (b) would fail on the unlabelled alone. Reads ``condition_b_result``, never changes
+    it."""
+    beyond = condition_b_result["beyond"]
+    labelled = tuple(slot for slot in beyond if slot in labels)
+    unlabelled = tuple(slot for slot in beyond if slot not in labels)
+    return {
+        "beyond_labelled": len(labelled),
+        "beyond_unlabelled": len(unlabelled),
+        "b_fails_on_unlabelled_alone": bool(unlabelled),
+        "labelled": labelled,
+        "unlabelled": unlabelled,
+    }
+
+
+def in_range(value, low, high):
+    """D-18 / D-20: "dentro da faixa" iff ``low <= value <= high``, else "fora da faixa"."""
+    return INSIDE if low <= value <= high else OUTSIDE
+
+
+def m1_m2_rows(target, *, full_rows, m1_rows, m2_rows, noise_floor):
+    """D-18 (descriptive): pet_name cells only (``phase19_erasure.TARGET_SLOT``), per non-target,
+    full intact, M1 at the stop and M2 of the same seed (each [n, 27]), M1 - full and M2 - full
+    (rates), the min-max of ``recall_floor.m2.per_slot[slot].counts`` and M1's count dentro/fora.
+    Any other target: {"comparison": "sem M2, comparação não feita"}. Not a statistical test."""
+    import phase19_erasure  # torch at import: lazy
+
+    _prove(target in TARGETS, f"target {target!r} is not one of {TARGETS}")
+    if target != phase19_erasure.TARGET_SLOT:
+        return {"comparison": NO_M2}
+    per_slot = noise_floor["recall_floor"]["m2"]["per_slot"]
+    rows = {}
+    for slot in nontarget_slots(target):
+        m2_range = _group_range(per_slot[slot]["counts"])
+        full, m1, m2 = full_rows[slot], m1_rows[slot], m2_rows[slot]
+        rows[slot] = {
+            "full": [full["n_answerable"], full["n_questions"]],
+            "m1": [m1["n_answerable"], m1["n_questions"]],
+            "m2": [m2["n_answerable"], m2["n_questions"]],
+            "m1_minus_full": m1["rate"] - full["rate"],
+            "m2_minus_full": m2["rate"] - full["rate"],
+            "m2_range": (m2_range["min"], m2_range["max"]),
+            "m1_in_range": in_range(m1["n_answerable"], m2_range["min"], m2_range["max"]),
+        }
+    return rows
+
+
+def _anchor_size(block):
+    """The largest anchor-curve size of a D-13 block, read (``max(keys, key=int)``), never typed."""
+    return max(block["anchor_curve"], key=int)
+
+
+def d13_ranges(noise_floor):
+    """D-20: the min-max over Phase 40's D-13 blocks (the five M2 seeds) of the anchor rank at the
+    largest anchor size and of R_q n1 on the committed and minted lists; every block measured and
+    at the same anchor size."""
+    blocks = list(noise_floor["d13"]["blocks"].values())
+    _prove(blocks and all(b["measured"] is True for b in blocks), "a D-13 block is not measured")
+    sizes = {_anchor_size(block) for block in blocks}
+    _prove(len(sizes) == 1, f"the D-13 blocks disagree on the anchor size: {sorted(sizes)}")
+    (size,) = sizes
+    readings = {
+        f"anchor_{size}": [block["anchor_curve"][size]["rank"] for block in blocks],
+        "r_q_committed": [block["r_q"]["committed"]["n1"] for block in blocks],
+        "r_q_minted": [block["r_q"]["minted"]["n1"] for block in blocks],
+    }
+    return {name: (min(values), max(values)) for name, values in readings.items()}
+
+
+def d13_comparison(block, ranges):
+    """D-20 (descriptive): one pet_name cell's D-13 block at the stop, each reading beside its
+    Phase 40 M2 range with dentro/fora; a block not measured stays {"measured": False}."""
+    if block["measured"] is False:
+        return {"measured": False, "readings": None}
+    _prove(block["measured"] is True, f"block measured is {block['measured']!r}")
+    size = _anchor_size(block)
+    anchor = f"anchor_{size}"
+    _prove(anchor in ranges, f"no Phase 40 range for {anchor!r}")
+    values = {
+        anchor: block["anchor_curve"][size]["rank"],
+        "r_q_committed": block["r_q"]["committed"]["n1"],
+        "r_q_minted": block["r_q"]["minted"]["n1"],
+    }
+    readings = {
+        name: {"value": value, "range": ranges[name], "label": in_range(value, *ranges[name])}
+        for name, value in values.items()
+    }
+    return {"measured": True, "anchor": anchor, "readings": readings}
+
+
+def d21_reading(comparisons_by_cell):
+    """D-21 (prediction, descriptive): over the pet_name cells keyed by exactly ORDERINGS x SEEDS,
+    "held" per cell iff R_q n1 is fora on both lists and the anchor rank dentro; prediction_held is
+    None while any cell is not measured. Never a criterion."""
+    expected = {(o, s) for o in ORDERINGS for s in SEEDS}
+    _prove(
+        set(comparisons_by_cell) == expected,
+        f"cells {sorted(set(comparisons_by_cell) ^ expected, key=repr)} are missing or extra",
+    )
+    per_cell = {}
+    for cell, comparison in comparisons_by_cell.items():
+        if not comparison["measured"]:
+            per_cell[cell] = "not measured"
+            continue
+        labels = {name: r["label"] for name, r in comparison["readings"].items()}
+        held = (
+            labels["r_q_committed"] == OUTSIDE
+            and labels["r_q_minted"] == OUTSIDE
+            and labels[comparison["anchor"]] == INSIDE
+        )
+        per_cell[cell] = "held" if held else "not held"
+    outcomes = set(per_cell.values())
+    return {
+        "prediction": ENTRIES["predictions"]["value"]["d21_d13_at_stop"],
+        "per_cell": per_cell,
+        "prediction_held": None if "not measured" in outcomes else outcomes == {"held"},
+        "criterion": False,
+    }

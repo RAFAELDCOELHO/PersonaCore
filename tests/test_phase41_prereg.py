@@ -1213,3 +1213,297 @@ def test_no_pin_pet_name_helpers(tmp_path):
         assert _pin_helper_calls(planted) == [f"{name}( at line {planted.count(chr(10))}"], name
     bare = _planted(tmp_path, source, source + "\n_X = erasure_succeeded()\n", "bare.py")
     assert _pin_helper_calls(bare)
+
+
+# =================================================================================================
+# (9) THE DECLARED DESCRIPTIVE READINGS (plan 41-03 Task 2: D-06, D-12, D-14, D-18, D-19, D-20,
+# D-21, D-28), rules written before any record; none feeds a verdict.
+# =================================================================================================
+
+
+def _component_permutation(seed):
+    import random
+
+    import phase19_erasure
+
+    order = list(phase19_erasure.component_index())
+    random.Random(seed).shuffle(order)
+    return tuple(order)
+
+
+def test_spearman_rho():
+    import statistics
+
+    import phase19_erasure
+
+    index = tuple(phase19_erasure.component_index())
+    assert phase41_prereg.spearman_rho(index, index) == 1.0
+    assert phase41_prereg.spearman_rho(index, index[::-1]) == -1.0
+    a, b = _component_permutation(1), _component_permutation(2)
+    rho = phase41_prereg.spearman_rho(a, b)
+    rank_b = {address: i for i, address in enumerate(b)}
+    ranks_a = list(range(len(a)))
+    ranks_b = [rank_b[address] for address in a]
+    assert rho == pytest.approx(statistics.correlation(ranks_a, ranks_b), abs=1e-12)
+    n = phase19_erasure.N_COMPONENTS
+    d2 = sum((i - j) ** 2 for i, j in zip(ranks_a, ranks_b, strict=True))
+    assert rho == 1 - 6 * d2 / (n * (n * n - 1))
+    # The committed Phase 19 greedy prefix (JSON lists), completed to a full permutation.
+    prefix = _record("results/phase19_collateral_curve.json")["ordered_prefix"]
+    full = [tuple(address) for address in prefix]
+    full += [address for address in index if address not in set(full)]
+    assert len(full) == n
+    computed = phase41_prereg.spearman_rho(
+        prefix + [list(x) for x in full[len(prefix) :]], full[::-1]
+    )
+    assert -1.0 <= computed < 1.0
+    refused = (
+        (prefix, prefix),  # prefix-only orders: not 288-permutations
+        (index, index[:-1] + index[:1]),  # a duplicate
+        (index, index[1:] + ((99, "q_proj", 0),)),  # a different address set
+    )
+    for order_a, order_b in refused:
+        with pytest.raises(SystemExit, match=r"^\[phase41_prereg\]"):
+            phase41_prereg.spearman_rho(order_a, order_b)
+
+
+def _floor_row(ordering, seed, successes):
+    return {
+        "floor": 0.1 + successes / 1000,
+        "floor_branch": "clamp",
+        "calibration_rate": successes / 41,
+        "calibration_successes": successes,
+        "calibration_questions": 41,
+        "calibration_record": phase41_prereg.calibration_record(ordering, seed),
+    }
+
+
+def test_d12_rows():
+    p = phase41_prereg
+    rows = {
+        (o, s): _floor_row(o, s, i)
+        for i, (o, s) in enumerate((o, s) for o in p.ORDERINGS for s in p.SEEDS)
+    }
+    floors = {(t, o, s): rows[(o, s)] for t in p.TARGETS for o in p.ORDERINGS for s in p.SEEDS}
+    out = phase41_prereg.d12_rows(floors)
+    assert [(r["ordering"], r["seed"]) for r in out] == [
+        (o, s) for o in p.ORDERINGS for s in p.SEEDS
+    ]
+    for row in out:
+        expected = rows[(row["ordering"], row["seed"])]
+        assert {k: row[k] for k in expected} == expected
+    disagree = dict(floors)
+    key = (p.TARGETS[-1], p.ORDERINGS[0], p.SEEDS[0])
+    disagree[key] = {**floors[key], "floor": 0.5}
+    missing = {k: v for k, v in floors.items() if k[0] != p.TARGETS[0]}
+    for bad, match in ((disagree, "disagree"), (missing, "keys")):
+        with pytest.raises(SystemExit, match=match):
+            phase41_prereg.d12_rows(bad)
+
+
+def test_retention_rows():
+    import phase20_run
+    import phase40_prereg
+
+    path, record = phase41_prereg.retention_floor_record()
+    assert _ROOT / path == phase20_run.RETENTION_FLOOR_PATH
+    assert path == "results/phase20_retention_floor.json" and record == _record(path)
+    cap = record["cap"]
+    assert cap == 3.9085032379884783
+    stop, full, m2 = _record(_K064), _phase40_a2("full", 1337), _phase40_a2("m2", 1337)
+    rows = phase41_prereg.retention_rows(stop, full, m2, cap=cap)
+    label = phase41_prereg.V4_CAP_LABEL
+    assert label == "passaria no teto do v4.0"
+    assert rows == {
+        "stop": stop["retention_ppl"][0],
+        "intact_full": full["retention_ppl"][0],
+        "m2": m2["retention_ppl"][0],
+        "cap": cap,
+        label: "sim",  # the ablated arm is below the adapter-off-anchored cap
+    }
+    other = phase41_prereg.retention_rows(full, full, None, cap=cap)
+    assert other["m2"] is None and other[label] == "não"  # the intact adapter sits above it
+
+    seeds = phase40_prereg.SEEDS
+    full_records = {s: _phase40_a2("full", s) for s in seeds}
+    m2_records = {s: _phase40_a2("m2", s) for s in seeds}
+    assert len(full_records) + len(m2_records) == 2 * len(seeds)
+    floor = record["retention_ppl_noise_floor"]
+    spread = phase41_prereg.retention_spread(full_records, m2_records, floor=floor)
+    assert spread["retention_ppl_noise_floor"] == floor
+    for group, records in (("full", full_records), ("m2", m2_records)):
+        values = [r["retention_ppl"][0] for r in records.values()]
+        assert spread[group] == {
+            "min": min(values),
+            "max": max(values),
+            "range": max(values) - min(values),
+            "n": len(values),
+        }, group
+    with pytest.raises(SystemExit, match="seeds"):
+        phase41_prereg.retention_spread(full_records, {seeds[0]: m2_records[seeds[0]]}, floor=floor)
+
+
+def _full_rows_by_seed():
+    import phase40_prereg
+
+    return {s: phase41_prereg.record_rows(_phase40_a2("full", s)) for s in phase40_prereg.SEEDS}
+
+
+def test_slot_ranges_and_varies_labels_on_the_committed_record():
+    import copy
+
+    import phase18_extraction
+
+    noise = _record(phase41_prereg.NOISE_FLOOR_RECORD)
+    full_rows = _full_rows_by_seed()
+    ranges = phase41_prereg.slot_ranges(noise, full_rows)
+    assert tuple(ranges) == phase18_extraction.CORE_SLOTS
+    assert phase41_prereg.varies_labels(ranges) == {"birth_year", "hometown"}
+    assert phase41_prereg.VARIES_LABEL == "varia entre seeds"
+    pet = ranges["pet_name"]
+    assert pet["basis"] == "full only" and "m2" not in pet
+    assert pet["full"]["counts"] == (27, 26, 27, 25, 27)
+    assert (pet["full"]["min"], pet["full"]["max"]) == (25, 27)
+    hometown = ranges["hometown"]
+    assert hometown["basis"] == "full and m2"
+    per_slot = noise["recall_floor"]
+    assert hometown["range"] == max(
+        per_slot["full"]["per_slot"]["hometown"]["range"],
+        per_slot["m2"]["per_slot"]["hometown"]["range"],
+    )
+
+    # NON-VACUITY: a planted copy with hometown flat in both groups drops the label.
+    planted = copy.deepcopy(noise)
+    for group in ("full", "m2"):
+        row = planted["recall_floor"][group]["per_slot"]["hometown"]
+        row["counts"] = [[20, 27]] * len(row["counts"])
+        row["rates"] = [20 / 27] * len(row["rates"])
+        row["range"] = 0.0
+    assert phase41_prereg.varies_labels(phase41_prereg.slot_ranges(planted, full_rows)) == {
+        "birth_year"
+    }
+    # A slot in one group only is refused; a recorded range off its counts is refused.
+    one_group = copy.deepcopy(noise)
+    del one_group["recall_floor"]["m2"]["per_slot"]["street"]
+    off_range = copy.deepcopy(noise)
+    off_range["recall_floor"]["full"]["per_slot"]["hometown"]["range"] = 0.0
+    wrong_seeds = dict(list(full_rows.items())[:-1])
+    for bad_noise, bad_rows, match in (
+        (one_group, full_rows, "one group"),
+        (off_range, full_rows, "range"),
+        (noise, wrong_seeds, "seeds"),
+    ):
+        with pytest.raises(SystemExit, match=match):
+            phase41_prereg.slot_ranges(bad_noise, bad_rows)
+
+
+def test_nontarget_damage():
+    labels = frozenset({"birth_year", "hometown"})
+    b = {"holds": False, "beyond": ["street", "hometown", "birth_year"], "slots": {}}
+    before = {**b, "beyond": list(b["beyond"])}
+    out = phase41_prereg.nontarget_damage(b, labels)
+    assert out == {
+        "beyond_labelled": 2,
+        "beyond_unlabelled": 1,
+        "b_fails_on_unlabelled_alone": True,
+        "labelled": ("hometown", "birth_year"),
+        "unlabelled": ("street",),
+    }
+    assert b == before and b["holds"] is False  # (b) untouched
+    only_labelled = {"holds": False, "beyond": ["hometown"], "slots": {}}
+    out = phase41_prereg.nontarget_damage(only_labelled, labels)
+    assert out["b_fails_on_unlabelled_alone"] is False and only_labelled["holds"] is False
+    clean = phase41_prereg.nontarget_damage({"holds": True, "beyond": [], "slots": {}}, labels)
+    assert clean["beyond_labelled"] == clean["beyond_unlabelled"] == 0
+
+
+def test_m1_m2_rows():
+    p = phase41_prereg
+    noise = _record(p.NOISE_FLOOR_RECORD)
+    full = p.record_rows(_phase40_a2("full", 1337))
+    m1 = p.record_rows(_record(_K064))
+    m2 = p.record_rows(_phase40_a2("m2", 1337))
+    assert p.INSIDE == "dentro da faixa" and p.OUTSIDE == "fora da faixa"
+    assert phase41_prereg.in_range(3, 3, 5) == p.INSIDE == phase41_prereg.in_range(5, 3, 5)
+    assert phase41_prereg.in_range(2, 3, 5) == p.OUTSIDE == phase41_prereg.in_range(6, 3, 5)
+    rows = phase41_prereg.m1_m2_rows(
+        "pet_name", full_rows=full, m1_rows=m1, m2_rows=m2, noise_floor=noise
+    )
+    assert tuple(rows) == p.nontarget_slots("pet_name")
+    per_slot = noise["recall_floor"]["m2"]["per_slot"]
+    for slot, row in rows.items():
+        counts = [n for n, _ in per_slot[slot]["counts"]]
+        assert row["full"] == [full[slot]["n_answerable"], 27], slot
+        assert row["m1"] == [m1[slot]["n_answerable"], 27], slot
+        assert row["m2"] == [m2[slot]["n_answerable"], 27], slot
+        assert row["m1_minus_full"] == m1[slot]["rate"] - full[slot]["rate"], slot
+        assert row["m2_minus_full"] == m2[slot]["rate"] - full[slot]["rate"], slot
+        assert row["m2_range"] == (min(counts), max(counts)), slot
+        inside = min(counts) <= m1[slot]["n_answerable"] <= max(counts)
+        assert row["m1_in_range"] == ("dentro da faixa" if inside else "fora da faixa"), slot
+    # NON-VACUITY: an M1 count moved onto the M2 minimum reads dentro.
+    slot = p.nontarget_slots("pet_name")[0]
+    low = min(n for n, _ in per_slot[slot]["counts"])
+    moved = {**m1, slot: {**m1[slot], "n_answerable": low, "rate": low / 27}}
+    moved_rows = phase41_prereg.m1_m2_rows(
+        "pet_name", full_rows=full, m1_rows=moved, m2_rows=m2, noise_floor=noise
+    )
+    assert moved_rows[slot]["m1_in_range"] == p.INSIDE
+    for target in p.TARGETS[1:]:
+        out = phase41_prereg.m1_m2_rows(
+            target, full_rows=full, m1_rows=m1, m2_rows=m2, noise_floor=noise
+        )
+        assert out == {"comparison": "sem M2, comparação não feita"} == {"comparison": p.NO_M2}
+
+
+def test_d13_ranges_and_d21():
+    import copy
+
+    p = phase41_prereg
+    noise = _record(p.NOISE_FLOOR_RECORD)
+    ranges = phase41_prereg.d13_ranges(noise)
+    assert ranges == {"anchor_512": (15, 41), "r_q_committed": (0, 1), "r_q_minted": (9, 12)}
+
+    block = copy.deepcopy(next(iter(noise["d13"]["blocks"].values())))
+    inside = phase41_prereg.d13_comparison(block, ranges)
+    assert inside["measured"] is True
+    assert {k: v["label"] for k, v in inside["readings"].items()} == {
+        "anchor_512": p.INSIDE,
+        "r_q_committed": p.INSIDE,
+        "r_q_minted": p.INSIDE,
+    }
+    predicted = copy.deepcopy(block)
+    predicted["r_q"]["committed"]["n1"] = 11
+    predicted["r_q"]["minted"]["n1"] = 20
+    held = phase41_prereg.d13_comparison(predicted, ranges)
+    assert held["readings"]["r_q_committed"] == {"value": 11, "range": (0, 1), "label": p.OUTSIDE}
+    not_measured = phase41_prereg.d13_comparison({"measured": False}, ranges)
+    assert not_measured["measured"] is False
+
+    cells = [(o, s) for o in p.ORDERINGS for s in p.SEEDS]
+    all_held = phase41_prereg.d21_reading({cell: held for cell in cells})
+    assert all_held["prediction_held"] is True and all_held["criterion"] is False
+    assert all_held["prediction"] == p.ENTRIES["predictions"]["value"]["d21_d13_at_stop"]
+    assert set(all_held["per_cell"]) == set(cells)
+    one_off = phase41_prereg.d21_reading({**{cell: held for cell in cells}, cells[0]: inside})
+    assert one_off["prediction_held"] is False
+    assert one_off["per_cell"][cells[0]] == "not held" and one_off["per_cell"][cells[1]] == "held"
+    gap = phase41_prereg.d21_reading({**{cell: held for cell in cells}, cells[-1]: not_measured})
+    assert gap["prediction_held"] is None and gap["per_cell"][cells[-1]] == "not measured"
+    with pytest.raises(SystemExit, match="cells"):
+        phase41_prereg.d21_reading({cells[0]: held})
+
+
+def test_group_range_and_anchor_size_helpers():
+    assert phase41_prereg._group_range([[25, 27], [27, 27], [26, 27]]) == {
+        "counts": (25, 27, 26),
+        "min": 25,
+        "max": 27,
+        "range": 27 / 27 - 25 / 27,
+    }
+    for bad in ([], [[1, 14]]):
+        with pytest.raises(SystemExit, match=r"^\[phase41_prereg\]"):
+            phase41_prereg._group_range(bad)
+    block = {"anchor_curve": {"8": {}, "128": {}, "32": {}, "512": {}}}
+    assert phase41_prereg._anchor_size(block) == "512"  # by int, never by string order
+    assert max(block["anchor_curve"]) == "8"  # meta-guard: string order would pick "8"
