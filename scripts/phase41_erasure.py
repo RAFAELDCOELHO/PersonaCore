@@ -24,6 +24,7 @@ import datetime
 import gc
 import hashlib
 import json
+import math
 import pathlib
 import re
 import shutil
@@ -2120,3 +2121,320 @@ def run(
         print(STAGE_1_DONE, flush=True)
     print(f"RUN DONE whole={whole}", flush=True)
     return {"stage": pf["stage"], "whole": whole}
+
+
+# =================================================================================================
+# The emit (CPU): the erasure record from the committed records, every verdict and reading through
+# the frozen pre-registration (D-15..D-21, D-26..D-28; ERASE-06, ERASE-09, ERASE-10)
+# =================================================================================================
+
+
+def _key(*parts):
+    """A JSON key for a tuple key: its parts joined by ``|``."""
+    return "|".join(str(p) for p in parts)
+
+
+def build_record(root, *, ledger_path=None, floors=None, bands=None):
+    """The erasure record from the records alone: per cell condition_a / condition_b (pre = the
+    seed's intact Phase 40 full A2 record) / condition_c / cell_verdict on the stop's K = 48
+    record, NOT_RUN for a cell never whole; the pair labels, summary_counts, the 4 x 2 x 2 table
+    and every declared descriptive reading. ``floors`` / ``bands`` default (real root only) to the
+    floors fill file's two fills, imported here. Every input record is proved by the sha256 its
+    producer named and listed with its sha256 in ``inputs``."""
+    import phase19_erasure as pin  # torch at import: lazy
+    import phase35_prereg
+    import phase37_routes  # torch at import: lazy
+    import phase38_prereg
+    import phase40_prereg
+
+    prereg = _prereg()
+    greedy = prereg.ORDERINGS[0]
+    root = pathlib.Path(root)
+    if floors is None or bands is None:
+        _prove(
+            _is_real(root),
+            "a rehearsal root passes floors and bands (the two fills on its own stage-1 records); "
+            "the floors fill file is the real root's",
+        )
+        import phase41_floors_prereg
+
+        floors = phase41_floors_prereg.E1_CONDITION_A_FLOORS if floors is None else floors
+        bands = phase41_floors_prereg.E1_CONDITION_C_BAND_INPUTS if bands is None else bands
+    inputs = {}
+
+    def read(base, rel, sha256=None):
+        path = pathlib.Path(base) / rel
+        digest = _sha256(path)
+        _prove(sha256 is None or digest == sha256, f"{rel}'s sha256 differs from its producer's")
+        inputs[rel] = digest
+        return _load(path)
+
+    lines = phase36_ledger.read_ledger(ledger_path)
+    outcomes = prereg.unit_outcomes(lines, prereg.UNITS)
+    not_whole = [u for u in prereg.PREP_UNITS if outcomes[u] != "whole"]
+    _prove(not not_whole, f"prep units {not_whole} are not whole: no floor or band without them")
+
+    cal = {}
+    for unit in prereg.PREP_UNITS:
+        _, o, s = prereg.unit_key(unit)
+        cal[(o, s)] = read(root, prereg.calibration_record(o, s))
+        read(root, prereg.band_record(s, o))
+    chosen = {(r["variant"], r["variant_decided_by"]) for (o, _), r in cal.items() if o != greedy}
+    _prove(len(chosen) == 1, f"the gradient calibration records disagree on the variant: {chosen}")
+    ((variant, decided_by),) = chosen
+
+    noise = read(_REPO, prereg.NOISE_FLOOR_RECORD)
+    a2 = {
+        (g, s): read(_REPO, phase40_prereg.a2_record(g, s))
+        for g in phase40_prereg.GROUPS
+        for s in phase40_prereg.SEEDS
+    }
+    rows40 = {key: prereg.record_rows(rec) for key, rec in a2.items()}
+    ranges = prereg.slot_ranges(noise, {s: rows40[("full", s)] for s in phase40_prereg.SEEDS})
+    labels = prereg.varies_labels(ranges)
+    retention_rel, retention = prereg.retention_floor_record()
+    inputs[retention_rel] = _sha256(_REPO / retention_rel)
+    d13_ranges = prereg.d13_ranges(noise)
+
+    cells, verdicts, d13 = {}, {}, {}
+    for unit in prereg.CELL_UNITS:
+        _, t, o, s = prereg.unit_key(unit)
+        block = {"unit": unit, "target": t, "ordering": o, "seed": s, "outcome": outcomes[unit]}
+        no_m2 = (
+            None
+            if t == pin.TARGET_SLOT
+            else prereg.m1_m2_rows(t, full_rows=None, m1_rows=None, m2_rows=None, noise_floor=noise)
+        )
+        if outcomes[unit] != "whole":
+            cells[unit] = {**block, "verdict": prereg.NOT_RUN, "m1_m2": no_m2, "d13": None}
+            verdicts[(t, o, s)] = prereg.NOT_RUN
+            if t == pin.TARGET_SLOT:
+                d13[(o, s)] = prereg.d13_comparison({"measured": False}, d13_ranges)
+            continue
+        rel = prereg.cell_record(t, o, s)
+        rec = read(root, rel)
+        reads = []
+        for row in rec["reads"]:
+            k16 = read(root, row["k16_record"], row["k16_sha256"])
+            if row["k48_record"] is not None:
+                inputs[row["k48_record"]] = _sha256(root / row["k48_record"])
+                _prove(
+                    inputs[row["k48_record"]] == row["k48_sha256"],
+                    f"{row['k48_record']}'s sha256 differs from {rel}'s",
+                )
+            reads.append(
+                {
+                    **{k: row[k] for k in ("checkpoint", "k16_zero", "k48_zero", "rank")},
+                    "target_count": k16["target_count"],
+                    "slot_counts": k16["slot_counts"],
+                }
+            )
+        triples = [(r["checkpoint"], r["k16_zero"], r["k48_zero"]) for r in reads]
+        stop = prereg.driver_stop(triples)
+        _prove(
+            stop == rec["stop"],
+            f"{rel}: its reads stop at {stop!r}, the record says {rec['stop']!r}",
+        )
+        failures = prereg.confirmation_failures(rec["confirmations"], triples)
+        _prove(not failures, f"{rel}: the confirmations fail: {failures}")
+        block.update(
+            record=rel,
+            stop=stop,
+            reads=reads,
+            confirmations=rec["confirmations"],
+            confirmation_hours=prereg.confirmation_hours(rec["confirmations"]),
+            applied_ordering=rec["applied_ordering"]["ordered"],
+            not_reached_sentence=rec["not_reached_sentence"],
+            m1=rec["m1"],
+        )
+        if stop == phase35_prereg.NOT_REACHED:
+            verdict = prereg.cell_verdict(
+                stop=stop,
+                target_n=None,
+                target_q=None,
+                zero_results_have_nll=None,
+                a=None,
+                b=None,
+                c=None,
+            )
+            block.update(verdict, conditions=None, m1_m2=no_m2, d13=None)
+            if t == pin.TARGET_SLOT:
+                d13[(o, s)] = prereg.d13_comparison({"measured": False}, d13_ranges)
+        else:
+            k48 = read(root, prereg.k48_record(t, o, s, stop))
+            post = prereg.record_rows(k48)
+            n, q = post[t]["n_answerable"], post[t]["n_questions"]
+            conditions = {
+                "a": prereg.condition_a(n, q, floors[(t, o, s)]["floor"]),
+                "b": prereg.condition_b(post, rows40[("full", s)], t),
+                "c": prereg.condition_c(k48["dialogue_ppl"], tuple(bands[(s, o)])),
+            }
+            verdict = prereg.cell_verdict(
+                stop=stop,
+                target_n=n,
+                target_q=q,
+                zero_results_have_nll=phase37_routes.route_a(k48),
+                **conditions,
+            )
+            pet = t == pin.TARGET_SLOT
+            block.update(
+                verdict,
+                conditions=conditions,
+                retention=prereg.retention_rows(
+                    k48, a2[("full", s)], a2[("m2", s)] if pet else None, cap=retention["cap"]
+                ),
+                m1_m2=prereg.m1_m2_rows(
+                    t,
+                    full_rows=rows40[("full", s)],
+                    m1_rows=post,
+                    m2_rows=rows40[("m2", s)],
+                    noise_floor=noise,
+                ),
+                nontarget_damage=prereg.nontarget_damage(conditions["b"], labels),
+                d13=prereg.d13_comparison(rec["d13"], d13_ranges) if pet else None,
+            )
+            if pet:
+                d13[(o, s)] = block["d13"]
+        cells[unit] = block
+        verdicts[(t, o, s)] = block["verdict"]
+
+    pairs = {
+        (t, o): {s: verdicts[(t, o, s)] for s in prereg.SEEDS}
+        for t in prereg.TARGETS
+        for o in prereg.ORDERINGS
+    }
+    d21 = prereg.d21_reading(d13)
+    d21 = {**d21, "per_cell": {_key(*k): v for k, v in d21["per_cell"].items()}}
+    first = {s: cal[prereg.unit_key(_seed_first_prep_unit(s))[1:]] for s in prereg.SEEDS}
+    gradient = [r for (o, _), r in cal.items() if o != greedy]
+    devices = {r["provenance"]["run"]["device"] for r in gradient}
+    d02 = [x["d02"] for r in gradient for x in r["ordering_detail"]["rankings"]]
+    off = read(_REPO, phase38_prereg.ADAPTER_OFF_RECORD)
+    if {"attack_family", "k"} <= set(off["config"]):
+        basis, readings = "a2_rows", phase40_prereg.a2_rows(off, *phase40_prereg.a2_scope(off))
+    else:
+        basis, readings = "exposure", phase38_prereg._exposure_rows(off["exposure"])
+    prefix = read(_REPO, phase38_prereg.CURVE_RECORD)["ordered_prefix"]
+    g1337 = cells[prereg.cell_unit(pin.TARGET_SLOT, greedy, prereg.SEEDS[0])]
+    observed = {
+        "d11_calibration_identity": first[prereg.SEEDS[0]]["d11_identity"],
+        "d21_d13_at_stop": d21["per_cell"],
+        "greedy_1337_phase19_prefix": prereg.NOT_RUN
+        if "applied_ordering" not in g1337
+        else g1337["applied_ordering"][: len(prefix)],
+        "d02_cpu_equality": {"devices": sorted(devices), "d02": d02},
+    }
+    held = {
+        "d11_calibration_identity": observed["d11_calibration_identity"]["tensors_identical"],
+        "d21_d13_at_stop": d21["prediction_held"],
+        "greedy_1337_phase19_prefix": None
+        if "applied_ordering" not in g1337
+        else observed["greedy_1337_phase19_prefix"] == prefix,
+        "d02_cpu_equality": all(x["equal"] for x in d02) if devices == {"cpu"} else None,
+    }
+    spent = phase36_ledger.spent(ledger_path=ledger_path, fronts=(FRONT,))
+    prep_ids = {prereg.run_id(u) for u in prereg.PREP_UNITS}
+    record = {
+        "phase": 41,
+        "front": FRONT,
+        "status": "COMPLETE"
+        if all(outcomes[u] == "whole" for u in prereg.CELL_UNITS)
+        else "PARTIAL",
+        "outcomes": outcomes,
+        "variant": variant,
+        "variant_decided_by": decided_by,
+        "cells": cells,
+        "pairs": {_key(*k): {**prereg.pair_label(v), "verdicts": v} for k, v in pairs.items()},
+        "summary": prereg.summary_counts(pairs),
+        "table": {
+            t: {o: {s: verdicts[(t, o, s)] for s in prereg.SEEDS} for o in prereg.ORDERINGS}
+            for t in prereg.TARGETS
+        },
+        "calibrations": {
+            "d12": prereg.d12_rows(floors),
+            "d06": {
+                s: prereg.spearman_rho(cal[(greedy, s)]["d06_order"], r["d06_order"])
+                for (o, s), r in cal.items()
+                if o != greedy
+            },
+            "d11": {s: first[s]["d11_identity"] for s in prereg.SEEDS},
+            "condition_a": prereg.ENTRIES["condition_a"]["derivation"],
+            "prep_hours": math.fsum(r["seconds"] for r in spent["rows"] if r["run_id"] in prep_ids)
+            / 3600,
+        },
+        "bands": {_key(*k): list(v) for k, v in bands.items()},
+        "labels": {"varies": sorted(labels), "ranges": ranges},
+        "retention_spread": prereg.retention_spread(
+            {s: a2[("full", s)] for s in phase40_prereg.SEEDS},
+            {s: a2[("m2", s)] for s in phase40_prereg.SEEDS},
+            floor=retention["retention_ppl_noise_floor"],
+        ),
+        "d21": d21,
+        "end_point": {
+            "record": phase38_prereg.ADAPTER_OFF_RECORD,
+            "sha256": inputs[phase38_prereg.ADAPTER_OFF_RECORD],
+            "basis": basis,
+            "readings": readings,
+        },
+        "e1_hours": spent["by_front"][FRONT] / 3600,
+        "confirmation_hours": math.fsum(
+            c["confirmation_hours"] for c in cells.values() if "confirmation_hours" in c
+        ),
+        "predictions": {
+            name: {"prediction": text, "observed": observed[name], "held": held[name]}
+            for name, text in prereg.ENTRIES["predictions"]["value"].items()
+        },
+        "not_reached_sentence": prereg.not_reached_sentence(),
+        "limits": {
+            "d18": prereg.ENTRIES["m1_m2"]["value"],
+            "d19": prereg.ENTRIES["varies_label"]["value"],
+            "d20": prereg.ENTRIES["d13_block"]["value"],
+            "summary_line": prereg.ENTRIES["summary_line"]["value"],
+        },
+        "inputs": inputs,
+        "provenance": {
+            "emitted_utc": _now(),
+            "git_sha": git_sha(),
+            "module_sha256": module_sha256(),
+        },
+    }
+    return json.loads(json.dumps(record, default=dict))
+
+
+def emit(*, root=None, ledger_path=None, floors=None, bands=None):
+    """Write results/phase41_erasure.json ONCE (CPU). On the real root: from a clean tree, and only
+    when the floors fill file and every record build_record read are tracked and unmodified."""
+    root = pathlib.Path(root) if root is not None else pathlib.Path(_ROOT)
+    real = _root_ledger(root, ledger_path)
+    prereg = _prereg()
+    out = root / prereg.ERASURE_RECORD
+    _prove(
+        not out.exists(),
+        f"{out} exists — REFUSING to overwrite it. The erasure record is write-once; a correction "
+        "is a dated continuation via scripts/_addendum.py",
+    )
+    if real:
+        refuse_if_dirty(
+            who="phase41_erasure",
+            detail=(
+                "the erasure record publishes git_sha and hashes its modules from the working "
+                "tree; a record written from a dirty tree names a commit it cannot be regenerated "
+                "from"
+            ),
+            pathspec=LAUNCH_PATHSPEC,
+            cwd=_REPO,
+        )
+    record = build_record(root, ledger_path=ledger_path, floors=floors, bands=bands)
+    if real:
+        _prove(
+            _tracked_and_clean(FLOORS_FILE, *record["inputs"]),
+            f"{FLOORS_FILE} and every record the erasure record reads must be tracked and clean "
+            "(the cell and stage-1 records committed under Rafael's approved) before emit",
+        )
+    _write_once(out, record)
+    print(
+        f"EMIT {record['status']} "
+        + " ".join(f"{label}={record['summary'][label]}" for label in prereg.PAIR_LABELS),
+        flush=True,
+    )
+    return record

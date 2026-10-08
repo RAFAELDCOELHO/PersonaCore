@@ -3232,3 +3232,298 @@ def test_no_file_deletion_in_the_driver():
     assert _deletion_calls(source) == allowed
     planted = source + "\n\ndef planted(path):\n    pathlib.Path(path).unlink()\n"
     assert _deletion_calls(planted) == allowed + [("planted", "unlink")]
+
+
+# =================================================================================================
+# (10) Plan 41-10 Task 1: build_record and emit — verdicts, pair labels, the summary and every
+# declared reading from the records the real write paths produce on a tmp root, with ONE real
+# committed producer record (results/erasure_kstar_arm_k064.json) as a stop's K = 48 record.
+# =================================================================================================
+
+_K064 = _ROOT / "results" / "erasure_kstar_arm_k064.json"
+# The checkpoint that record was read at: its own ablated-component count, a GRID checkpoint.
+_K064_AT = len(_json(_K064)["config"]["ablated_components"])
+assert _K064_AT in _GRID
+_CURVE = _ROOT / "results" / "phase19_collateral_curve.json"
+
+
+def _fills(monkeypatch, root):
+    """The two fills, exactly as plan 41-13's floors file will make them, on ``root``'s stage-1
+    records: the corpus and the noise floor copied byte for byte, phase35_prereg._REPO_ROOT
+    pointed at ``root`` for the two calls only."""
+    import shutil
+
+    import phase35_prereg
+
+    for rel in (phase41_prereg.CALIBRATION_CORPUS, phase41_prereg.NOISE_FLOOR_RECORD):
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(_ROOT / rel, root / rel)
+    with monkeypatch.context() as m:
+        m.setattr(phase35_prereg, "_REPO_ROOT", root)
+        floors = phase35_prereg.fill("e1_condition_a_floors", **phase41_prereg.floors_fill_inputs())
+        bands = phase35_prereg.fill(
+            "e1_condition_c_band_inputs", **phase41_prereg.band_fill_inputs()
+        )
+    return floors, bands
+
+
+def _d13_block(seed):
+    """A D-13 block as phase40_noise.d13_scores returns it: the committed Phase 40 one."""
+    return _noise_floor()["d13"]["blocks"][str(seed)]
+
+
+def _producer_rig(monkeypatch, tmp_path, **kw):
+    """Stage 1 through run() (the 41-08 write paths, fakes behind the real signatures)."""
+    rig = _run_fakes(monkeypatch, _e1_rig(monkeypatch, tmp_path, **kw))
+    if rig.identity is not None:
+        _run(rig)
+    else:
+        phase41_erasure.run()
+    return rig
+
+
+def _producer_cell(monkeypatch, rig, unit):
+    """One judged pet_name cell through run(): the greedy ordering starts with Phase 19's
+    ordered_prefix, the K = read_k target count is zero only at _K064_AT, and the REAL k48_confirm
+    runs with the pin's arm writing results/erasure_kstar_arm_k064.json's bytes at its
+    record_path; D-13 is the committed Phase 40 block."""
+    import shutil
+
+    import phase19_erasure
+
+    real_confirm = phase41_erasure.k48_confirm
+    _, target, ordering, seed = phase41_prereg.unit_key(unit)
+    script = {c: (c == _K064_AT, True if c == _K064_AT else None, 9) for c in _GRID}
+    rig = _cell_fakes(monkeypatch, rig, script, d13=_d13_block(seed))
+    prefix = [tuple(a) for a in _json(_CURVE)["ordered_prefix"]]
+    ordered = tuple(prefix) + tuple(a for a in rig.index if a not in set(prefix))
+
+    def cell_ordering(
+        model, tok, device, forbid, artifact, *, target, ordering, variant, unit, root
+    ):
+        rig.unit = unit
+        return {"ordered": ordered, "k": len(prefix), "stopped": True, "curve": []}
+
+    def arm(name, device, **kw):
+        assert name == "erased" and len(kw["components"]) == _K064_AT
+        shutil.copyfile(_K064, kw["record_path"])
+
+    d = phase41_erasure
+    monkeypatch.setattr(d, "cell_ordering", _checked(d.cell_ordering, cell_ordering))
+    monkeypatch.setattr(d, "k48_confirm", real_confirm)
+    monkeypatch.setattr(
+        phase19_erasure, "run_erasure_arm", _checked(phase19_erasure.run_erasure_arm, arm)
+    )
+    if rig.identity is not None:
+        assert _run(rig, units=(unit,))["whole"] == [unit]
+    else:
+        assert phase41_erasure.run(units=(unit,))["whole"] == [unit]
+    k48 = rig.root / phase41_prereg.k48_record(target, ordering, seed, _K064_AT)
+    assert k48.read_bytes() == _K064.read_bytes()  # the committed producer record, byte for byte
+    return rig
+
+
+def _roundtrip(value):
+    return json.loads(json.dumps(value, default=dict))
+
+
+def test_emit_fed_a_real_producer_record(monkeypatch, tmp_path):
+    import erasure_gate
+    import phase37_routes
+    import phase40_prereg
+
+    p = phase41_prereg
+    rig = _producer_rig(monkeypatch, tmp_path)
+    cell = p.cell_unit("pet_name", "greedy", 1337)
+    _producer_cell(monkeypatch, rig, cell)
+    floors, bands = _fills(monkeypatch, rig.root)
+    record = phase41_erasure.emit(root=rig.root, ledger_path=rig.ledger, floors=floors, bands=bands)
+    assert record == _json(rig.root / p.ERASURE_RECORD)
+    assert record["phase"] == 41 and record["front"] == "E1" and record["status"] == "PARTIAL"
+    k064 = _json(_K064)
+    rel = p.k48_record("pet_name", "greedy", 1337, _K064_AT)
+    assert record["inputs"][rel] == phase41_erasure._sha256(_K064)
+    c = record["cells"][cell]
+    assert (c["stop"], c["judged"], c["outcome"]) == (_K064_AT, True, "whole")
+    post = p.record_rows(k064)
+    pre = p.record_rows(_json(_ROOT / phase40_prereg.a2_record("full", 1337)))
+    a, b, cc = (c["conditions"][k] for k in ("a", "b", "c"))
+    assert a["upper"] == erasure_gate.wilson_upper_bound(0, 27)
+    assert a["floor"] == floors[("pet_name", "greedy", 1337)]["floor"] and a["holds"] is True
+    assert list(b["slots"]) == list(p.nontarget_slots("pet_name"))
+    for slot, row in b["slots"].items():
+        assert row["pre"] == [pre[slot]["n_answerable"], 27], slot
+        assert row["post"] == [post[slot]["n_answerable"], 27], slot
+    assert cc["gap"] == 4.920568428792842 - 4.573349214207799
+    assert [cc["lo"], cc["hi"]] == list(bands[(1337, "greedy")])
+    expected = p.cell_verdict(
+        stop=_K064_AT,
+        target_n=0,
+        target_q=27,
+        zero_results_have_nll=phase37_routes.route_a(k064),
+        a=p.condition_a(0, 27, floors[("pet_name", "greedy", 1337)]["floor"]),
+        b=p.condition_b(post, pre, "pet_name"),
+        c=p.condition_c(k064["dialogue_ppl"], bands[(1337, "greedy")]),
+    )
+    v = c["verdict"]
+    assert v in erasure_gate.VERDICTS and v == expected["verdict"]
+    assert (c["failed"], c["beyond"], c["reason"]) == (
+        expected["failed"],
+        expected["beyond"],
+        expected["reason"],
+    )
+    # Every other cell never started: NOT_RUN.
+    others = {u: block["verdict"] for u, block in record["cells"].items() if u != cell}
+    assert set(record["cells"]) == set(p.CELL_UNITS)
+    assert set(others.values()) == {p.NOT_RUN}
+    assert record["table"]["pet_name"]["greedy"] == {"1337": v, "2024": p.NOT_RUN}
+    pair = record["pairs"]["pet_name|greedy"]
+    assert pair["label"] == "não replicado" and pair["text"] == f"{v} na 1337, NOT_RUN na 2024"
+    summary = record["summary"]
+    assert summary["n_pairs"] == 8
+    assert sum(summary[label] for label in p.PAIR_LABELS) == 8
+    assert summary["inside_nao_replicado"] == {f"{v} + NOT_RUN": 1, "NOT_RUN + NOT_RUN": 7}
+    # D-27: every checkpoint's K = 16 per-fact counts, read from the K = 16 record it names.
+    assert [r["checkpoint"] for r in c["reads"]] == [x for x in _GRID if x <= _K064_AT]
+    for read in c["reads"]:
+        k16 = _json(rig.root / p.k16_record("pet_name", "greedy", 1337, read["checkpoint"]))
+        assert read["slot_counts"] == k16["slot_counts"] and read["rank"] == 9
+        assert read["target_count"] == k16["target_count"]
+    assert c["confirmation_hours"] == p.confirmation_hours(c["confirmations"])
+    # D-18, D-19 / D-28, D-14, D-20.
+    noise = _noise_floor()
+    m2 = p.record_rows(_json(_ROOT / phase40_prereg.a2_record("m2", 1337)))
+    assert c["m1_m2"] == _roundtrip(
+        p.m1_m2_rows("pet_name", full_rows=pre, m1_rows=post, m2_rows=m2, noise_floor=noise)
+    )
+    assert record["labels"]["varies"] == ["birth_year", "hometown"]
+    assert c["nontarget_damage"] == _roundtrip(
+        p.nontarget_damage(p.condition_b(post, pre, "pet_name"), {"birth_year", "hometown"})
+    )
+    cap = p.retention_floor_record()[1]["cap"]
+    assert c["retention"]["stop"] == k064["retention_ppl"][0] and c["retention"]["cap"] == cap
+    assert c["retention"][p.V4_CAP_LABEL] in ("sim", "não")
+    assert c["d13"] == _roundtrip(p.d13_comparison(_d13_block(1337), p.d13_ranges(noise)))
+    assert record["d21"]["per_cell"]["gradient|1337"] == "not measured"
+    assert record["d21"]["prediction_held"] is None
+    predictions = record["predictions"]
+    assert set(predictions) == set(p.ENTRIES["predictions"]["value"])
+    assert predictions["greedy_1337_phase19_prefix"]["held"] is True
+    assert record["variant"] == "adaptive" and record["variant_decided_by"] == "cpu_rehearsal"
+    assert record["not_reached_sentence"] == p.not_reached_sentence()
+
+
+def test_not_reached_cell_in_the_record(monkeypatch, tmp_path):
+    p = phase41_prereg
+    rig = _producer_rig(monkeypatch, tmp_path)
+    ranks = {c: (True, False, i + 2) for i, c in enumerate(_GRID)}
+    rig = _cell_fakes(monkeypatch, rig, ranks)
+    cell = p.cell_unit("street", "greedy", 1337)
+    assert _run(rig, units=(cell,))["whole"] == [cell]
+    floors, bands = _fills(monkeypatch, rig.root)
+    record = phase41_erasure.build_record(
+        rig.root, ledger_path=rig.ledger, floors=floors, bands=bands
+    )
+    c = record["cells"][cell]
+    assert (c["verdict"], c["judged"], c["stop"]) == ("NOT_REACHED", False, "NOT_REACHED")
+    assert c["conditions"] is None and c["failed"] == [] and c["beyond"] == []
+    assert c["not_reached_sentence"] == p.not_reached_sentence()
+    assert [r["checkpoint"] for r in c["reads"]] == list(_GRID)
+    assert [r["rank"] for r in c["reads"]] == [ranks[x][2] for x in _GRID]
+    assert all(r["target_count"] == [0, 27] for r in c["reads"])
+    assert all(set(r["slot_counts"]) == set(p.k16_slot_counts(_a2_reads())) for r in c["reads"])
+    assert len(c["confirmations"]) == len(_GRID) and c["confirmation_hours"] >= 0
+    assert c["m1_m2"] == {"comparison": p.NO_M2} and c["d13"] is None
+    assert record["table"]["street"]["greedy"]["1337"] == "NOT_REACHED"
+    assert record["pairs"]["street|greedy"]["text"] == "NOT_REACHED na 1337, NOT_RUN na 2024"
+
+
+def _floors_module(monkeypatch, floors, bands):
+    module = types.ModuleType("phase41_floors_prereg")
+    module.E1_CONDITION_A_FLOORS, module.E1_CONDITION_C_BAND_INPUTS = floors, bands
+    monkeypatch.setitem(sys.modules, "phase41_floors_prereg", module)
+    return module
+
+
+def test_build_record_real_root_defaults_import_the_floors_file(monkeypatch, tmp_path):
+    import ast
+
+    rig = _producer_rig(monkeypatch, tmp_path, real=True)
+    floors, bands = _fills(monkeypatch, rig.root)
+    _floors_module(monkeypatch, floors, bands)
+    record = phase41_erasure.build_record(rig.root)
+    assert record["calibrations"]["d12"] == _roundtrip(phase41_prereg.d12_rows(floors))
+    assert record["status"] == "PARTIAL"
+    assert {b["verdict"] for b in record["cells"].values()} == {phase41_prereg.NOT_RUN}
+    # A rehearsal root passes its own fills: the floors file is the real root's.
+    tmp = _producer_rig(monkeypatch, tmp_path / "tmp")
+    with pytest.raises(SystemExit, match="floors and bands"):
+        phase41_erasure.build_record(tmp.root, ledger_path=tmp.ledger)
+    # The floors file is imported inside build_record only; no module-level name binds a fill.
+    tree = ast.parse((_SCRIPTS / "phase41_erasure.py").read_text(encoding="utf-8"))
+    sites = [
+        (top.name if isinstance(top, ast.FunctionDef) else "<module>")
+        for top in tree.body
+        for node in ast.walk(top)
+        if isinstance(node, ast.Import)
+        and any(a.name == "phase41_floors_prereg" for a in node.names)
+    ]
+    assert sites == ["build_record"]
+    bound = {
+        t.id
+        for top in tree.body
+        if isinstance(top, ast.Assign)
+        for t in top.targets
+        if isinstance(t, ast.Name)
+    }
+    assert not bound & {"E1_CONDITION_A_FLOORS", "E1_CONDITION_C_BAND_INPUTS"}
+
+
+def test_emit_is_write_once_and_refuses_a_dirty_tree(monkeypatch, tmp_path):
+    p = phase41_prereg
+    rig = _producer_rig(monkeypatch, tmp_path)
+    floors, bands = _fills(monkeypatch, rig.root)
+    kw = {"root": rig.root, "ledger_path": rig.ledger, "floors": floors, "bands": bands}
+    record = phase41_erasure.emit(**kw)
+    assert _json(rig.root / p.ERASURE_RECORD) == record
+    with pytest.raises(SystemExit, match="write-once"):
+        phase41_erasure.emit(**kw)
+
+    real = _producer_rig(monkeypatch, tmp_path / "real", real=True)
+    floors, bands = _fills(monkeypatch, real.root)
+    _floors_module(monkeypatch, floors, bands)
+    out = real.root / p.ERASURE_RECORD
+    monkeypatch.setattr(phase41_erasure, "refuse_if_dirty", _raise("planted dirty tree"))
+    with pytest.raises(SystemExit, match="planted dirty tree"):
+        phase41_erasure.emit()
+    assert not out.exists()
+    dirty = []
+    monkeypatch.setattr(phase41_erasure, "refuse_if_dirty", lambda **k: dirty.append(k))
+    # The stage-1 records are untracked in the repository: refused, nothing written.
+    with pytest.raises(SystemExit, match="tracked and clean"):
+        phase41_erasure.emit()
+    assert not out.exists() and dirty and dirty[-1]["cwd"] == phase41_erasure._REPO
+    asked = []
+
+    def tracked(*rels):
+        asked.append(rels)
+        return True
+
+    monkeypatch.setattr(phase41_erasure, "_tracked_and_clean", tracked)
+    record = phase41_erasure.emit()
+    assert _json(out) == record
+    (rels,) = asked
+    assert rels[0] == phase41_erasure.FLOORS_FILE
+    assert set(rels[1:]) == set(record["inputs"])
+    assert set(phase41_erasure._stage1_records()) <= set(rels)
+
+
+def test_record_has_no_top_level_run_provenance(monkeypatch, tmp_path):
+    rig = _producer_rig(monkeypatch, tmp_path)
+    floors, bands = _fills(monkeypatch, rig.root)
+    record = phase41_erasure.build_record(
+        rig.root, ledger_path=rig.ledger, floors=floors, bands=bands
+    )
+    assert "run" not in record["provenance"]
+    assert set(record["provenance"]) == {"emitted_utc", "git_sha", "module_sha256"}
+    assert record["provenance"]["module_sha256"] == phase41_erasure.module_sha256()
