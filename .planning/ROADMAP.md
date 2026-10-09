@@ -1929,11 +1929,11 @@ Plans:
 
 **Wave 12** *(blocked on Wave 11 completion)*
 
-- [ ] 41-12-PLAN.md — checkpoint: driver review (41-REVIEW-2.md), launch gate (collector, memory state, identity), Rafael's approved, stage-1 MPS run waited by PID (no commits)
+- [x] 41-12-PLAN.md — checkpoint: driver review (41-REVIEW-2.md), launch gate (collector, memory state, identity), Rafael's approved, stage-1 MPS run waited by PID (no commits)
 
 **Wave 13** *(blocked on Wave 12 completion)*
 
-- [ ] 41-13-PLAN.md — checkpoint: Rafael's approved on the stage-1 records; commit ledger, then the 8 records, then scripts/phase41_floors_prereg.py (floors + band in one file) with its test; full suite
+- [x] 41-13-PLAN.md — checkpoint: Rafael's approved on the stage-1 records; commit ledger, then the 8 records, then scripts/phase41_floors_prereg.py (floors + band in one file) with its test; full suite
 
 **Wave 14** *(blocked on Wave 13 completion)*
 
@@ -2111,7 +2111,7 @@ Next (v5.0): `/gsd:plan-phase 29`.
 | 38. Exposure Rank at Larger Minted Sets | v6.0 | 10/10 | Complete | 2026-10-04 — verification passed 4/4 SC; reviews 1e4b3e2 (WR-01 fixed d33986c per Rafael) and 6475b14 (nothing to fix); minting 7357577, sizes b2416ee, ledger 8ae5994, rank d6984f4, report 7043e9c, each after Rafael's approved; suite 4103/4/0 at 7043e9c; zero gsd-sdk mutation handlers |
 | 39. Instrument × Context 2×2 | v6.0 | 10/10 | Complete | 2026-10-05 — verification passed 4/4 SC; prereg reviewed and frozen 9366134 (39-REVIEW, -2); driver review 39-REVIEW-3 (7 fixes, re-rehearsed); ledger 4268f26, record 78d2605, report 86de12a, each after Rafael's approved; suite 4300/4/0 |
 | 40. M2 Seed Noise Floor | v6.0 | 11/11 | Complete | 2026-10-08 — verification passed 3/3 SC; prereg frozen 8cf3b32 (40-REVIEW); driver review 40-REVIEW-2; ledger ea8f7d3, seed records cf3b626..60e4480, noise floor fd603cd, report 9a6a5e4 + addendum 4f7b2ff, each after Rafael's approved; suite 4495/4/0; zero gsd-sdk mutation handlers |
-| 41. Erasure Across Facts, Orderings and Seeds | v6.0 | 11/16 | In Progress | - |
+| 41. Erasure Across Facts, Orderings and Seeds | v6.0 | 13/16 | In Progress | - |
 | 42. DP-SGD Recipe Search at Large ε | v6.0 | 0/TBD | Not started | - |
 | 43. One-Run Privacy Audit (Conditional) | v6.0 | 0/TBD | Not started | - |
 | 44. Public Deposit Package | v6.0 | 0/TBD | Not started | - |
