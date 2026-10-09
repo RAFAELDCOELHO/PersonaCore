@@ -2144,6 +2144,34 @@ def _key(*parts):
     return "|".join(str(p) for p in parts)
 
 
+# IN-01 (a), Rafael 2026-10-09: the CPU rehearsal's own records are scratch / gitignored; the
+# committed lines that quote its erasure record's D-02 reading are these (cited, never re-typed).
+D02_CPU_REHEARSAL_RECORD = {
+    "path": ".planning/phases/41-erasure-across-facts-orderings-and-seeds/41-11-SUMMARY.md",
+    "lines": (172, 176),
+    "commit": "2098294",
+}
+_DROPPED_SUMMARY_KEYS = (
+    "lost_utc",
+    "cause_note",
+    "manifest",
+    "manifest_sha256",
+    "relaunch_git_sha",
+    "head_change_declared",
+    "ordering_equal",
+    "adapter_identity",
+)
+
+
+def _dropped_summary(attempts):
+    """WR-02 (emit only): per dropped attempt of a re-run unit, as its sha-pinned unit record
+    lists it: the manifest's fields, the kept-file count and the comparison with the re-run."""
+    return [
+        {k: a[k] for k in _DROPPED_SUMMARY_KEYS if k in a} | {"n_kept": len(a["kept"])}
+        for a in attempts
+    ]
+
+
 def build_record(root, *, ledger_path=None, floors=None, bands=None):
     """The erasure record from the records alone: per cell condition_a / condition_b (pre = the
     seed's intact Phase 40 full A2 record) / condition_c / cell_verdict on the stop's K = 48
@@ -2160,6 +2188,7 @@ def build_record(root, *, ledger_path=None, floors=None, bands=None):
     prereg = _prereg()
     greedy = prereg.ORDERINGS[0]
     root = pathlib.Path(root)
+    inputs = {}
     if floors is None or bands is None:
         _prove(
             _is_real(root),
@@ -2170,7 +2199,7 @@ def build_record(root, *, ledger_path=None, floors=None, bands=None):
 
         floors = phase41_floors_prereg.E1_CONDITION_A_FLOORS if floors is None else floors
         bands = phase41_floors_prereg.E1_CONDITION_C_BAND_INPUTS if bands is None else bands
-    inputs = {}
+        inputs[FLOORS_FILE] = _sha256(root / FLOORS_FILE)  # IN-05 (ii)
 
     def read(base, rel, sha256=None):
         path = pathlib.Path(base) / rel
@@ -2192,6 +2221,13 @@ def build_record(root, *, ledger_path=None, floors=None, bands=None):
     chosen = {(r["variant"], r["variant_decided_by"]) for (o, _), r in cal.items() if o != greedy}
     _prove(len(chosen) == 1, f"the gradient calibration records disagree on the variant: {chosen}")
     ((variant, decided_by),) = chosen
+    variant_path = _variant_path(root)
+    variant_content = _variant_record(root)  # IN-05 (i): gitignored, so copied into the record
+    _prove(
+        (variant_content["variant"], variant_content["variant_decided_by"])
+        == (variant, decided_by),
+        f"{variant_path} disagrees with the gradient calibration records ({variant}, {decided_by})",
+    )
 
     noise = read(_REPO, prereg.NOISE_FLOOR_RECORD)
     a2 = {
@@ -2256,6 +2292,7 @@ def build_record(root, *, ledger_path=None, floors=None, bands=None):
             applied_ordering=rec["applied_ordering"]["ordered"],
             not_reached_sentence=rec["not_reached_sentence"],
             m1=rec["m1"],
+            dropped_attempts=_dropped_summary(rec["dropped_attempts"]),
         )
         if stop == phase35_prereg.NOT_REACHED:
             verdict = prereg.cell_verdict(
@@ -2342,6 +2379,17 @@ def build_record(root, *, ledger_path=None, floors=None, bands=None):
         else observed["greedy_1337_phase19_prefix"] == prefix,
         "d02_cpu_equality": all(x["equal"] for x in d02) if devices == {"cpu"} else None,
     }
+    cite = D02_CPU_REHEARSAL_RECORD
+    where = f"{cite['path']}:{cite['lines'][0]}-{cite['lines'][1]} (commit {cite['commit']})"
+    reasons = {
+        "d02_cpu_equality": None
+        if devices == {"cpu"}
+        else (
+            f"D-02 equality on CPU was established in the CPU rehearsal ({where}), and on "
+            f"{', '.join(sorted(devices))} it is verified at every gradient of this run; "
+            "d02_cpu_equality is None because no gradient of this run runs on CPU"
+        )
+    }
     spent = phase36_ledger.spent(ledger_path=ledger_path, fronts=(FRONT,))
     prep_ids = {prereg.run_id(u) for u in prereg.PREP_UNITS}
     record = {
@@ -2353,6 +2401,11 @@ def build_record(root, *, ledger_path=None, floors=None, bands=None):
         "outcomes": outcomes,
         "variant": variant,
         "variant_decided_by": decided_by,
+        "variant_record": {
+            "path": _rel(variant_path, root),
+            "sha256": _sha256(variant_path),
+            "content": variant_content,
+        },
         "cells": cells,
         "pairs": {_key(*k): {**prereg.pair_label(v), "verdicts": v} for k, v in pairs.items()},
         "summary": prereg.summary_counts(pairs),
@@ -2368,6 +2421,10 @@ def build_record(root, *, ledger_path=None, floors=None, bands=None):
                 if o != greedy
             },
             "d11": {s: first[s]["d11_identity"] for s in prereg.SEEDS},
+            "dropped_attempts": {
+                u: _dropped_summary(cal[prereg.unit_key(u)[1:]]["dropped_attempts"])
+                for u in prereg.PREP_UNITS
+            },
             "condition_a": prereg.ENTRIES["condition_a"]["derivation"],
             "prep_hours": math.fsum(r["seconds"] for r in spent["rows"] if r["run_id"] in prep_ids)
             / 3600,
@@ -2391,7 +2448,12 @@ def build_record(root, *, ledger_path=None, floors=None, bands=None):
             c["confirmation_hours"] for c in cells.values() if "confirmation_hours" in c
         ),
         "predictions": {
-            name: {"prediction": text, "observed": observed[name], "held": held[name]}
+            name: {
+                "prediction": text,
+                "observed": observed[name],
+                "held": held[name],
+                "reason": reasons.get(name),
+            }
             for name, text in prereg.ENTRIES["predictions"]["value"].items()
         },
         "not_reached_sentence": prereg.not_reached_sentence(),
@@ -2468,6 +2530,23 @@ def _counts(pair):
     return f"{pair[0]}/{pair[1]}"
 
 
+def _dropped_lines(unit, attempts):
+    """WR-02: one report line per dropped attempt of a re-run unit (from the record's summary)."""
+    out = []
+    for a in attempts:
+        field = "ordering_equal" if "ordering_equal" in a else "adapter_identity"
+        value = a[field]
+        if isinstance(value, dict):
+            value = f"tensors_identical {value.get('tensors_identical')}"
+        out.append(
+            f"- {unit}: dropped attempt lost {a['lost_utc']}; cause note: {a['cause_note']}; "
+            f"manifest {a['manifest']} (sha256 {a['manifest_sha256']}); {a['n_kept']} kept "
+            f"files; relaunched at {a['relaunch_git_sha']} (HEAD change declared: "
+            f"{a['head_change_declared']}); {field} {value}."
+        )
+    return [*out, ""] if out else []
+
+
 def _cell_section(unit, c, labels):
     """One cell: verdict, D-27 reads and per-fact counts, D-26 confirmations, (a)/(b)/(c), D-14,
     D-18, D-19 and D-20, each from the cell's block."""
@@ -2480,6 +2559,7 @@ def _cell_section(unit, c, labels):
         f"{', '.join(c['failed']) or 'none'}; non-targets beyond the margin: "
         f"{', '.join(c['beyond']) or 'none'}; INCONCLUSIVE reason: {c['reason'] or 'none'}.",
         "",
+        *_dropped_lines(unit, c["dropped_attempts"]),
     ]
     if c["not_reached_sentence"]:
         out += [f"D-09: {c['not_reached_sentence']}.", ""]
@@ -2687,7 +2767,11 @@ def render_report(record):
         "never started (or dropped and not re-run).",
         "",
         f"Alternative ordering variant: {record['variant']} (decided by "
-        f"{record['variant_decided_by']}; IN-02).",
+        f"{record['variant_decided_by']}: cpu_seconds "
+        f"{record['variant_record']['content']['cpu_seconds']!r}, mps_seconds "
+        f"{record['variant_record']['content']['mps_seconds']!r}; "
+        f"{record['variant_record']['path']} sha256 {record['variant_record']['sha256']}; "
+        "IN-02).",
         "",
         "## Cells",
         "",
@@ -2725,8 +2809,37 @@ def render_report(record):
             ],
         ),
         *_table(
-            ("seed", "D-06 Spearman rho (gradient vs greedy)", "D-11 tensor-identical"),
-            [[s, repr(cal["d06"][s]), cal["d11"][s].get("tensors_identical")] for s in seeds],
+            (
+                "seed",
+                "D-06 Spearman rho (gradient vs greedy)",
+                "D-11 reference sha256 matches record",
+                "D-11 tensor-identical",
+                "D-11 max abs diff",
+                "D-11 finding",
+            ),
+            [
+                [
+                    s,
+                    repr(cal["d06"][s]),
+                    cal["d11"][s].get("reference_sha256_matches_record"),
+                    cal["d11"][s].get("tensors_identical"),
+                    max(
+                        (
+                            v
+                            for v in (cal["d11"][s].get("max_abs_diff") or {}).values()
+                            if v is not None
+                        ),
+                        default=None,
+                    ),
+                    cal["d11"][s].get("finding"),
+                ]
+                for s in seeds
+            ],
+        ),
+        *(
+            line
+            for unit in prereg.PREP_UNITS
+            for line in _dropped_lines(unit, cal["dropped_attempts"][unit])
         ),
         "## (c) bands (D-13)",
         "",
@@ -2791,6 +2904,11 @@ def render_report(record):
         *_table(
             ("prediction", "held"),
             [[name, x["held"]] for name, x in record["predictions"].items()],
+        ),
+        *(
+            f"{name}: {x['reason']}.\n"
+            for name, x in record["predictions"].items()
+            if x["reason"] is not None
         ),
     ]
     end = record["end_point"]

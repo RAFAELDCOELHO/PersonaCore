@@ -3469,7 +3469,9 @@ def test_not_reached_cell_in_the_record(monkeypatch, tmp_path):
     assert record["pairs"]["street|greedy"]["text"] == "NOT_REACHED na 1337, NOT_RUN na 2024"
 
 
-def _floors_module(monkeypatch, floors, bands):
+def _floors_module(monkeypatch, root, floors, bands):
+    """The floors fill file planted at ``root`` (its bytes are what inputs pins) and its module."""
+    _plant(pathlib.Path(root) / phase41_erasure.FLOORS_FILE, b"planted floors fill file\n")
     module = types.ModuleType("phase41_floors_prereg")
     module.E1_CONDITION_A_FLOORS, module.E1_CONDITION_C_BAND_INPUTS = floors, bands
     monkeypatch.setitem(sys.modules, "phase41_floors_prereg", module)
@@ -3481,7 +3483,7 @@ def test_build_record_real_root_defaults_import_the_floors_file(monkeypatch, tmp
 
     rig = _producer_rig(monkeypatch, tmp_path, real=True)
     floors, bands = _fills(monkeypatch, rig.root)
-    _floors_module(monkeypatch, floors, bands)
+    _floors_module(monkeypatch, rig.root, floors, bands)
     record = phase41_erasure.build_record(rig.root)
     assert record["calibrations"]["d12"] == _roundtrip(phase41_prereg.d12_rows(floors))
     assert record["status"] == "PARTIAL"
@@ -3522,7 +3524,7 @@ def test_emit_is_write_once_and_refuses_a_dirty_tree(monkeypatch, tmp_path):
 
     real = _producer_rig(monkeypatch, tmp_path / "real", real=True)
     floors, bands = _fills(monkeypatch, real.root)
-    _floors_module(monkeypatch, floors, bands)
+    _floors_module(monkeypatch, real.root, floors, bands)
     out = real.root / p.ERASURE_RECORD
     monkeypatch.setattr(phase41_erasure, "refuse_if_dirty", _raise("planted dirty tree"))
     with pytest.raises(SystemExit, match="planted dirty tree"):
@@ -3618,7 +3620,7 @@ def test_report_writes_once_from_a_tracked_record(monkeypatch, tmp_path):
     p = phase41_prereg
     real = _producer_rig(monkeypatch, tmp_path, real=True)
     floors, bands = _fills(monkeypatch, real.root)
-    _floors_module(monkeypatch, floors, bands)
+    _floors_module(monkeypatch, real.root, floors, bands)
     with pytest.raises(SystemExit, match="emit the record first"):
         phase41_erasure.report()
     with monkeypatch.context() as m:
@@ -3638,6 +3640,217 @@ def test_report_writes_once_from_a_tracked_record(monkeypatch, tmp_path):
     assert out.read_text(encoding="utf-8") == phase41_erasure.render_report(record)
     with pytest.raises(SystemExit, match=r"write-once.*scripts/_addendum\.py"):
         phase41_erasure.report()
+
+
+# =================================================================================================
+# (12) 41-REVIEW-2, Rafael 2026-10-09 — emit only: WR-02 a re-run unit's dropped attempts, IN-05 the
+# variant.json content / the floors file's sha256 / D-11 in the report, IN-01 (a) the
+# d02_cpu_equality reason.
+# =================================================================================================
+
+_SUMMARY_KEYS = (
+    "lost_utc",
+    "cause_note",
+    "manifest",
+    "manifest_sha256",
+    "relaunch_git_sha",
+    "head_change_declared",
+)
+
+
+def test_erasure_record_and_report_list_a_rerun_cells_dropped_attempt(monkeypatch, tmp_path):
+    """WR-02 (41-REVIEW-2 E3): a pet_name cell crashes at its first read, is dropped, re-runs."""
+    import phase36_ledger
+
+    p = phase41_prereg
+    rig = _producer_rig(monkeypatch, tmp_path)
+    cell = p.cell_unit("pet_name", "greedy", 1337)
+    real_confirm = phase41_erasure.k48_confirm
+    _cell_fakes(monkeypatch, rig, {c: (False, None, 5) for c in _GRID}, crash_at=_GRID[0])
+    with pytest.raises(RuntimeError, match="planted crash"):
+        _run(rig, units=(cell,))
+    phase36_ledger.reconcile(ledger_path=rig.ledger, heartbeat_path=rig.heartbeat)
+    _drop(rig, cell, cause_note="planted cause: a crash at the first read")
+    monkeypatch.setattr(phase41_erasure, "k48_confirm", real_confirm)
+    _producer_cell(monkeypatch, rig, cell)
+    floors, bands = _fills(monkeypatch, rig.root)
+    record = phase41_erasure.emit(root=rig.root, ledger_path=rig.ledger, floors=floors, bands=bands)
+    cell_rel = p.unit_record(cell)
+    (attempt,) = _json(rig.root / cell_rel)["dropped_attempts"]
+    (summary,) = record["cells"][cell]["dropped_attempts"]
+    assert summary == _roundtrip(phase41_erasure._dropped_summary([attempt]))[0]
+    for key in (*_SUMMARY_KEYS, "ordering_equal"):
+        assert summary[key] == attempt[key], key
+    assert summary["cause_note"] == "planted cause: a crash at the first read"
+    assert summary["n_kept"] == len(attempt["kept"]) > 0
+    assert record["inputs"][cell_rel] == phase41_erasure._sha256(rig.root / cell_rel)
+    text = phase41_erasure.render_report(record)
+    (line,) = [x for x in text.splitlines() if attempt["lost_utc"] in x]
+    assert line == phase41_erasure._dropped_lines(cell, [summary])[0]
+    for value in (
+        cell,
+        summary["cause_note"],
+        summary["manifest"],
+        summary["manifest_sha256"],
+        f"ordering_equal {summary['ordering_equal']}",
+    ):
+        assert value in line, value
+    assert phase41_erasure._dropped_lines(cell, []) == []
+
+
+def test_erasure_record_and_report_list_a_rerun_prep_units_dropped_attempt(monkeypatch, tmp_path):
+    """WR-02: a seed's first prep unit crashes after training, is dropped, re-runs; stage 1 ends."""
+    import phase36_ledger
+    import phase40_noise
+
+    p = phase41_prereg
+    rig = _run_fakes(monkeypatch, _e1_rig(monkeypatch, tmp_path))
+    unit = p.PREP_UNITS[0]
+    current = phase41_erasure.calibration_identity
+    crash = {"on": True}
+
+    def identity(new_adapter):
+        if crash["on"]:
+            raise RuntimeError("planted crash after training")
+        return current(new_adapter)
+
+    monkeypatch.setattr(phase41_erasure, "calibration_identity", identity)
+    with pytest.raises(RuntimeError, match="planted crash"):
+        _run(rig, units=(unit,))
+    phase36_ledger.reconcile(ledger_path=rig.ledger, heartbeat_path=rig.heartbeat)
+    _drop(rig, unit, cause_note="planted cause: a crash after training")
+
+    def compared(new_path, committed_path):
+        return {"tensors_identical": True, "planted": "identity"}
+
+    monkeypatch.setattr(
+        phase40_noise, "adapter_identity", _checked(phase40_noise.adapter_identity, compared)
+    )
+    crash["on"] = False
+    assert _run(rig) == {"stage": 1, "whole": list(p.PREP_UNITS)}
+    floors, bands = _fills(monkeypatch, rig.root)
+    record = phase41_erasure.build_record(
+        rig.root, ledger_path=rig.ledger, floors=floors, bands=bands
+    )
+    (attempt,) = _json(rig.root / p.unit_record(unit))["dropped_attempts"]
+    dropped = record["calibrations"]["dropped_attempts"]
+    assert set(dropped) == set(p.PREP_UNITS)
+    assert all(dropped[u] == [] for u in p.PREP_UNITS if u != unit)
+    (summary,) = dropped[unit]
+    assert summary == _roundtrip(phase41_erasure._dropped_summary([attempt]))[0]
+    for key in _SUMMARY_KEYS:
+        assert summary[key] == attempt[key], key
+    assert summary["adapter_identity"] == {"tensors_identical": True, "planted": "identity"}
+    assert summary["n_kept"] == len(attempt["kept"]) > 0
+    text = phase41_erasure.render_report(record)
+    (line,) = [x for x in text.splitlines() if attempt["lost_utc"] in x]
+    assert line == phase41_erasure._dropped_lines(unit, [summary])[0]
+    assert unit in line and "tensors_identical True" in line and summary["cause_note"] in line
+
+
+def test_d02_cpu_equality_reason_cites_the_cpu_rehearsal(monkeypatch, tmp_path):
+    """IN-01 (a), Rafael 2026-10-09 (41-REVIEW-2 E4): on an mps record the field stays None, with
+    the reason; the reason cites the committed lines that quote the CPU rehearsal's record."""
+    cpu = _producer_rig(monkeypatch, tmp_path / "cpu")
+    floors, bands = _fills(monkeypatch, cpu.root)
+    record = phase41_erasure.build_record(
+        cpu.root, ledger_path=cpu.ledger, floors=floors, bands=bands
+    )
+    pred = record["predictions"]["d02_cpu_equality"]
+    assert pred["observed"]["devices"] == ["cpu"] and pred["held"] is True
+    assert pred["reason"] is None
+    assert "d02_cpu_equality:" not in phase41_erasure.render_report(record)
+
+    rig = _producer_rig(monkeypatch, tmp_path / "real", real=True)
+    floors, bands = _fills(monkeypatch, rig.root)
+    record = phase41_erasure.build_record(rig.root, floors=floors, bands=bands)
+    pred = record["predictions"]["d02_cpu_equality"]
+    assert pred["observed"]["devices"] == ["mps"] and pred["held"] is None
+    assert pred["observed"]["d02"] and all(x["equal"] for x in pred["observed"]["d02"])
+    cite = phase41_erasure.D02_CPU_REHEARSAL_RECORD
+    where = f"{cite['path']}:{cite['lines'][0]}-{cite['lines'][1]} (commit {cite['commit']})"
+    assert pred["reason"] == (
+        f"D-02 equality on CPU was established in the CPU rehearsal ({where}), and on mps it is "
+        "verified at every gradient of this run; d02_cpu_equality is None because no gradient of "
+        "this run runs on CPU"
+    )
+    assert all(
+        x["reason"] is None for n, x in record["predictions"].items() if n != "d02_cpu_equality"
+    )
+    assert f"d02_cpu_equality: {pred['reason']}." in phase41_erasure.render_report(record)
+    # The cited lines, at the cited commit, quote the rehearsal record's D-02 reading.
+    quoted = _git("show", f"{cite['commit']}:{cite['path']}").splitlines()
+    quoted = "\n".join(quoted[cite["lines"][0] - 1 : cite["lines"][1]])
+    assert "`predictions.d02_cpu_equality.held = True`" in quoted
+    assert "`difference 0.0, equal True`" in quoted and '`["cpu"]`' in quoted
+
+
+def test_record_carries_variant_json_and_the_floors_sha256(monkeypatch, tmp_path):
+    """IN-05 (i) and (ii): variant.json's content in the record and the report; the floors fill
+    file's sha256 in inputs on the real root (a rehearsal root passes its fills: not there)."""
+    rig = _producer_rig(monkeypatch, tmp_path / "rh")
+    floors, bands = _fills(monkeypatch, rig.root)
+    record = phase41_erasure.build_record(
+        rig.root, ledger_path=rig.ledger, floors=floors, bands=bands
+    )
+    assert phase41_erasure.FLOORS_FILE not in record["inputs"]
+
+    real = _producer_rig(monkeypatch, tmp_path / "real", real=True)
+    floors, bands = _fills(monkeypatch, real.root)
+    _floors_module(monkeypatch, real.root, floors, bands)
+    record = phase41_erasure.build_record(real.root)
+    path = phase41_erasure._variant_path(real.root)
+    content = _json(path)
+    assert record["variant_record"] == {
+        "path": path.relative_to(real.root).as_posix(),
+        "sha256": phase41_erasure._sha256(path),
+        "content": content,
+    }
+    assert (content["variant"], content["variant_decided_by"]) == (
+        record["variant"],
+        record["variant_decided_by"],
+    )
+    floors_file = real.root / phase41_erasure.FLOORS_FILE
+    assert record["inputs"][phase41_erasure.FLOORS_FILE] == phase41_erasure._sha256(floors_file)
+    text = phase41_erasure.render_report(record)
+    for value in (
+        f"Alternative ordering variant: {content['variant']}",
+        f"decided by {content['variant_decided_by']}",
+        f"cpu_seconds {content['cpu_seconds']!r}",
+        f"mps_seconds {content['mps_seconds']!r}",
+        record["variant_record"]["path"],
+        record["variant_record"]["sha256"],
+    ):
+        assert value in text, value
+    # A variant.json that disagrees with the calibration records is refused.
+    path.write_text(json.dumps({**content, "variant": "planted"}), encoding="utf-8")
+    with pytest.raises(SystemExit, match="variant.json"):
+        phase41_erasure.build_record(real.root)
+
+
+def test_report_prints_the_d11_result(monkeypatch, tmp_path):
+    """IN-05 (iii): D-11's reference digest check, tensor identity, max diff and finding."""
+    p = phase41_prereg
+    _, record = _producer_record(monkeypatch, tmp_path)
+    identity = {
+        "tensors_identical": False,
+        "reference_sha256_matches_record": False,
+        "max_abs_diff": {"a": 0.25, "b": None, "c": 0.5},
+        "finding": "planted finding",
+    }
+    record["calibrations"]["d11"] = {str(s): identity for s in p.SEEDS}
+    text = phase41_erasure.render_report(record)
+    for s in p.SEEDS:
+        d06 = record["calibrations"]["d06"][str(s)]
+        assert f"| {s} | {d06!r} | False | False | 0.5 | planted finding |" in text, s
+    # An identical adapter: every diff 0.0, its max 0.0 (not "none"); no finding.
+    identity = {**identity, "tensors_identical": True, "max_abs_diff": {"a": 0.0, "b": None}}
+    identity.update(reference_sha256_matches_record=True, finding=None)
+    record["calibrations"]["d11"] = {str(s): identity for s in p.SEEDS}
+    text = phase41_erasure.render_report(record)
+    for s in p.SEEDS:
+        d06 = record["calibrations"]["d06"][str(s)]
+        assert f"| {s} | {d06!r} | True | True | 0.0 | None |" in text, s
 
 
 @pytest.mark.parametrize("command", ["preflight", "run", "emit", "report"])
