@@ -40,13 +40,55 @@ def _phase41_outputs():
     )
 
 
+def _real_e1_bytes():
+    """sha256 of the real milestone ledger and of every file under the real data/phase41_e1 (the
+    stage-1 artifacts; data/ is gitignored, so git status cannot see them)."""
+    paths = [_ROOT / "ledger" / "v6_mps_ledger.jsonl"]
+    paths += sorted(p for p in (_ROOT / "data" / "phase41_e1").rglob("*") if p.is_file())
+    return {
+        p.relative_to(_ROOT).as_posix(): phase41_erasure._sha256(p) for p in paths if p.exists()
+    }
+
+
 @pytest.fixture(autouse=True)
 def _real_tree_untouched():
     before = _git("status", "--porcelain", "--", "results", "ledger")
     outputs = _phase41_outputs()
+    e1 = _real_e1_bytes()
     yield
     assert _git("status", "--porcelain", "--", "results", "ledger") == before
     assert _phase41_outputs() == outputs
+    assert _real_e1_bytes() == e1
+
+
+def _tmp_git(path):
+    """An empty tmp git repository at ``path``; returns a git runner bound to it."""
+    path.mkdir(parents=True, exist_ok=True)
+
+    def git(*args):
+        return subprocess.run(
+            ("git", "-c", "user.name=t", "-c", "user.email=t@t", *args),
+            cwd=path,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+
+    git("init", "-q")
+    return git
+
+
+def _tracked_in(repo):
+    """The REAL _tracked_and_clean, reading ``repo``'s git instead of the repository's: a gate's
+    outcome never depends on what the real repository has committed (Phase 36 rule)."""
+    real = phase41_erasure._tracked_and_clean
+
+    def tracked(*rels):
+        with pytest.MonkeyPatch.context() as m:
+            m.setattr(phase41_erasure, "_REPO", pathlib.Path(repo))
+            return real(*rels)
+
+    return tracked
 
 
 # =================================================================================================
@@ -1330,8 +1372,10 @@ def _e1_rig(monkeypatch, tmp_path, *, real=False, identity=True, seconds=True):
     tmp files and ``_noise_floor`` returns the committed record with phase41_adapters rewritten to
     their paths and digests; run_inputs is empty, refuse_if_dirty records its kwargs, the caps read
     the committed budget only. ``real``: ``_ROOT`` and the milestone ledger / heartbeat point into
-    the rig, HEAD is the repository's real HEAD, the device resolves to mps, and the rehearsal
-    identity is recorded (with its smoke seconds unless ``seconds`` is False)."""
+    the rig, HEAD is the repository's real HEAD, the device resolves to mps, the rehearsal
+    identity is recorded (with its smoke seconds unless ``seconds`` is False), and
+    _tracked_and_clean reads an empty tmp git repository (the floors file and the stage-1
+    records untracked) whatever the real repository has committed."""
     import phase36_caps
     import phase36_ledger
 
@@ -1358,6 +1402,9 @@ def _e1_rig(monkeypatch, tmp_path, *, real=False, identity=True, seconds=True):
         head = _git("rev-parse", "HEAD")
         monkeypatch.setattr(phase41_erasure, "git_sha", lambda: head)
         monkeypatch.setattr(phase41_erasure, "_device", lambda: "mps")
+        git_dir = tmp_path / "git"
+        _tmp_git(git_dir)
+        monkeypatch.setattr(phase41_erasure, "_tracked_and_clean", _tracked_in(git_dir))
         if identity:
             path = phase41_erasure.rehearsal_identity_path()
             phase41_erasure.record_rehearsal(path, units=phase41_prereg.PREP_UNITS)
@@ -1712,6 +1759,8 @@ def test_preflight_stage_logic(monkeypatch, tmp_path, capsys):
     assert phase41_erasure.preflight(**after_crash.kw, units=prep[2:])["pending"] == prep[2:]
 
     # The real root: cells only once the floors fill file and the 8 records are tracked + clean.
+    # The rig's tracked state is a tmp git repository with nothing committed (hermetic: since
+    # b8c0e81 / b42900d the real repository tracks them, and the gate must not read that).
     real = _e1_rig(monkeypatch, tmp_path / "real", real=True)
     _whole(None, *prep)
     asked = []
@@ -1737,12 +1786,31 @@ def test_preflight_stage_logic(monkeypatch, tmp_path, capsys):
     assert (pf["stage"], pf["pending"], pf["device"]) == (2, cells, "mps")
 
 
-def test_tracked_and_clean_reads_git():
+def test_tracked_and_clean_reads_git(monkeypatch, tmp_path):
     assert phase41_erasure._tracked_and_clean(phase41_erasure.PREREG_FILE) is True
-    assert phase41_erasure._tracked_and_clean(phase41_erasure.FLOORS_FILE) is False
     assert (
         phase41_erasure._tracked_and_clean(phase41_erasure.PREREG_FILE, "scripts/nope.py") is False
     )
+    # Untracked / committed / modified on a tmp repository: the answer is git's, not the real
+    # repository's committed state (the floors file is tracked there since b8c0e81).
+    git = _tmp_git(tmp_path / "git")
+    monkeypatch.setattr(phase41_erasure, "_REPO", tmp_path / "git")
+    floors = _plant(tmp_path / "git" / phase41_erasure.FLOORS_FILE)
+    record = _plant(tmp_path / "git" / phase41_prereg.calibration_record("greedy", 1337))
+    rels = (phase41_erasure.FLOORS_FILE, phase41_prereg.calibration_record("greedy", 1337))
+    assert phase41_erasure._tracked_and_clean(*rels) is False
+    git("add", rels[0])
+    git("commit", "-q", "-m", "floors")
+    assert phase41_erasure._tracked_and_clean(rels[0]) is True
+    assert phase41_erasure._tracked_and_clean(*rels) is False  # the record still untracked
+    git("add", rels[1])
+    git("commit", "-q", "-m", "record")
+    assert phase41_erasure._tracked_and_clean(*rels) is True
+    record.write_bytes(b"modified")
+    assert phase41_erasure._tracked_and_clean(*rels) is False
+    record.write_bytes(b"planted")
+    floors.unlink()
+    assert phase41_erasure._tracked_and_clean(*rels) is False
 
 
 def test_launch_pathspec_excludes_whole_and_dropped_records():
@@ -2428,12 +2496,16 @@ def test_run_with_no_arguments_resolves_the_real_defaults(monkeypatch, tmp_path,
 
 def test_run_stage_gates(monkeypatch, tmp_path, capsys):
     prep = phase41_prereg.PREP_UNITS
+    e1 = _real_e1_bytes()
+    # The rig's tracked state is an empty tmp git repository, so run() can never pass the gate
+    # into stage-2 work because of what the real repository has committed (b8c0e81 / b42900d).
     real = _e1_rig(monkeypatch, tmp_path / "real", real=True)
     _whole(None, *prep)
     before = _lines(real.ledger)
     assert phase41_erasure.run() == {"stage": "STAGE 1 DONE", "whole": []}
     assert "STAGE 1 DONE" in capsys.readouterr().out.splitlines()
     assert _lines(real.ledger) == before and not real.heartbeat.exists()
+    assert _real_e1_bytes() == e1  # the real ledger and data/phase41_e1, byte for byte
     # The rehearsal identity rule is checked before the first start line.
     fresh = _e1_rig(monkeypatch, tmp_path / "fresh")
     with pytest.raises(SystemExit, match="rehearsal_identity"):
@@ -3532,7 +3604,8 @@ def test_emit_is_write_once_and_refuses_a_dirty_tree(monkeypatch, tmp_path):
     assert not out.exists()
     dirty = []
     monkeypatch.setattr(phase41_erasure, "refuse_if_dirty", lambda **k: dirty.append(k))
-    # The stage-1 records are untracked in the repository: refused, nothing written.
+    # The stage-1 records are untracked in the rig's tmp git repository: refused, nothing
+    # written (hermetic: the real repository tracks them since b42900d).
     with pytest.raises(SystemExit, match="tracked and clean"):
         phase41_erasure.emit()
     assert not out.exists() and dirty and dirty[-1]["cwd"] == phase41_erasure._REPO
