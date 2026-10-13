@@ -1133,3 +1133,13 @@ E1 spent (ledger): 32.3751665625 h; D-26 confirmations: 18.46044798445584 h; cal
 
 - emitted 2026-10-13T00:23:21.263552+00:00 at 67f4aecf2ccdf703f2666baa4c473706afe7eb57
 - 109 input records, each with its sha256 in the erasure record
+
+## Adendo — 2026-10-13 (continuação datada; nenhum número novo, tudo dos registros commitados)
+
+1. A tabela "Inside 'não replicado'" acima está vazia porque nenhum par caiu nessa categoria (0 pares).
+
+2. A previsão D-21, por extenso. O lado do R_q se confirmou nas 4 células do pet_name: n1 na lista commitada 11, 10, 17 e 17 contra 0–1 dos cinco M2; na mintada 27 nas quatro contra 9–12. O lado da âncora falhou nas 4: rank em 512 igual a 12, 6, 2 e 1 contra a faixa de 15 a 41. As paradas foram 64, 64, 32 e 32 (greedy 1337, greedy 2024, gradient 1337, gradient 2024). A leitura do E5 para o pet_name na âncora em 512 (results/phase38_rank_report.md) era 16 em k = 78, dentro da faixa, com mais ablação do que essas paradas; em k = 64 era 12. Essa metade da previsão errou. Pelo pré-registro (D-21), o desacordo entre rank e geração é registrado como achado e não muda nenhum veredito: com a geração em zero, o alvo continua entre os primeiros dos 512 candidatos.
+
+3. Horas: o 32,3752 h da linha "E1 spent (ledger)" vem do relógio provenance.run de cada registro, que o phase36_ledger.spent() usa quando o registro está rastreado. Pelo intervalo das linhas do livro-caixa seriam 32,3795 h. A diferença de 15,5 s vem dessas duas formas de medir.
+
+4. Uma leitura, sem veredito novo: a ordenação gradient (variante adaptive) parou com o mesmo número ou menos componentes que a atual (greedy) em cada um dos 8 pares, menos em 5 e o mesmo em 3 (cat_name 2024, street 1337, street 2024); as paradas foram de 32 a 48, contra 32 a 128 da atual. A condição (b) falhou nas 16 células, nas duas ordenações.
