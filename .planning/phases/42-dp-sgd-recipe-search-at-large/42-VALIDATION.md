@@ -21,7 +21,7 @@ created: 2026-10-13
 | **Framework** | pytest 8 in `.venv` (Python 3.11), CPU-only |
 | **Config file** | `pyproject.toml` (existing) |
 | **Quick run command** | `.venv/bin/pytest -q -p no:cacheprovider tests/test_phase42_prereg.py tests/test_phase42_threshold_prereg.py tests/test_phase42_recipes.py` |
-| **Census subset** | `.venv/bin/pytest -q tests/test_phase35_prereg.py -k "slot_census or slot_ordering or grids_must or e3_" tests/test_phase36_caps.py tests/test_phase36_ledger.py tests/test_phase23_resume.py::test_resume_from_none_is_inert tests/test_phase25_driver.py::test_os_replace_appears_only_in_the_two_phase25_writers tests/test_lora_inject.py tests/test_phase21_sc5.py tests/test_phase19_erasure.py::test_retention_measurement_pins_a_new_call_site_with_no_adapted_precedent tests/test_phase20_correction.py::test_mitigation_point_verdict_has_no_caller_outside_this_module tests/test_phase32_frontier.py::test_v4_bytes_unchanged_since_the_v4_tag` |
+| **Census subset** | two calls (one `-k` applies to every file in a call): `.venv/bin/pytest -q tests/test_phase35_prereg.py -k "slot_census or slot_ordering or grids_must or e3_"` then `.venv/bin/pytest -q tests/test_phase36_caps.py tests/test_phase36_ledger.py tests/test_phase23_resume.py tests/test_phase25_driver.py::test_os_replace_appears_only_in_the_two_phase25_writers tests/test_lora_inject.py tests/test_phase21_sc5.py tests/test_phase19_erasure.py::test_retention_measurement_pins_a_new_call_site_with_no_adapted_precedent tests/test_phase20_correction.py::test_mitigation_point_verdict_has_no_caller_outside_this_module tests/test_phase32_frontier.py::test_v4_bytes_unchanged_since_the_v4_tag` |
 | **Full suite command** | `nohup sh -c ".venv/bin/pytest -q -p no:cacheprovider > $LOG 2>&1; echo EXIT=\$? >> $LOG" &` plus a waiter on `^EXIT=` (Bash caps a call at 600 s) |
 | **Estimated runtime** | quick ~60 s; full ~40-56 min (Phase 41 close: 4709 passed / 4 skipped) |
 
@@ -97,3 +97,13 @@ Filled by the planner per task; the requirement → test map from research:
 
 | Iteration | Finding | Origin (revision-introduced / pre-existing) |
 |-----------|---------|---------------------------------------------|
+| 1 | B1 42-04/08/10: real-root preflight refuses untracked whole-unit records (crash_rule dead) | pre-existing (initial plan) |
+| 1 | B2 42-01: D-18 "degrade retention → REFUSED" text with no rule; Rafael ruled recall-only + D-23 | pre-existing (CONTEXT wording) |
+| 1 | W1 census subset: one -k over all files, 13/189 collected | pre-existing (research command) |
+| 1 | W2 two -k flags in one call (42-01/04/09/11) | pre-existing |
+| 1 | W3 42-03 descriptive_reading truth with no task | pre-existing |
+| 1 | W4 42-03 AST gate scans docstring | pre-existing |
+| 1 | W5 42-01 refusal_omitted source vs dc578f9 test | pre-existing |
+| 1 | W6 42-02/07 tamper byte can break JSON | pre-existing |
+| 1 | W7 42-05 report order vs D-15 | pre-existing |
+| 1 | W8 RESEARCH open questions / VALIDATION map | pre-existing (orchestrator fixed RESEARCH + census row) |

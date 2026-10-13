@@ -561,6 +561,12 @@ def train_cell(plan, *, lr, steps):
 
 ## Open Questions
 
+> **RESOLVED 2026-10-13 (plan-phase orchestrator rulings + Rafael):** (1) TPR form enters as a KOV Thm 2.1
+> rearrangement with its caveat; biased-coin bound primary. (2) Retention measured via
+> `measure_condition_c`; refusal omitted and declared. (3) Rehearsal shape is the planner's (42-07).
+> (4) ε compared with tolerance. (5) Verdicts use the fill's float + an exact-rational disagreement
+> test. Also: D-18 corrected by Rafael — REFUSED only via `control_is_unlearnable`; D-23 added.
+
 1. **The TPR ≤ e^ε·FPR + δ line.**
    - Known: it is verified as a rearrangement of KOV Thm 2.1, p. 3. It is non-vacuous only for FPR < (1−δ)e^{−ε} (5.69e-70 at ε = 159.44).
    - Unclear: whether Rafael wants it in the text with that caveat.

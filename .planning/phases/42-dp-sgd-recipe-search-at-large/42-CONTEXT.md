@@ -123,9 +123,18 @@ The phase only FILLS the two Phase-42-owned slots that Phase 35 already wrote in
   - The rationale is an argument, not a project measurement. Under AdamW (the DP optimizer,
     `dpsgd.py:32`) lr scales signal and noise together, and only T accumulates signal faster than
     noise.
-- **D-18: Declared possible outcome.** A σ = 0 control at lr = 1e-3 may fail to learn or degrade
-  retention. Its recipe's points are then REFUSED, as in v4.0, and that is reported with the same
-  weight.
+- **D-18: Declared possible outcome (corrected 2026-10-13 in plan-phase, Rafael's ruling).**
+  - A σ = 0 control at lr = 1e-3 may fail to learn. Its recipe's points are then REFUSED, only via
+    `phase29_prereg.control_is_unlearnable`, exactly as in v4.0, and that is reported with the same
+    weight.
+  - A control that learns but degrades retention does NOT change any label. The retention drop is
+    published descriptively beside the points and named in the report with the same weight.
+  - Correction: the earlier wording ("may fail to learn or degrade retention … REFUSED") was wrong.
+    v4.0 has no retention leg in REFUSED (the rule reads recall counts only, `phase29_prereg.py:190-200`).
+- **D-23: Each point publishes its own control's raw recall (added 2026-10-13 in plan-phase, Rafael).**
+  Beside each label, every noised point publishes the raw recall (k/n) of its recipe's σ = 0 control
+  on both legs, so a "passa" against a control that learned little stays visible. The imported rule
+  (D-12) does not change.
 
 ### Order, rehearsal and approvals
 - **D-19: Two stages.**
