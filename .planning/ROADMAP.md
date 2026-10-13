@@ -1979,7 +1979,57 @@ the guarantee is vacuous, with every ε published unselected and null answers gi
      result records are write-once and committed only after Rafael writes approved. (RECIPE-02,
      RECIPE-03)
 
-**Plans**: TBD
+**Plans**: 12 plans in 12 waves (strictly sequential: the prereg (three parts) and its ancestry test before any driver code; the review and the CPU rehearsal before any MPS time; stage 1 controls, then the threshold fill file, before any noised point; every record committed only after Rafael's approved, the ledger before the records)
+
+Plans:
+
+**Wave 1**
+
+- [ ] 42-01-PLAN.md — scripts/phase42_prereg.py part 1 + tests/test_phase42_prereg.py in ONE commit: 2x2 grid (lr 1e-3 the one typed literal), E3_GRID_SUBSET fill (v4.0 control by SHA-256, P22 at T 200/800), caps check, 28 ENTRIES for D-01..D-23 incl. Rafael's D-18/D-23 ruling, predictions read from records, ancestry tests, forbidden-token AST gate
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 42-02-PLAN.md — prereg part 2: units and order, record paths, ledger run ids, phase42e3_/phase42rh_ prefixes, T-derived warmup (20/80), clip rule, expected train_config, threshold_fill_inputs through the real Phase 35 rule on planted controls, .gitignore lines
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 42-03-PLAN.md — prereg part 3: point_verdict (passa / não passa / REFUSED, reads only recall), 4x2 table with each control's raw k/n (D-23), control retention rows (D-18, descriptive), summary and D-15 null lead, ε per point and basic composition, biased-coin bound, KOV Thm 2.1 rearrangement with caveat, exact-rational disagreements, D-16/D-17 readings
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 42-04-PLAN.md — driver scripts/phase42_recipes.py, measuring half: D-05 rebinding of tp.LR/WARMUP_STEPS/MAX_STEPS in try/finally checked against the sidecar, resume guard, score_arm + measure_condition_c, write-once records, preflight with _launch_pathspec, P22 re-checked before stage 2
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 42-05-PLAN.md — driver emit / report / main, LaunchAgent plist, end-to-end scratch test (driver controls → real threshold fill → emit → report)
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 42-06-PLAN.md — checkpoint: code review (42-REVIEW.md); Rafael rules on findings, the 5 planner defaults and the D-05 rebinding line; fixes, full suite, frozen digests
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [ ] 42-07-PLAN.md — CPU rehearsal (D-21): v4.0 tamper refusal first, then v4.0 SHA reuse, warmup 20/80 from real CPU training, planted P22 crossing, REFUSED via an unlearnable stand-in; artifacts removed from the real tree
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
+- [ ] 42-08-PLAN.md — checkpoint: launch gate, approved #1, stage 1 on MPS — the 3 new σ = 0 controls, PID waiter, verified from files; no commits
+
+**Wave 9** *(blocked on Wave 8 completion)*
+
+- [ ] 42-09-PLAN.md — checkpoint: under one approved — ledger, each control alone, then scripts/phase42_threshold_prereg.py + its test; full suite
+
+**Wave 10** *(blocked on Wave 9 completion)*
+
+- [ ] 42-10-PLAN.md — checkpoint: stage-2 gate (P22 printed, 8 points pending), approved #2, stage 2 on MPS — the 8 noised points; no commits
+
+**Wave 11** *(blocked on Wave 10 completion)*
+
+- [ ] 42-11-PLAN.md — checkpoint: approved — ledger, then each of the 8 points alone; emit on CPU; approval of the E3 record
+
+**Wave 12** *(blocked on Wave 11 completion)*
+
+- [ ] 42-12-PLAN.md — checkpoint: E3 record alone + full suite; report rendered, approved, committed alone; suite again; SC1-SC5 by command
 
 ### Phase 43: One-Run Privacy Audit (Conditional)
 
@@ -2112,7 +2162,7 @@ Next (v5.0): `/gsd:plan-phase 29`.
 | 39. Instrument × Context 2×2 | v6.0 | 10/10 | Complete | 2026-10-05 — verification passed 4/4 SC; prereg reviewed and frozen 9366134 (39-REVIEW, -2); driver review 39-REVIEW-3 (7 fixes, re-rehearsed); ledger 4268f26, record 78d2605, report 86de12a, each after Rafael's approved; suite 4300/4/0 |
 | 40. M2 Seed Noise Floor | v6.0 | 11/11 | Complete | 2026-10-08 — verification passed 3/3 SC; prereg frozen 8cf3b32 (40-REVIEW); driver review 40-REVIEW-2; ledger ea8f7d3, seed records cf3b626..60e4480, noise floor fd603cd, report 9a6a5e4 + addendum 4f7b2ff, each after Rafael's approved; suite 4495/4/0; zero gsd-sdk mutation handlers |
 | 41. Erasure Across Facts, Orderings and Seeds | v6.0 | 16/16 | Complete | 2026-10-13 — verification passed 5/5 SC; stage-1 records b42900d; ledger 37324be, 16 cells ab79f87..67f4aec, erasure record 14a0cc6, report 54ef68c + dated continuation 2da7ba2, each after Rafael's approved; E1: PASS 0, FAILURE replicada 8; suite 4709/4/0; zero gsd-sdk mutation handlers |
-| 42. DP-SGD Recipe Search at Large ε | v6.0 | 0/TBD | Not started | - |
+| 42. DP-SGD Recipe Search at Large ε | v6.0 | 0/12 | Planned | 2026-10-13 — 12 plans in 12 waves; checker PASSED after two revisions; D-18 corrected and D-23 added by Rafael (4f45a91) |
 | 43. One-Run Privacy Audit (Conditional) | v6.0 | 0/TBD | Not started | - |
 | 44. Public Deposit Package | v6.0 | 0/TBD | Not started | - |
 | 45. v6.0 Report and Milestone Close | v6.0 | 0/TBD | Not started | - |
