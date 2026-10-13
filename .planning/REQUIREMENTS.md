@@ -734,14 +734,14 @@ reproducible by an outsider. No closed verdict is reopened; v6.0 publishes besid
 
 ### Erasure across facts, orderings and seeds (ERASE) — E1
 
-- [ ] **ERASE-03**: The targets are the four facts at 13/13 in Phase 19's committed `TARGET_RANKING` (`pet_name`, `cat_name`, `street`, `sibling_name`), selected by a rule committed before measurement that reads the committed ranking
-- [ ] **ERASE-04**: Two ablation orderings are pre-registered: the existing greedy leave-one-out ordering and one alternative
-- [ ] **ERASE-05**: The two teaching seeds are imported from Phase 35's `seed_list` (seed 1337 plus one new seed); the `pet_name` taught adapter and M2 adapter trained in Phase 40 are reused, verified by SHA-256, never retrained
-- [ ] **ERASE-06**: Each target's condition-(a) floor is derived in writing before measurement; if it depends on the calibration rate, the calibration is run per ordering (and per seed if the derivation requires it) and budgeted
-- [ ] **ERASE-07**: The rank never enters the stopping rule (v3.0 showed it saturated); it is recorded at every checkpoint. Proposed for the E1 discuss phase (Rafael, from Claude (claude.ai)): a fixed, pre-registered grid of checkpoints, each read with A2 at K = 16 (precedent: v4.0 `CURVE_K`); at the first checkpoint reading zero, confirm at K = 48; if K = 48 is not zero, continue to the next checkpoint. E1 is re-priced under this design by COST-01
-- [ ] **ERASE-08**: Defect E is routed by a wrapper that imports the pin; `scripts/phase19_erasure.py` stays byte-unchanged and a test proves it
-- [ ] **ERASE-09**: The new condition (c) is a bilateral dialogue band anchored on the adapted model, with the D-01 logic imported from `mitigation_gate`
-- [ ] **ERASE-10**: Damage is reported per non-target fact, each with its own denominator, and no cell reads PASS without replication at the second seed
+- [x] **ERASE-03**: The targets are the four facts at 13/13 in Phase 19's committed `TARGET_RANKING` (`pet_name`, `cat_name`, `street`, `sibling_name`), selected by a rule committed before measurement that reads the committed ranking
+- [x] **ERASE-04**: Two ablation orderings are pre-registered: the existing greedy leave-one-out ordering and one alternative
+- [x] **ERASE-05**: The two teaching seeds are imported from Phase 35's `seed_list` (seed 1337 plus one new seed); the `pet_name` taught adapter and M2 adapter trained in Phase 40 are reused, verified by SHA-256, never retrained
+- [x] **ERASE-06**: Each target's condition-(a) floor is derived in writing before measurement; if it depends on the calibration rate, the calibration is run per ordering (and per seed if the derivation requires it) and budgeted
+- [x] **ERASE-07**: The rank never enters the stopping rule (v3.0 showed it saturated); it is recorded at every checkpoint. Proposed for the E1 discuss phase (Rafael, from Claude (claude.ai)): a fixed, pre-registered grid of checkpoints, each read with A2 at K = 16 (precedent: v4.0 `CURVE_K`); at the first checkpoint reading zero, confirm at K = 48; if K = 48 is not zero, continue to the next checkpoint. E1 is re-priced under this design by COST-01
+- [x] **ERASE-08**: Defect E is routed by a wrapper that imports the pin; `scripts/phase19_erasure.py` stays byte-unchanged and a test proves it
+- [x] **ERASE-09**: The new condition (c) is a bilateral dialogue band anchored on the adapted model, with the D-01 logic imported from `mitigation_gate`
+- [x] **ERASE-10**: Damage is reported per non-target fact, each with its own denominator, and no cell reads PASS without replication at the second seed
 
 ### M2 seed noise floor (NOISE) — E2
 
@@ -817,14 +817,14 @@ reproducible by an outsider. No closed verdict is reopened; v6.0 publishes besid
 | PKG-08 | Phase 44 | Pending |
 | COST-01 | Phase 36 | Complete |
 | COST-02 | Phase 36 | Complete |
-| ERASE-03 | Phase 41 | Pending |
-| ERASE-04 | Phase 41 | Pending |
-| ERASE-05 | Phase 41 | Pending |
-| ERASE-06 | Phase 41 | Pending |
-| ERASE-07 | Phase 41 | Pending |
-| ERASE-08 | Phase 41 | Pending |
-| ERASE-09 | Phase 41 | Pending |
-| ERASE-10 | Phase 41 | Pending |
+| ERASE-03 | Phase 41 | Complete |
+| ERASE-04 | Phase 41 | Complete |
+| ERASE-05 | Phase 41 | Complete |
+| ERASE-06 | Phase 41 | Complete |
+| ERASE-07 | Phase 41 | Complete |
+| ERASE-08 | Phase 41 | Complete |
+| ERASE-09 | Phase 41 | Complete |
+| ERASE-10 | Phase 41 | Complete |
 | NOISE-01 | Phase 40 | Complete |
 | NOISE-02 | Phase 40 | Complete |
 | RECIPE-01 | Phase 42 | Pending |

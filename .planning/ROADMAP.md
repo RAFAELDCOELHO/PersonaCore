@@ -1442,7 +1442,7 @@ never over them.
 - [x] **Phase 38: Exposure Rank at Larger Minted Sets** - E5: the committed ablation prefixes re-scored against same-slot sets minted by a pre-registered rule (completed 2026-10-04; verification passed 4/4 SC; minting record 7357577 (stop_draw 58195), rank record d6984f4 (gate 64/64, CPU 0/256, 0.084 h MPS), report 7043e9c; approved by Rafael; suite 4103/4/0 at 7043e9c)
 - [x] **Phase 39: Instrument × Context 2×2** - E6: NLL, rank and generation at the answer anchor and the full A2 question on the same adapters (completed 2026-10-05; verification passed 4/4 SC; prereg frozen 9366134 after Rafael's reviewed; E6 MPS run 820.6 s SCORED — gate 64/64, copy 448/448 bitwise, IN-02 8/8, CPU 0 differing; ledger 4268f26, record 78d2605, report 86de12a; approved by Rafael; suite 4300/4/0 at 86de12a)
 - [x] **Phase 40: M2 Seed Noise Floor** - E2: M2 retrained at S seeds, published beside v3.0's sampling floor (completed 2026-10-08; verification passed 3/3 SC, 40-VERIFICATION.md; prereg frozen 8cf3b32 after Rafael's confirmations; E2 5 seeds on MPS, ledger ea8f7d3, seed records cf3b626..60e4480, noise-floor record fd603cd (m2 0.3481 over 10 pairs beside 0.1481, margin unamended; gap_noise_floor 0.0841), report 9a6a5e4 + dated addendum 4f7b2ff; approved by Rafael; suite 4495/4/0)
-- [ ] **Phase 41: Erasure Across Facts, Orderings and Seeds** - E1: the four facts tied at 13/13, two orderings, two seeds, no PASS without second-seed replication
+- [x] **Phase 41: Erasure Across Facts, Orderings and Seeds** - E1: the four facts tied at 13/13, two orderings, two seeds, no PASS without second-seed replication (completed 2026-10-13; verification passed 5/5 SC, 41-VERIFICATION.md; E1 result: 16/16 cells FAILURE, 8/8 pairs FAILURE replicada, PASS 0)
 - [ ] **Phase 42: DP-SGD Recipe Search at Large ε** - E3: a pre-registered grid of 4 recipes × σ ∈ {0, 0.5, 1} (σ = 0 is each recipe's own control), n = 8, each configuration's ε published with `selection_accounted = false`
 - [ ] **Phase 43: One-Run Privacy Audit (Conditional)** - E4: runs only if its CPU-computed ceiling could reprove a point Phase 26 could not; otherwise the cut is published with the computed number
 - [ ] **Phase 44: Public Deposit Package** - R2: per-table inventory, SHA-256 manifest and verifier, model and data cards; no PersonaChat bytes; the deposit is Rafael's act
@@ -1937,15 +1937,15 @@ Plans:
 
 **Wave 14** *(blocked on Wave 13 completion)*
 
-- [ ] 41-14-PLAN.md — checkpoint: stage-2 launch gate and Rafael's approved; the 16 cells on MPS in D-22 order with the E1 share pause, per-block relaunch and R-3 b (no commits)
+- [x] 41-14-PLAN.md — checkpoint: stage-2 launch gate and Rafael's approved; the 16 cells on MPS in D-22 order with the E1 share pause, per-block relaunch and R-3 b (no commits)
 
 **Wave 15** *(blocked on Wave 14 completion)*
 
-- [ ] 41-15-PLAN.md — checkpoint: first approved on the ledger and every cell record with its K = 16 / K = 48 records (ledger first, one commit per cell); emit on CPU; second approved on the erasure record
+- [x] 41-15-PLAN.md — checkpoint: first approved on the ledger and every cell record with its K = 16 / K = 48 records (ledger first, one commit per cell); emit on CPU; second approved on the erasure record
 
 **Wave 16** *(blocked on Wave 15 completion)*
 
-- [ ] 41-16-PLAN.md — checkpoint: commit the erasure record, full suite, render the report, third approved, commit the report, full suite; SC1-SC5 by command; hand close left to the orchestrator
+- [x] 41-16-PLAN.md — checkpoint: commit the erasure record, full suite, render the report, third approved, commit the report, full suite; SC1-SC5 by command; hand close left to the orchestrator
 
 ### Phase 42: DP-SGD Recipe Search at Large ε
 
@@ -2111,7 +2111,7 @@ Next (v5.0): `/gsd:plan-phase 29`.
 | 38. Exposure Rank at Larger Minted Sets | v6.0 | 10/10 | Complete | 2026-10-04 — verification passed 4/4 SC; reviews 1e4b3e2 (WR-01 fixed d33986c per Rafael) and 6475b14 (nothing to fix); minting 7357577, sizes b2416ee, ledger 8ae5994, rank d6984f4, report 7043e9c, each after Rafael's approved; suite 4103/4/0 at 7043e9c; zero gsd-sdk mutation handlers |
 | 39. Instrument × Context 2×2 | v6.0 | 10/10 | Complete | 2026-10-05 — verification passed 4/4 SC; prereg reviewed and frozen 9366134 (39-REVIEW, -2); driver review 39-REVIEW-3 (7 fixes, re-rehearsed); ledger 4268f26, record 78d2605, report 86de12a, each after Rafael's approved; suite 4300/4/0 |
 | 40. M2 Seed Noise Floor | v6.0 | 11/11 | Complete | 2026-10-08 — verification passed 3/3 SC; prereg frozen 8cf3b32 (40-REVIEW); driver review 40-REVIEW-2; ledger ea8f7d3, seed records cf3b626..60e4480, noise floor fd603cd, report 9a6a5e4 + addendum 4f7b2ff, each after Rafael's approved; suite 4495/4/0; zero gsd-sdk mutation handlers |
-| 41. Erasure Across Facts, Orderings and Seeds | v6.0 | 13/16 | In Progress | - |
+| 41. Erasure Across Facts, Orderings and Seeds | v6.0 | 16/16 | Complete | 2026-10-13 — verification passed 5/5 SC; stage-1 records b42900d; ledger 37324be, 16 cells ab79f87..67f4aec, erasure record 14a0cc6, report 54ef68c + dated continuation 2da7ba2, each after Rafael's approved; E1: PASS 0, FAILURE replicada 8; suite 4709/4/0; zero gsd-sdk mutation handlers |
 | 42. DP-SGD Recipe Search at Large ε | v6.0 | 0/TBD | Not started | - |
 | 43. One-Run Privacy Audit (Conditional) | v6.0 | 0/TBD | Not started | - |
 | 44. Public Deposit Package | v6.0 | 0/TBD | Not started | - |
