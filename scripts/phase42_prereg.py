@@ -809,3 +809,66 @@ def warmup_for(steps):
 
 
 _prove(all(warmup_for(t) == w for t, w in WARMUPS.items()), "warmup_for disagrees with WARMUPS")
+
+# =================================================================================================
+# (8) THE DRIVER'S TAKE PROOFS (D-05, D-06, D-07) AND THE THRESHOLD FILL'S EXACT KWARGS (RECIPE-03,
+# D-12, D-19). This file never calls fill("e3_recall_threshold"): that slot is filled once, in
+# scripts/phase42_threshold_prereg.py, after the 3 new controls are committed.
+# =================================================================================================
+
+
+def clip_norm_for(sigma):
+    """D-06 / D-07: mitigation_budget.CONTROL_CLIP_NORM (non-binding) at the control sigma,
+    mitigation_budget.CLIP_NORM at every noised sigma; refuses any other sigma."""
+    if sigma == CONTROL_SIGMA:
+        return mitigation_budget.CONTROL_CLIP_NORM
+    _prove(sigma in NOISED_SIGMAS, f"sigma {sigma!r} is not one of the grid's sigmas")
+    return mitigation_budget.CLIP_NORM
+
+
+def expected_train_config(recipe):
+    """D-05 / D-07: the v4.0 control record's training.train_config with only lr, max_steps and
+    warmup_steps replaced by the recipe's; everything else (grad_clip, batch_size,
+    grad_accum_steps, seed, weight_decay) is the v4.0 control's. Read-only."""
+    _prove(recipe in RECIPES, f"recipe {recipe!r} is not one of RECIPES")
+    return types.MappingProxyType(
+        dict(
+            _V4["training"]["train_config"],
+            lr=recipe["lr"],
+            max_steps=recipe["steps"],
+            warmup_steps=warmup_for(recipe["steps"]),
+        )
+    )
+
+
+def recipe_key(recipe):
+    """``(lr, steps, batch, SEED)``: the key the Phase 35 threshold rule builds from a record."""
+    _prove(recipe in RECIPES, f"recipe {recipe!r} is not one of RECIPES")
+    return (recipe["lr"], recipe["steps"], recipe["batch"], SEED)
+
+
+def threshold_fill_inputs():
+    """RECIPE-03 / D-12 / D-19: the exact kwargs of ``phase35_prereg.fill("e3_recall_threshold",
+    ...)``: the grid by identity, the reused v4.0 control plus the 3 new control records, and a
+    four-field derivation whose value is the tuple of the grid's recipe keys and whose source names
+    every input path. A fresh object each call (phase41_prereg.floors_fill_inputs)."""
+    input_records = (V4_CONTROL_RECORD,) + tuple(unit_record(u) for u in CONTROL_UNITS)
+    derivation = {
+        "value": tuple(recipe_key(r) for r in RECIPES),
+        "derivation": (
+            "RECIPE-03 / D-12 / D-19: the threshold of every grid recipe is F_Y x the recall of "
+            "ITS OWN sigma = 0 control on each leg (taught, held-out), never a control borrowed "
+            "from another recipe; the v4.0 recipe reuses the v4.0 control (verified "
+            "byte-identical to tag v5.0); a control that does not learn "
+            "(phase29_prereg.control_is_unlearnable) makes its recipe REFUSED (D-18); filled in "
+            "scripts/phase42_threshold_prereg.py after the 3 new controls are committed and "
+            "before any noised record"
+        ),
+        "kind": "derived",
+        "source": (
+            f"{_CONTEXT.format('12, D-19')}; {_RULING_CONTEXT.format('18')}; "
+            + " ".join(input_records)
+        ),
+    }
+    _prove_entry("threshold_fill_inputs", derivation)
+    return {"grid": E3_GRID_SUBSET, "input_records": input_records, "derivation": derivation}

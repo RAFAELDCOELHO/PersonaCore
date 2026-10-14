@@ -906,3 +906,139 @@ def test_warmup_rule():
     with pytest.raises(SystemExit, match=r"^\[phase42_prereg\]"):
         phase42_prereg.warmup_for(201)
     assert (teach_persona.WARMUP_STEPS, teach_persona.LR, teach_persona.MAX_STEPS) == before
+
+
+# =================================================================================================
+# (9) THE CLIP AND TRAIN_CONFIG RULES, AND THE THRESHOLD FILL'S KWARGS THROUGH THE REAL PHASE 35
+# RULE ON PLANTED CONTROLS (plan 42-02 Task 2; D-06, D-07, D-12, D-19, RECIPE-03).
+# =================================================================================================
+
+
+def test_clip_rule():
+    import mitigation_budget
+
+    assert phase42_prereg.clip_norm_for(phase42_prereg.CONTROL_SIGMA) == (
+        mitigation_budget.CONTROL_CLIP_NORM
+    )
+    for sigma in phase42_prereg.NOISED_SIGMAS:
+        assert phase42_prereg.clip_norm_for(sigma) == mitigation_budget.CLIP_NORM
+    assert mitigation_budget.CLIP_NORM == 1.3254119157791138  # D-06, the literal in the test only
+    with pytest.raises(SystemExit, match=r"^\[phase42_prereg\]"):
+        phase42_prereg.clip_norm_for(0.25)
+
+
+def test_expected_train_config():
+    v4 = _record(phase42_prereg.V4_CONTROL_RECORD)["training"]["train_config"]
+    for recipe in phase42_prereg.RECIPES:
+        expected = dict(
+            v4,
+            lr=recipe["lr"],
+            max_steps=recipe["steps"],
+            warmup_steps=phase42_prereg.warmup_for(recipe["steps"]),
+        )
+        got = phase42_prereg.expected_train_config(recipe)
+        assert dict(got) == expected, dict(recipe)
+        assert got["grad_clip"] == v4["grad_clip"] == 1.0
+        with pytest.raises(TypeError):
+            got["lr"] = 0.0
+    assert dict(phase42_prereg.expected_train_config(phase42_prereg.REUSED_RECIPE)) == v4
+    with pytest.raises(SystemExit, match=r"^\[phase42_prereg\]"):
+        phase42_prereg.expected_train_config({"lr": 1e-2, "steps": 1, "batch": 1})
+
+
+def test_threshold_fill_inputs_shape():
+    p = phase42_prereg
+    first, second = phase42_prereg.threshold_fill_inputs(), phase42_prereg.threshold_fill_inputs()
+    assert first == second and first is not second
+    assert first["derivation"] is not second["derivation"]
+    assert first["grid"] is p.E3_GRID_SUBSET
+    assert first["input_records"] == (
+        p.V4_CONTROL_RECORD,
+        *(phase42_prereg.unit_record(u) for u in p.CONTROL_UNITS),
+    )
+    derivation = first["derivation"]
+    assert phase42_prereg._prove_entry("threshold_fill_inputs", derivation) is None
+    keys = {
+        (c["recipe"]["lr"], c["recipe"]["steps"], c["recipe"]["batch"], c["seed"])
+        for c in p.E3_GRID_SUBSET["cells"]
+    }
+    assert isinstance(derivation["value"], tuple) and set(derivation["value"]) == keys
+    assert len(derivation["value"]) == len(p.RECIPES)
+    assert derivation["value"] == tuple(phase42_prereg.recipe_key(r) for r in p.RECIPES)
+    for path in first["input_records"]:
+        assert path in derivation["source"], path
+    assert "4f45a91" in derivation["source"]
+    assert phase42_prereg._RULING_CONTEXT.format("18") in derivation["source"]
+
+
+def _plant_controls(root, counts):
+    """The 3 new control records on ``root``, each with the contract fields the threshold rule
+    reads; ``counts`` maps a unit to (taught k, held-out k)."""
+    p = phase42_prereg
+    taught_n = p.V4_CONTROL_COUNTS["taught"][1]
+    heldout_n = p.V4_CONTROL_COUNTS["heldout"][1]
+    for unit in p.CONTROL_UNITS:
+        recipe, sigma = phase42_prereg.unit_cell(unit)
+        tk, hk = counts[unit]
+        path = root / phase42_prereg.unit_record(unit)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        record = {
+            "recipe": dict(recipe),
+            "seed": p.SEED,
+            "sigma": sigma,
+            "taught_recall": {"numerator": tk, "denominator": taught_n},
+            "heldout_recall": {"numerator": hk, "denominator": heldout_n},
+        }
+        path.write_text(json.dumps(record), encoding="utf-8")
+
+
+def test_threshold_fill_runs_the_real_rule_on_planted_controls(tmp_path, monkeypatch):
+    import phase29_prereg
+
+    p = phase42_prereg
+    v4_bytes = (_ROOT / p.V4_CONTROL_RECORD).read_bytes()
+    v4_copy = tmp_path / p.V4_CONTROL_RECORD
+    v4_copy.parent.mkdir(parents=True, exist_ok=True)
+    v4_copy.write_bytes(v4_bytes)
+    learnable = p.V4_CONTROL_COUNTS["taught"][0], p.V4_CONTROL_COUNTS["heldout"][0]
+    unlearnable_unit = "control_lr1e-03_t800"
+    counts = {u: (0, 0) if u == unlearnable_unit else learnable for u in p.CONTROL_UNITS}
+    _plant_controls(tmp_path, counts)
+    monkeypatch.setattr(phase35_prereg, "_REPO_ROOT", tmp_path)
+
+    thresholds = phase35_prereg.fill(
+        "e3_recall_threshold", **phase42_prereg.threshold_fill_inputs()
+    )
+    v4_key = (teach_persona.LR, phase35_prereg.STEP_BUDGET, teach_persona.BATCH_SIZE, p.SEED)
+    assert set(thresholds) == set(phase42_prereg.recipe_key(r) for r in p.RECIPES)
+    assert thresholds[v4_key]["control"] == p.V4_CONTROL_RECORD
+    # The v4.0 key's thresholds; the literals in the test only.
+    assert thresholds[v4_key]["taught"] == 0.5486111111111112
+    assert thresholds[v4_key]["heldout"] == 0.3737654320987654
+    refused_key = (1e-3, p.T_MAX, teach_persona.BATCH_SIZE, p.SEED)
+    assert thresholds[refused_key] is phase29_prereg.REFUSED
+    for unit in p.CONTROL_UNITS:
+        key = phase42_prereg.recipe_key(phase42_prereg.unit_cell(unit)[0])
+        if unit != unlearnable_unit:
+            assert thresholds[key]["control"] == phase42_prereg.unit_record(unit), unit
+
+    # Keyed by the record, never by position: a control whose recipe is another recipe's.
+    swapped = tmp_path / phase42_prereg.unit_record("control_lr1e-03_t200")
+    good = swapped.read_bytes()
+    record = json.loads(good)
+    record["recipe"] = dict(phase42_prereg.unit_cell("control_lr3e-04_t800")[0])
+    swapped.write_text(json.dumps(record), encoding="utf-8")
+    with pytest.raises(SystemExit, match="D-17"):
+        phase35_prereg.fill("e3_recall_threshold", **phase42_prereg.threshold_fill_inputs())
+    swapped.write_bytes(good)
+
+    # A tampered v4.0 copy: still valid JSON (meta-guard), refused by the SHA-256 check.
+    assert v4_bytes.endswith(b"\n")
+    tampered = v4_bytes[:-1] + b" "
+    json.loads(tampered)
+    v4_copy.write_bytes(tampered)
+    with pytest.raises(SystemExit, match="byte-identical"):
+        phase35_prereg.fill("e3_recall_threshold", **phase42_prereg.threshold_fill_inputs())
+    # NON-VACUITY: restored, the same fill passes again.
+    v4_copy.write_bytes(v4_bytes)
+    assert phase35_prereg.fill("e3_recall_threshold", **phase42_prereg.threshold_fill_inputs())
