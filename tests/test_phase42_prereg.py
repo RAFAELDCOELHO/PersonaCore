@@ -227,10 +227,11 @@ _DECISION_ENTRIES = frozenset(
         "own_control_recall",
     }
 )
-# Plan 42-06 replaces each with its confirmed form.
-_UNCONFIRMED = frozenset(
-    {"record_layout", "unit_order", "crash_rule", "rehearsal_shape", "d05_seam"}
-)
+# Plan 42-06 removes each name once Rafael confirms or changes that default: all five confirmed
+# at the 42-06 checkpoint (his rulings, 2026-10-14, quoted in 42-REVIEW.md Resolution).
+_UNCONFIRMED = frozenset()
+_CONFIRMED_LABEL = "confirmed by Rafael 2026-10-14"
+_CONFIRMED = frozenset({"record_layout", "unit_order", "crash_rule", "rehearsal_shape", "d05_seam"})
 
 
 def _record(rel):
@@ -249,8 +250,8 @@ def _no_mutable_containers(value):
 
 def test_entries_names_kinds_and_d_ids():
     entries = phase42_prereg.ENTRIES
-    assert set(entries) == _DECISION_ENTRIES | _UNCONFIRMED
-    assert len(entries) == len(_DECISION_ENTRIES) + len(_UNCONFIRMED)
+    assert set(entries) == _DECISION_ENTRIES | _UNCONFIRMED | _CONFIRMED
+    assert len(entries) == len(_DECISION_ENTRIES) + len(_UNCONFIRMED) + len(_CONFIRMED)
     for name, entry in entries.items():
         assert re.search(r"\b(D-\d\d|RECIPE-\d\d)\b", entry["derivation"]), name
         assert _CONTEXT_SHA in entry["source"], name
@@ -367,9 +368,12 @@ def test_d11_wording():
 
 
 def test_defaults_are_labelled():
+    assert phase42_prereg._DEFAULT == _DEFAULT_TEXT
+    assert phase42_prereg._CONFIRMED == _CONFIRMED_LABEL
     for name, entry in phase42_prereg.ENTRIES.items():
         assert (_DEFAULT_TEXT in entry["derivation"]) == (name in _UNCONFIRMED), name
-    assert phase42_prereg._DEFAULT == _DEFAULT_TEXT
+        assert (_CONFIRMED_LABEL in entry["derivation"]) == (name in _CONFIRMED), name
+    assert len(_CONFIRMED) == 5 and not _UNCONFIRMED
 
 
 # =================================================================================================

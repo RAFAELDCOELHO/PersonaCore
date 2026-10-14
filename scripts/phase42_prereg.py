@@ -211,6 +211,7 @@ _CONTEXT = "42-CONTEXT D-{} (dc578f9)"
 _RULING_CONTEXT = "42-CONTEXT D-{} (4f45a91)"
 _RULING = "plan-phase ruling 2026-10-13 (42-RESEARCH Open Questions)"
 _DEFAULT = "default taken at plan time, not yet confirmed by Rafael"
+_CONFIRMED = "confirmed by Rafael 2026-10-14"
 
 _ENTRIES = {
     "e3_grid_subset": {
@@ -293,7 +294,7 @@ _ENTRIES = {
             "LR = 3e-4, MAX_STEPS = 200, WARMUP_STEPS = 20 are the v4.0 values and "
             "scripts/teach_persona.py is never edited. Each record proves the take from the "
             "training sidecar's train_config (lr, warmup_steps, max_steps) and "
-            f"live_mechanism.composed_steps. {_DEFAULT}."
+            f"live_mechanism.composed_steps. {_CONFIRMED}."
         ),
         "kind": "preference",
         "source": f"{_CONTEXT.format('05')}; 42-RESEARCH Item 3; scripts/phase36_probe.py stage_e3",
@@ -581,7 +582,7 @@ _ENTRIES = {
             "noised record under the control glob would be exempt from leg (a)); the aggregate "
             "results/phase42_recipes.json and the report results/phase42_recipes_report.md; "
             "training prefixes phase42e3_<unit> (real) and phase42rh_<unit> (rehearsal), never "
-            f"phase25_ nor phase42_; their run.csv directories gitignored. {_DEFAULT}."
+            f"phase25_ nor phase42_; their run.csv directories gitignored. {_CONFIRMED}."
         ),
         "kind": "preference",
         "source": _CONTEXT.format("19, D-22"),
@@ -590,7 +591,8 @@ _ENTRIES = {
         "value": ("stage 1: controls in RECIPES order", "stage 2: RECIPES x noised sigma"),
         "derivation": (
             "D-19, D-20: stage 1 runs the 3 new controls in RECIPES order; stage 2 runs the 8 "
-            f"noised points in RECIPES x noised-sigma order, REFUSED recipes included. {_DEFAULT}."
+            "noised points in RECIPES x noised-sigma order, REFUSED recipes included. "
+            f"{_CONFIRMED}."
         ),
         "kind": "preference",
         "source": _CONTEXT.format("19, D-20"),
@@ -606,7 +608,7 @@ _ENTRIES = {
             "carries the DP noise generator state, dp_noise_rng) or reuses a finished sidecar, "
             "after the driver proves the checkpoint's train_config lr / warmup_steps / max_steps "
             "equal the cell's (42-RESEARCH Pitfall 1); the record lists the unit's lost attempts "
-            f"from the ledger and its resumed_from_step; partial outputs are kept. {_DEFAULT}."
+            f"from the ledger and its resumed_from_step; partial outputs are kept. {_CONFIRMED}."
         ),
         "kind": "preference",
         "source": f"{_CONTEXT.format('22')}; 42-RESEARCH Pitfall 1",
@@ -622,7 +624,7 @@ _ENTRIES = {
             "800, sigma = 1) for real (warmup 80, the real DP noise, ε at T = 800) and the other 7 "
             "points with stand-in seams; a planted P22 crossing at T = 800 refuses before any "
             "training; a tampered copy of the v4.0 control refuses the threshold fill; emit and "
-            f"report on the scratch root. {_DEFAULT}."
+            f"report on the scratch root. {_CONFIRMED}."
         ),
         "kind": "preference",
         "source": _CONTEXT.format("21"),
