@@ -456,6 +456,50 @@ _ENTRIES = {
         "kind": "preference",
         "source": _CONTEXT.format("15"),
     },
+    "refused_lead": {
+        "value": types.MappingProxyType(
+            {
+                "some_refused": (
+                    "nenhuma receita manteve o recall onde a garantia é vazia (0 de {judged}; "
+                    "{refused}, sem limiar porque o controle da receita não aprendeu)"
+                ),
+                "all_refused": (
+                    f"nenhum ponto foi julgado: os {_NOISED_CELLS} pontos são REFUSED porque os "
+                    "controles não aprenderam; a pergunta do RECIPE-03 fica sem resposta nesta "
+                    "grade"
+                ),
+                "judged": ("ponto julgado", "pontos julgados"),
+                "refused": ("ponto REFUSED", "pontos REFUSED"),
+            }
+        ),
+        "derivation": (
+            "D-15, D-18 (42-REVIEW WR-03; 42-REVIEW.md Resolution, Rafael 2026-10-14): with R "
+            "REFUSED points and M = N − R judged points and no point passing, the report's FIRST "
+            "line is null_line when R = 0, some_refused with M and R when 0 < R < N, and "
+            "all_refused when R = N; a count of 1 takes the singular form, every other count the "
+            "plural. If any point passes, the summary line stays first and carries the REFUSED "
+            "count. D-15's wording did not foresee REFUSED points: a fault of the original "
+            "decision, not of the code."
+        ),
+        "kind": "preference",
+        "source": f"{_CONTEXT.format('15')}; 42-REVIEW.md Resolution",
+    },
+    "d17_judged": {
+        "value": types.MappingProxyType(
+            {
+                "confirmed": "previsão D-17 confirmada nos {judged}; {refused} fora da leitura",
+                "unread": "previsão D-17 não lida: nenhum ponto julgado",
+            }
+        ),
+        "derivation": (
+            "D-17 (42-REVIEW WR-03; 42-REVIEW.md Resolution, Rafael 2026-10-14): the D-17 "
+            "prediction is read only over the judged points. With no point passing: confirmed "
+            "with M judged and R REFUSED (refused_lead's singular / plural forms), or unread when "
+            "M = 0. A passing point keeps the reading not confirmed, naming its cells."
+        ),
+        "kind": "preference",
+        "source": f"{_CONTEXT.format('17')}; 42-REVIEW.md Resolution",
+    },
     "predictions": {
         "value": types.MappingProxyType(
             {
@@ -653,6 +697,8 @@ _ENTRY_NAMES = frozenset(
         "descriptive_readings",
         "summary_and_composition",
         "null_line",
+        "refused_lead",
+        "d17_judged",
         "predictions",
         "lr_control_outcome",
         "stages",
@@ -1024,14 +1070,29 @@ def null_line():
     return line
 
 
+def _count(n, forms):
+    """42-REVIEW WR-03 grammar: "<n> <singular>" when n == 1, else "<n> <plural>"."""
+    return f"{n} {forms[0] if n == 1 else forms[1]}"
+
+
 def report_lead(verdicts):
-    """D-15 / D-14: the report's ONE lead line: null_line() when no point passes, else the summary
-    line. The report follows it with every point's raw recall and epsilon, and prints the summary
-    line once."""
+    """D-15 / D-14 / 42-REVIEW WR-03: the report's ONE lead line. A point passes: the summary line.
+    None passes: null_line() with no REFUSED point, ENTRIES["refused_lead"] naming the judged and
+    REFUSED counts otherwise (all_refused when no point was judged). The report follows it with
+    every point's raw recall and epsilon, and prints the summary line once."""
     _prove_verdicts(verdicts)
-    if PASSA not in verdicts.values():
+    if PASSA in verdicts.values():
+        return summary_line(verdicts)
+    refused = sum(label == REFUSED for label in verdicts.values())
+    if refused == 0:
         return null_line()
-    return summary_line(verdicts)
+    lines = ENTRIES["refused_lead"]["value"]
+    if refused == len(POINT_UNITS):
+        return lines["all_refused"]
+    return lines["some_refused"].format(
+        judged=_count(len(POINT_UNITS) - refused, lines["judged"]),
+        refused=_count(refused, lines["refused"]),
+    )
 
 
 # =================================================================================================
@@ -1131,7 +1192,8 @@ def d16_side_by_side(points):
 
 
 def d17_reading(verdicts):
-    """D-17, descriptive: whether the prediction (no point passes) held, and which (recipe tag,
+    """D-17, descriptive, read over the judged points only (42-REVIEW WR-03): whether the
+    prediction (no point passes) held (None when no point was judged), and which (recipe tag,
     sigma tag) cells passed if not; a disagreement is a finding, not a failure."""
     _prove_verdicts(verdicts)
     passing = tuple(
@@ -1139,11 +1201,20 @@ def d17_reading(verdicts):
         for u in POINT_UNITS
         if verdicts[u] == PASSA
     )
+    refused = sum(label == REFUSED for label in verdicts.values())
+    judged = len(POINT_UNITS) - refused
+    words = ENTRIES["d17_judged"]["value"]
+    forms = ENTRIES["refused_lead"]["value"]
+    held = not passing if judged else None
     if passing:
         cells = ", ".join(f"{r} {s}" for r, s in passing)
         text = f"previsão D-17 não confirmada: {cells}; uma discordância é um achado, não uma falha"
+    elif judged:
+        text = words["confirmed"].format(
+            judged=_count(judged, forms["judged"]), refused=_count(refused, forms["refused"])
+        )
     else:
-        text = "previsão D-17 confirmada: nenhum ponto passa"
+        text = words["unread"]
     return types.MappingProxyType(
-        {"held": not passing, "passing_cells": passing, "text": text, "kind": "descriptive"}
+        {"held": held, "passing_cells": passing, "text": text, "kind": "descriptive"}
     )

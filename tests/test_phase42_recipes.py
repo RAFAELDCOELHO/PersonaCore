@@ -1276,6 +1276,11 @@ def test_emit_is_write_once_and_carries_emit_provenance_only(monkeypatch, tmp_pa
 # =================================================================================================
 
 _NULL = "nenhuma receita manteve o recall onde a garantia é vazia (0 de 8 pontos)"
+# 42-REVIEW WR-03 (Rafael's wording): two REFUSED points are named in line 1.
+_NULL_2_REFUSED = (
+    "nenhuma receita manteve o recall onde a garantia é vazia (0 de 6 pontos julgados; 2 pontos "
+    "REFUSED, sem limiar porque o controle da receita não aprendeu)"
+)
 
 
 def _point_block_line(record, unit):
@@ -1454,7 +1459,7 @@ def test_end_to_end_on_a_scratch_root(monkeypatch, tmp_path, capsys):
     assert record["summary"] == "0 de 8 pontos passam; 2 REFUSED"
     assert f"EMIT {p.E3_RECORD} {record['summary']}" in printed
     text = out.read_text(encoding="utf-8")
-    assert text.splitlines()[0] == record["lead"] == _NULL
+    assert text.splitlines()[0] == record["lead"] == _NULL_2_REFUSED
     assert text.count(record["summary"]) == 1
     labels = [record["points"][u]["label"] for u in p.POINT_UNITS]
     assert labels.count(p.REFUSED) == len(p.NOISED_SIGMAS)

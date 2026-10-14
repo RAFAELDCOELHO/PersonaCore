@@ -217,6 +217,8 @@ _DECISION_ENTRIES = frozenset(
         "descriptive_readings",
         "summary_and_composition",
         "null_line",
+        "refused_lead",
+        "d17_judged",
         "predictions",
         "lr_control_outcome",
         "stages",
@@ -1300,8 +1302,10 @@ def test_report_lead_null_case():
         assert "\n" not in lead
         if p.PASSA in verdicts.values():
             assert lead == phase42_prereg.summary_line(verdicts)
-        else:
+        elif p.REFUSED not in verdicts.values():
             assert lead == null
+        else:  # 42-REVIEW WR-03: REFUSED points are named in line 1, never read as "0 de 8"
+            assert lead != null and "REFUSED" in lead
         for text in (lead, phase42_prereg.summary_line(verdicts)):
             assert not any(h in text.lower() for h in _HEDGES), text
     assert phase42_prereg.report_lead(one) == "1 de 8 pontos passam; 0 REFUSED"
@@ -1421,6 +1425,94 @@ def _reused_points(taught=(0, 1008), heldout=(0, 648)):
         for u in p.POINT_UNITS
         if phase42_prereg.unit_cell(u)[0] == p.REUSED_RECIPE
     }
+
+
+# 42-REVIEW WR-03, Rafael's wording (42-REVIEW.md Resolution, 2026-10-14), the literals in the
+# test only; singular / plural by count (his follow-up ruling).
+_ALL_REFUSED = (
+    "nenhum ponto foi julgado: os 8 pontos são REFUSED porque os controles não aprenderam; a "
+    "pergunta do RECIPE-03 fica sem resposta nesta grade"
+)
+_D17_UNREAD = "previsão D-17 não lida: nenhum ponto julgado"
+_WR03_HEDGES = (
+    r"\b(ainda|possivelmente|talvez|provavelmente|possível|pode|poderia|may|might|could)\b"
+)
+
+
+def _judged(m):
+    return f"{m} ponto julgado" if m == 1 else f"{m} pontos julgados"
+
+
+def _refused(r):
+    return f"{r} ponto REFUSED" if r == 1 else f"{r} pontos REFUSED"
+
+
+def _some_refused_lead(m, r):
+    return (
+        f"nenhuma receita manteve o recall onde a garantia é vazia (0 de {_judged(m)}; "
+        f"{_refused(r)}, sem limiar porque o controle da receita não aprendeu)"
+    )
+
+
+def _d17_confirmed(m, r):
+    return f"previsão D-17 confirmada nos {_judged(m)}; {_refused(r)} fora da leitura"
+
+
+def _with_refused(r):
+    """Every point não passa except the first ``r`` POINT_UNITS (whole recipes when r is even)."""
+    p = phase42_prereg
+    return {u: p.REFUSED if i < r else p.NAO_PASSA for i, u in enumerate(p.POINT_UNITS)}
+
+
+def test_report_lead_and_d17_read_only_judged_points():
+    p = phase42_prereg
+    null = p.ENTRIES["null_line"]["value"]
+    texts = []
+    for r in (0, 2, 4, 6, 8, 1, 7):  # the grid's reachable R (even), then the singular forms
+        verdicts, m = _with_refused(r), len(p.POINT_UNITS) - r
+        lead, d17 = p.report_lead(verdicts), p.d17_reading(verdicts)
+        if r == 0:
+            assert lead == null
+        elif r == len(p.POINT_UNITS):
+            assert lead == _ALL_REFUSED
+        else:
+            assert lead == _some_refused_lead(m, r)
+        if m == 0:
+            assert d17["text"] == _D17_UNREAD and d17["held"] is None
+        else:
+            assert d17["text"] == _d17_confirmed(m, r) and d17["held"] is True
+        assert d17["passing_cells"] == () and d17["kind"] == "descriptive"
+        assert p.summary_line(verdicts) == f"0 de 8 pontos passam; {r} REFUSED"
+        texts += [lead, d17["text"]]
+    assert _some_refused_lead(1, 7) in texts and _d17_confirmed(7, 1) in texts
+    # A point passes: the summary line stays line 1 with the REFUSED count; D-17 names the cell.
+    passed = {**_with_refused(2), p.POINT_UNITS[3]: p.PASSA}
+    assert p.report_lead(passed) == p.summary_line(passed) == "1 de 8 pontos passam; 2 REFUSED"
+    missed = p.d17_reading(passed)
+    assert missed["held"] is False and "não confirmada" in missed["text"]
+    assert missed["passing_cells"] == (
+        (
+            p.recipe_tag(p.unit_cell(p.POINT_UNITS[3])[0]),
+            p.sigma_tag(p.unit_cell(p.POINT_UNITS[3])[1]),
+        ),
+    )
+    # Pre-registered: the texts live in ENTRIES with Rafael's ruling as their derivation.
+    for name in ("refused_lead", "d17_judged"):
+        assert "42-REVIEW.md Resolution, Rafael 2026-10-14" in p.ENTRIES[name]["derivation"], name
+    assert p.ENTRIES["refused_lead"]["value"]["all_refused"] == _ALL_REFUSED
+    assert p.ENTRIES["d17_judged"]["value"]["unread"] == _D17_UNREAD
+    assert phase42_prereg._count(1, ("ponto julgado", "pontos julgados")) == "1 ponto julgado"
+    assert phase42_prereg._count(0, ("ponto REFUSED", "pontos REFUSED")) == "0 pontos REFUSED"
+    for name in ("refused_lead", "d17_judged"):
+        texts += [
+            t
+            for v in p.ENTRIES[name]["value"].values()
+            for t in (v if isinstance(v, tuple) else (v,))
+        ]
+    for text in texts:
+        assert not re.search(_WR03_HEDGES, text, flags=re.IGNORECASE), text
+    # NON-VACUITY of the scan: it sees a hedge.
+    assert re.search(_WR03_HEDGES, "uma receita poderia passar")
 
 
 def test_d16_and_d17_readings():
