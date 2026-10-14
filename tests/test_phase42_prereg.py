@@ -1447,6 +1447,8 @@ _ALL_REFUSED = (
     "pergunta do RECIPE-03 fica sem resposta nesta grade"
 )
 _D17_UNREAD = "previsão D-17 não lida: nenhum ponto julgado"
+# Rafael's second follow-up (2026-10-14): R = 0 keeps the pre-WR-03 sentence, mirroring the lead.
+_D17_NONE_REFUSED = "previsão D-17 confirmada: nenhum ponto passa"
 _WR03_HEDGES = (
     r"\b(ainda|possivelmente|talvez|provavelmente|possível|pode|poderia|may|might|could)\b"
 )
@@ -1492,6 +1494,8 @@ def test_report_lead_and_d17_read_only_judged_points():
             assert lead == _some_refused_lead(m, r)
         if m == 0:
             assert d17["text"] == _D17_UNREAD and d17["held"] is None
+        elif r == 0:
+            assert d17["text"] == _D17_NONE_REFUSED and d17["held"] is True
         else:
             assert d17["text"] == _d17_confirmed(m, r) and d17["held"] is True
         assert d17["passing_cells"] == () and d17["kind"] == "descriptive"
