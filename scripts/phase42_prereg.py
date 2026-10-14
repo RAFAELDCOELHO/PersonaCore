@@ -42,6 +42,7 @@ if _SRC not in sys.path:
 
 import mitigation_budget  # noqa: E402  (needs the sys.path insert above; torch-free)
 import phase25_record  # noqa: E402  (same; torch-free)
+import phase29_prereg  # noqa: E402  (same; torch-free, loaded by phase35_prereg)
 import phase35_prereg  # noqa: E402  (same)
 import phase36_caps  # noqa: E402  (same; torch-free)
 import phase36_prereg  # noqa: E402  (same)
@@ -872,3 +873,157 @@ def threshold_fill_inputs():
     }
     _prove_entry("threshold_fill_inputs", derivation)
     return {"grid": E3_GRID_SUBSET, "input_records": input_records, "derivation": derivation}
+
+
+# =================================================================================================
+# (9) THE ANSWER'S FORM (RECIPE-03; D-12, D-13, D-14, D-15, D-18, D-23): the per-point verdict, the
+# 4 x 2 table with each recipe's own control recall beside the labels, the descriptive readings,
+# the summary line and the null lead. Written before any record; emit calls these, never computes.
+# =================================================================================================
+
+PASSA = "passa"
+NAO_PASSA = "não passa"
+REFUSED = phase29_prereg.REFUSED
+LABELS = (PASSA, NAO_PASSA, REFUSED)
+
+
+def _rate(pair):
+    """``k / n`` of a ``(k, n)`` recall pair of non-bool ints with 0 <= k <= n and n >= 1."""
+    _prove(
+        isinstance(pair, tuple) and len(pair) == 2,
+        f"recall {pair!r} is not a (k, n) tuple",
+    )
+    k, n = pair
+    _prove_count("k", k)
+    _prove_count("n", n, low=1)
+    _prove(k <= n, f"recall {k}/{n} has k > n")
+    return k / n
+
+
+def point_verdict(taught, heldout, threshold):
+    """RECIPE-03 / D-12: PASSA iff taught k/n >= threshold["taught"] AND held-out k/n >=
+    threshold["heldout"], the fill's floats used as given (never recomputed); NAO_PASSA otherwise;
+    REFUSED whenever the fill's threshold is REFUSED, whatever the counts (REFUSED comes only from
+    the fill, i.e. phase29_prereg.control_is_unlearnable; D-18 as corrected 2026-10-13). D-13: the
+    arguments are the recall pairs and the threshold, nothing else."""
+    taught_rate, heldout_rate = _rate(taught), _rate(heldout)
+    if threshold == REFUSED:
+        return REFUSED
+    if taught_rate >= threshold["taught"] and heldout_rate >= threshold["heldout"]:
+        return PASSA
+    return NAO_PASSA
+
+
+def _prove_verdicts(verdicts):
+    """Exactly one label from LABELS per POINT_UNITS member."""
+    _prove(
+        set(verdicts) == set(POINT_UNITS),
+        f"verdict units {sorted(set(verdicts) ^ set(POINT_UNITS))} are missing or extra",
+    )
+    for unit, label in verdicts.items():
+        _prove(label in LABELS, f"unit {unit} has label {label!r}, not one of {LABELS}")
+
+
+def table(verdicts, control_recall):
+    """D-12 / D-23: the 4 x 2 table, one row per recipe in RECIPES order: the recipe tag, one cell
+    per NOISED_SIGMAS member holding that point's label, and the raw recall k/n of the recipe's own
+    sigma = 0 control on both legs (``control_recall`` keyed by recipe tag; the reused v4.0
+    control's for the v4.0 recipe). The control counts sit beside the labels and never enter
+    them."""
+    _prove_verdicts(verdicts)
+    tags = {recipe_tag(r) for r in RECIPES}
+    _prove(
+        set(control_recall) == tags,
+        f"control recall recipes {sorted(set(control_recall) ^ tags)} are missing or extra",
+    )
+    rows = []
+    for recipe in RECIPES:
+        tag = recipe_tag(recipe)
+        row = {"recipe": tag}
+        for sigma in NOISED_SIGMAS:
+            row[sigma_tag(sigma)] = verdicts[f"point_{tag}_{sigma_tag(sigma)}"]
+        for leg in ("taught", "heldout"):
+            pair = control_recall[tag][leg]
+            _rate(pair)
+            row[f"control_{leg}"] = f"{pair[0]}/{pair[1]}"
+        rows.append(types.MappingProxyType(row))
+    return tuple(rows)
+
+
+def _field(record, *path):
+    """``record[path[0]][path[1]]...``, refused when any key is absent."""
+    value = record
+    for key in path:
+        _prove(
+            isinstance(value, collections.abc.Mapping) and key in value,
+            f"record has no {'.'.join(path)}",
+        )
+        value = value[key]
+    return value
+
+
+def descriptive_reading(record):
+    """D-13: retention, the dialogue gap, clip_bind_count and the training and scoring seconds of
+    one unit record, labelled descriptive; none of them enters a label."""
+    return types.MappingProxyType(
+        {
+            "kind": "descriptive",
+            "retention_ppl": _field(record, "condition_c", "retention_ppl"),
+            "retention_total_tokens": _field(record, "condition_c", "retention_total_tokens"),
+            "dialogue_gap": _field(record, "dialogue_gap"),
+            "clip_bind_count": _field(record, "clip_bind_count"),
+            "train_seconds": _field(record, "training", "seconds"),
+            "scoring_seconds": _field(record, "scoring_seconds"),
+        }
+    )
+
+
+# D-18: the reused v4.0 control's retention, read from its record.
+V4_CONTROL_RETENTION = _V4["condition_c"]["point_retention_ppl"]
+
+
+def control_retention_row(recipe, retention_ppl):
+    """D-18 (as corrected 2026-10-13): a control's retention beside the reused v4.0 control's and
+    their difference, labelled descriptive, with the report's sentence; a retention drop changes
+    no label. For REUSED_RECIPE the caller passes V4_CONTROL_RETENTION itself."""
+    tag = recipe_tag(recipe)
+    return types.MappingProxyType(
+        {
+            "recipe": tag,
+            "retention_ppl": retention_ppl,
+            "v4_control_retention_ppl": V4_CONTROL_RETENTION,
+            "difference": retention_ppl - V4_CONTROL_RETENTION,
+            "kind": "descriptive",
+            "text": (
+                f"retenção do controle {tag}: {retention_ppl:.4f} (controle v4.0: "
+                f"{V4_CONTROL_RETENTION:.4f}); leitura descritiva, não muda rótulo (D-18)"
+            ),
+        }
+    )
+
+
+def summary_line(verdicts):
+    """D-14: always the whole count, "k de N pontos passam; m REFUSED", N = len(POINT_UNITS)."""
+    _prove_verdicts(verdicts)
+    k = sum(label == PASSA for label in verdicts.values())
+    m = sum(label == REFUSED for label in verdicts.values())
+    return f"{k} de {len(POINT_UNITS)} pontos passam; {m} REFUSED"
+
+
+def null_line():
+    """D-15: the report's first line when no point passes; equal to ENTRIES["null_line"]."""
+    line = (
+        f"nenhuma receita manteve o recall onde a garantia é vazia (0 de {len(POINT_UNITS)} pontos)"
+    )
+    _prove(line == ENTRIES["null_line"]["value"], "null_line disagrees with ENTRIES null_line")
+    return line
+
+
+def report_lead(verdicts):
+    """D-15 / D-14: the report's ONE lead line: null_line() when no point passes, else the summary
+    line. The report follows it with every point's raw recall and epsilon, and prints the summary
+    line once."""
+    _prove_verdicts(verdicts)
+    if PASSA not in verdicts.values():
+        return null_line()
+    return summary_line(verdicts)

@@ -1069,3 +1069,235 @@ def test_training_csv_directories_are_gitignored():
         assert not _ignored(phase42_prereg.unit_record(unit)), unit
     assert not _ignored(p.E3_RECORD)
     assert not _ignored(p.REPORT_RECORD)
+
+
+# =================================================================================================
+# (11) THE VERDICT, THE 4 x 2 TABLE WITH EACH RECIPE'S CONTROL RECALL, THE DESCRIPTIVE AND
+# CONTROL-RETENTION READINGS, THE SUMMARY LINE AND THE NULL LEAD (plan 42-03 Task 1; RECIPE-03,
+# D-12, D-13, D-14, D-15, D-18, D-23).
+# =================================================================================================
+
+# The v4.0 key's fill thresholds (test_threshold_fill_runs_the_real_rule_on_planted_controls); the
+# literals in the test only.
+_V4_THRESHOLD = {"taught": 0.5486111111111112, "heldout": 0.3737654320987654}
+_HEDGES = ("ainda", "possivelmente")
+
+
+def test_point_verdict_truth_table():
+    import phase29_prereg
+
+    p = phase42_prereg
+    assert (p.PASSA, p.NAO_PASSA, p.REFUSED) == ("passa", "não passa", phase29_prereg.REFUSED)
+    assert p.LABELS == (p.PASSA, p.NAO_PASSA, p.REFUSED)
+    # Meta-guard: the tie is a real float tie.
+    assert 553 / 1008 == _V4_THRESHOLD["taught"]
+    cases = (
+        ((553, 1008), (243, 648), _V4_THRESHOLD, "passa"),
+        ((552, 1008), (648, 648), _V4_THRESHOLD, "não passa"),
+        ((1008, 1008), (242, 648), _V4_THRESHOLD, "não passa"),
+        ((0, 1008), (0, 648), _V4_THRESHOLD, "não passa"),
+        ((1008, 1008), (648, 648), phase29_prereg.REFUSED, phase29_prereg.REFUSED),
+        ((0, 1008), (0, 648), phase29_prereg.REFUSED, phase29_prereg.REFUSED),
+    )
+    for taught, heldout, threshold, expected in cases:
+        assert phase42_prereg.point_verdict(taught, heldout, threshold) == expected
+    for bad in ((1, 0), (True, 1008), (1009, 1008), (-1, 1008), (1.0, 1008)):
+        with pytest.raises(SystemExit, match=r"^\[phase42_prereg\]"):
+            phase42_prereg.point_verdict(bad, (0, 648), _V4_THRESHOLD)
+        with pytest.raises(SystemExit, match=r"^\[phase42_prereg\]"):
+            phase42_prereg.point_verdict((0, 1008), bad, phase29_prereg.REFUSED)
+    assert phase42_prereg._rate((553, 1008)) == 553 / 1008
+
+
+def _verdict_reads(source):
+    """``point_verdict``'s argument names and every Name id, Attribute attr and str Constant in
+    its body, its docstring excluded."""
+    tree = ast.parse(source)
+    (fn,) = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "point_verdict"]
+    docstrings = _docstring_nodes(tree)
+    read = set()
+    for node in ast.walk(fn):
+        if isinstance(node, ast.Name):
+            read.add(node.id)
+        elif isinstance(node, ast.Attribute):
+            read.add(node.attr)
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+            if id(node) not in docstrings:
+                read.add(node.value)
+    return tuple(a.arg for a in fn.args.args + fn.args.kwonlyargs), read
+
+
+def _descriptive_names(read):
+    return sorted(
+        name for name in read for word in ("retention", "dialogue", "gap", "clip") if word in name
+    )
+
+
+def test_point_verdict_reads_only_recall():
+    args, read = _verdict_reads(_prereg_source())
+    assert args == ("taught", "heldout", "threshold")
+    assert read and "threshold" in read, "meta-guard: the walk collected nothing"
+    assert _descriptive_names(read) == []
+    # NON-VACUITY: a body reading retention fails; a docstring naming it passes.
+    planted = (
+        "def point_verdict(taught, heldout, threshold):\n"
+        '    """x"""\n'
+        '    return threshold, record["retention_ppl"]\n'
+    )
+    assert _descriptive_names(_verdict_reads(planted)[1]) == ["retention_ppl"]
+    docstring_only = (
+        "def point_verdict(taught, heldout, threshold):\n"
+        '    """reads no retention, no dialogue gap, no clip"""\n'
+        "    return threshold\n"
+    )
+    assert _descriptive_names(_verdict_reads(docstring_only)[1]) == []
+
+
+def _control_recall(taught=(790, 1008), heldout=(346, 648)):
+    return {
+        phase42_prereg.recipe_tag(r): {"taught": taught, "heldout": heldout}
+        for r in phase42_prereg.RECIPES
+    }
+
+
+def test_table_4x2_with_control_recall():
+    p = phase42_prereg
+    verdicts = {
+        unit: p.LABELS[i % len(p.LABELS)] for i, unit in enumerate(phase42_prereg.POINT_UNITS)
+    }
+    rows = phase42_prereg.table(verdicts, _control_recall())
+    assert len(rows) == len(p.RECIPES)
+    for row, recipe in zip(rows, p.RECIPES, strict=True):
+        assert isinstance(row, types.MappingProxyType)
+        tag = phase42_prereg.recipe_tag(recipe)
+        sigma_keys = [phase42_prereg.sigma_tag(s) for s in p.NOISED_SIGMAS]
+        assert list(row) == ["recipe", *sigma_keys, "control_taught", "control_heldout"]
+        assert row["recipe"] == tag
+        for sigma, key in zip(p.NOISED_SIGMAS, sigma_keys, strict=True):
+            assert row[key] == verdicts[f"point_{tag}_{key}"], (tag, sigma)
+        assert row["control_taught"] == "790/1008"
+        assert row["control_heldout"] == "346/648"
+    # D-23: the control counts sit beside the label, never in it.
+    other = phase42_prereg.table(verdicts, _control_recall((0, 1008), (0, 648)))
+    for row, again in zip(rows, other, strict=True):
+        assert row["control_taught"] != again["control_taught"]
+        assert {k: v for k, v in row.items() if not k.startswith("control_")} == {
+            k: v for k, v in again.items() if not k.startswith("control_")
+        }
+    refused = (
+        ({u: v for u, v in verdicts.items() if u != p.POINT_UNITS[0]}, _control_recall()),
+        ({**verdicts, "point_x": p.PASSA}, _control_recall()),
+        ({**verdicts, p.POINT_UNITS[0]: "sim"}, _control_recall()),
+        (verdicts, {k: v for k, v in list(_control_recall().items())[1:]}),
+        (verdicts, {**_control_recall(), "lr1e-02_t200": {"taught": (0, 1), "heldout": (0, 1)}}),
+        (verdicts, _control_recall(taught=(1009, 1008))),
+        (verdicts, _control_recall(heldout=(0, 0))),
+    )
+    for bad_verdicts, bad_recall in refused:
+        with pytest.raises(SystemExit, match=r"^\[phase42_prereg\]"):
+            phase42_prereg.table(bad_verdicts, bad_recall)
+
+
+def _fixture_record():
+    return {
+        "condition_c": {"retention_ppl": 4.25, "retention_total_tokens": 51234},
+        "dialogue_gap": -0.5,
+        "clip_bind_count": 3,
+        "training": {"seconds": 812.5},
+        "scoring_seconds": 1456.7,
+    }
+
+
+def test_descriptive_reading():
+    reading = phase42_prereg.descriptive_reading(_fixture_record())
+    assert isinstance(reading, types.MappingProxyType)
+    assert dict(reading) == {
+        "kind": "descriptive",
+        "retention_ppl": 4.25,
+        "retention_total_tokens": 51234,
+        "dialogue_gap": -0.5,
+        "clip_bind_count": 3,
+        "train_seconds": 812.5,
+        "scoring_seconds": 1456.7,
+    }
+    for path in (
+        ("condition_c", "retention_ppl"),
+        ("condition_c", "retention_total_tokens"),
+        ("condition_c",),
+        ("dialogue_gap",),
+        ("clip_bind_count",),
+        ("training", "seconds"),
+        ("training",),
+        ("scoring_seconds",),
+    ):
+        record = json.loads(json.dumps(_fixture_record()))
+        parent = record
+        for key in path[:-1]:
+            parent = parent[key]
+        del parent[path[-1]]
+        with pytest.raises(SystemExit, match=r"^\[phase42_prereg\]"):
+            phase42_prereg.descriptive_reading(record)
+    assert phase42_prereg._field({"a": {"b": 1}}, "a", "b") == 1
+    with pytest.raises(SystemExit, match=r"^\[phase42_prereg\] record has no a.c$"):
+        phase42_prereg._field({"a": {"b": 1}}, "a", "c")
+
+
+def test_control_retention_row():
+    p = phase42_prereg
+    v4 = _record(p.V4_CONTROL_RECORD)["condition_c"]["point_retention_ppl"]
+    assert p.V4_CONTROL_RETENTION == v4
+    recipe = p.RECIPES[-1]
+    row = phase42_prereg.control_retention_row(recipe, 4.5)
+    assert isinstance(row, types.MappingProxyType)
+    assert row["recipe"] == phase42_prereg.recipe_tag(recipe)
+    assert row["retention_ppl"] == 4.5
+    assert row["v4_control_retention_ppl"] == v4
+    assert row["difference"] == 4.5 - v4
+    assert row["kind"] == "descriptive"
+    assert "não muda rótulo" in row["text"]
+    assert "verdict" not in row and "label" not in row
+    assert not any(h in row["text"].lower() for h in _HEDGES)
+    reused = phase42_prereg.control_retention_row(p.REUSED_RECIPE, p.V4_CONTROL_RETENTION)
+    assert reused["difference"] == 0.0
+    with pytest.raises(SystemExit, match=r"^\[phase42_prereg\]"):
+        phase42_prereg.control_retention_row({"lr": 1e-2, "steps": 1, "batch": 1}, 4.5)
+
+
+def test_summary_line():
+    p = phase42_prereg
+    assert len(p.POINT_UNITS) == 8  # D-14, the literal in the test only
+    none = dict.fromkeys(p.POINT_UNITS, p.NAO_PASSA)
+    assert phase42_prereg._prove_verdicts(none) is None
+    assert phase42_prereg.summary_line(none) == "0 de 8 pontos passam; 0 REFUSED"
+    mixed = dict(none)
+    for unit in p.POINT_UNITS[:2]:
+        mixed[unit] = p.PASSA
+    for unit in p.POINT_UNITS[-2:]:
+        mixed[unit] = p.REFUSED
+    assert phase42_prereg.summary_line(mixed) == "2 de 8 pontos passam; 2 REFUSED"
+    with pytest.raises(SystemExit, match=r"^\[phase42_prereg\]"):
+        phase42_prereg.summary_line({**none, p.POINT_UNITS[0]: "sim"})
+    with pytest.raises(SystemExit, match=r"^\[phase42_prereg\]"):
+        phase42_prereg.summary_line(dict(list(none.items())[1:]))
+
+
+def test_report_lead_null_case():
+    p = phase42_prereg
+    null = "nenhuma receita manteve o recall onde a garantia é vazia (0 de 8 pontos)"
+    assert phase42_prereg.null_line() == null == p.ENTRIES["null_line"]["value"]
+    combos = [dict.fromkeys(p.POINT_UNITS, label) for label in p.LABELS]
+    one = dict.fromkeys(p.POINT_UNITS, p.NAO_PASSA)
+    one[p.POINT_UNITS[3]] = p.PASSA
+    refused_only = dict.fromkeys(p.POINT_UNITS, p.NAO_PASSA)
+    refused_only[p.POINT_UNITS[0]] = p.REFUSED
+    combos += [one, refused_only]
+    for verdicts in combos:
+        lead = phase42_prereg.report_lead(verdicts)
+        assert "\n" not in lead
+        if p.PASSA in verdicts.values():
+            assert lead == phase42_prereg.summary_line(verdicts)
+        else:
+            assert lead == null
+        for text in (lead, phase42_prereg.summary_line(verdicts)):
+            assert not any(h in text.lower() for h in _HEDGES), text
+    assert phase42_prereg.report_lead(one) == "1 de 8 pontos passam; 0 REFUSED"
