@@ -538,6 +538,12 @@ def _launch_requirements(*, real, device, identity, digests):
     digests (D-21); a scratch root is the rehearsal, on CPU."""
     if not real:
         _prove(device == "cpu", f"a rehearsal runs on CPU: pass device='cpu', not {device!r}")
+        resolved = _device()  # the resolver teach_persona.train_arm calls (42-REVIEW WR-04)
+        _prove(
+            resolved == "cpu",
+            f"a rehearsal trains on CPU, but the trainer's preflight_device resolves {resolved!r}: "
+            "hide MPS (rehearsal_shape)",
+        )
         return
     _prove(device == "mps", f"E3 runs on MPS on the real root; resolved {device!r}")
     _prove(identity is not None, "the rehearsal identity is missing: run the CPU rehearsal first")

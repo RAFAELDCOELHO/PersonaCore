@@ -35,6 +35,8 @@ import teach_persona  # noqa: E402  (same)
 
 from test_phase29_prereg import _git  # noqa: E402
 
+# The real resolver, kept before any test patches it (the rigs stand it in with "cpu").
+_REAL_DEVICE = phase42_recipes._device
 _V4_TRAIN_CONFIG = json.loads(
     (_ROOT / phase42_prereg.V4_CONTROL_RECORD).read_text(encoding="utf-8")
 )["training"]["train_config"]
@@ -292,6 +294,7 @@ def _measure_rig(
     monkeypatch.setattr(phase25_condition_c, "measure_condition_c", measure_condition_c)
     monkeypatch.setattr(phase42_recipes, "_release", lambda: None)
     monkeypatch.setattr(phase42_recipes, "git_sha", lambda: "h1")
+    monkeypatch.setattr(phase42_recipes, "_device", lambda: "cpu")  # MPS hidden (rehearsal_shape)
     root = tmp_path / "out"
     pf = {
         "root": root,
@@ -828,6 +831,7 @@ def test_relaunch_pathspec_excludes_only_whole_unit_records(monkeypatch, tmp_pat
 
 def test_real_root_launch_requirements(tmp_path, monkeypatch):
     monkeypatch.setattr(phase42_recipes, "git_sha", lambda: "h1")
+    monkeypatch.setattr(phase42_recipes, "_device", lambda: "cpu")
     digests = phase42_recipes._disclosed_digests()
     path = tmp_path / "identity.json"
     identity = phase42_recipes.record_rehearsal(path, units=(), seconds=1.0)
@@ -861,6 +865,29 @@ def test_real_root_launch_requirements(tmp_path, monkeypatch):
     ):
         with pytest.raises(SystemExit, match=r"^\[phase42_recipes\].*" + match):
             req(**kwargs, digests=digests)
+
+
+def test_a_rehearsal_trains_where_train_arm_resolves(monkeypatch, tmp_path):
+    """42-REVIEW WR-04: a scratch root proves the device the trainer resolves (preflight_device,
+    the resolver teach_persona.train_arm calls) is cpu, not only the device string passed in."""
+    import personacore.preflight
+
+    assert teach_persona.preflight_device is personacore.preflight.preflight_device
+    calls, kw, _ledger = _run_rig(monkeypatch, tmp_path)
+    monkeypatch.setattr(phase42_recipes, "_device", _REAL_DEVICE)
+    for resolved in ("mps", "cuda"):
+        monkeypatch.setattr(
+            personacore.preflight, "preflight_device", lambda strict, _d=resolved: {"device": _d}
+        )
+        with pytest.raises(SystemExit, match=rf"^\[phase42_recipes\].*resolves '{resolved}'"):
+            phase42_recipes.preflight(**kw)
+        with pytest.raises(SystemExit, match=r"^\[phase42_recipes\].*rehearsal"):
+            phase42_recipes._launch_requirements(
+                real=False, device="cpu", identity=None, digests={}
+            )
+    # NON-VACUITY: MPS hidden, the resolver gives cpu and the rehearsal preflight passes.
+    monkeypatch.setattr(personacore.preflight, "preflight_device", lambda strict: {"device": "cpu"})
+    assert phase42_recipes.preflight(**kw)["device"] == "cpu" and calls["train"] == []
 
 
 def test_record_rehearsal(tmp_path, monkeypatch):
