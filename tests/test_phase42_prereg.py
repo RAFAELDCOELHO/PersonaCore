@@ -784,3 +784,125 @@ def test_no_forbidden_token_in_phase42_files():
         assert not _forbidden_token_failures(f'def f():\n    """{token}"""\n', (token,)), token
     wall_line = "assert x " + "==" + " 1" + "0"
     assert any(pattern.search(wall_line) for pattern in _PATTERNS)
+
+
+# =================================================================================================
+# (8) UNITS, RECORD PATHS, RUN IDS, TRAINING PREFIXES AND THE WARMUP RULE (plan 42-02 Task 1;
+# D-05, D-19, D-20, D-22, record_layout, unit_order).
+# =================================================================================================
+
+
+def _is_grid_cell(recipe, sigma):
+    return any(
+        c["recipe"] == recipe and c["sigma"] == sigma
+        for c in phase42_prereg.E3_GRID_SUBSET["cells"]
+    )
+
+
+def test_units_and_order():
+    assert phase42_prereg.CONTROL_UNITS == (
+        "control_lr3e-04_t800",
+        "control_lr1e-03_t200",
+        "control_lr1e-03_t800",
+    )
+    assert len(phase42_prereg.POINT_UNITS) == len(phase42_prereg.RECIPES) * len(
+        phase42_prereg.NOISED_SIGMAS
+    )
+    assert phase42_prereg.POINT_UNITS[0] == "point_lr3e-04_t200_sigma0p500000"
+    assert phase42_prereg.POINT_UNITS[-1] == "point_lr1e-03_t800_sigma1p000000"
+    assert phase42_prereg.POINT_UNITS == tuple(
+        f"point_{phase42_prereg.recipe_tag(r)}_{phase42_prereg.sigma_tag(s)}"
+        for r in phase42_prereg.RECIPES
+        for s in phase42_prereg.NOISED_SIGMAS
+    )
+    assert phase42_prereg.UNITS == phase42_prereg.CONTROL_UNITS + phase42_prereg.POINT_UNITS
+    assert len(set(phase42_prereg.UNITS)) == len(phase42_prereg.UNITS)
+    # The reused recipe is read from the grid's one reused cell, and has no control unit.
+    assert phase42_prereg.REUSED_RECIPE == phase42_prereg.RECIPES[0]
+    assert (
+        f"control_{phase42_prereg.recipe_tag(phase42_prereg.REUSED_RECIPE)}"
+        not in phase42_prereg.CONTROL_UNITS
+    )
+    for unit in phase42_prereg.UNITS:
+        recipe, sigma = phase42_prereg.unit_cell(unit)
+        assert _is_grid_cell(recipe, sigma), unit
+        assert (sigma == phase42_prereg.CONTROL_SIGMA) == unit.startswith("control_"), unit
+    assert phase42_prereg.unit_cell(phase42_prereg.POINT_UNITS[0]) == (
+        phase42_prereg.RECIPES[0],
+        phase42_prereg.NOISED_SIGMAS[0],
+    )
+    for bad in ("point_x", "control_lr3e-04_t200", None):
+        with pytest.raises(SystemExit, match=r"^\[phase42_prereg\]"):
+            phase42_prereg.unit_cell(bad)
+    # The tag helpers refuse a recipe or sigma outside the grid.
+    with pytest.raises(SystemExit, match=r"^\[phase42_prereg\]"):
+        phase42_prereg.recipe_tag({"lr": 1e-2, "steps": phase35_prereg.STEP_BUDGET, "batch": 1})
+    with pytest.raises(SystemExit, match=r"^\[phase42_prereg\]"):
+        phase42_prereg.sigma_tag(0.25)
+    assert phase42_prereg.sigma_tag(phase42_prereg.CONTROL_SIGMA) == "sigma0p000000"
+
+
+def test_unit_records():
+    assert (
+        phase42_prereg.unit_record("control_lr1e-03_t200")
+        == "results/phase42_control_lr1e-03_t200.json"
+    )
+    assert (
+        phase42_prereg.unit_record("point_lr3e-04_t800_sigma1p000000")
+        == "results/phase42_point_lr3e-04_t800_sigma1p000000.json"
+    )
+    for unit in phase42_prereg.CONTROL_UNITS:
+        assert fnmatch.fnmatch(phase42_prereg.unit_record(unit), phase42_prereg.CONTROL_GLOB), unit
+    for unit in phase42_prereg.POINT_UNITS:
+        record = phase42_prereg.unit_record(unit)
+        assert fnmatch.fnmatch(record, phase42_prereg.RECORD_GLOB), unit
+        assert not fnmatch.fnmatch(record, phase42_prereg.CONTROL_GLOB), unit
+    assert phase42_prereg.E3_RECORD == "results/phase42_recipes.json"
+    assert phase42_prereg.REPORT_RECORD == "results/phase42_recipes_report.md"
+    for record in (phase42_prereg.E3_RECORD, phase42_prereg.REPORT_RECORD):
+        assert fnmatch.fnmatch(record, phase42_prereg.RECORD_GLOB)
+        assert not fnmatch.fnmatch(record, phase42_prereg.CONTROL_GLOB)
+    assert len({phase42_prereg.unit_record(u) for u in phase42_prereg.UNITS}) == len(
+        phase42_prereg.UNITS
+    )
+    with pytest.raises(SystemExit, match=r"^\[phase42_prereg\]"):
+        phase42_prereg.unit_record("point_x")
+
+
+def _csv_rel(unit, rehearsal):
+    csv = teach_persona.arm_outputs(
+        f"dp_n{phase35_prereg.E3_N}",
+        prefix=phase42_prereg.train_prefix(unit, rehearsal=rehearsal),
+    )["csv"]
+    return csv.relative_to(_ROOT).as_posix()
+
+
+def test_run_ids_and_prefixes():
+    assert phase42_prereg.run_id("control_lr1e-03_t200") == "v6/42/E3/control_lr1e-03_t200"
+    with pytest.raises(SystemExit, match=r"^\[phase42_prereg\]"):
+        phase42_prereg.run_id("point_x")
+    for unit in phase42_prereg.UNITS:
+        assert phase42_prereg.train_prefix(unit, rehearsal=False) == "phase42e3_" + unit
+        assert phase42_prereg.train_prefix(unit, rehearsal=True) == "phase42rh_" + unit
+        for rehearsal in (False, True):
+            rel = _csv_rel(unit, rehearsal)
+            assert not fnmatch.fnmatch(rel, phase42_prereg.RECORD_GLOB), rel
+            assert not fnmatch.fnmatch(rel, phase42_prereg.CONTROL_GLOB), rel
+        # Meta-guard: the record paths themselves do match.
+        assert fnmatch.fnmatch(phase42_prereg.unit_record(unit), phase42_prereg.RECORD_GLOB), unit
+    with pytest.raises(SystemExit, match=r"^\[phase42_prereg\]"):
+        phase42_prereg.train_prefix("point_x", rehearsal=False)
+
+
+def test_warmup_rule():
+    before = (teach_persona.WARMUP_STEPS, teach_persona.LR, teach_persona.MAX_STEPS)
+    assert phase42_prereg.warmup_for(phase35_prereg.STEP_BUDGET) == teach_persona.WARMUP_STEPS
+    assert (
+        phase42_prereg.warmup_for(phase42_prereg.T_MAX) == 80
+    )  # D-05, the literal in the test only
+    assert {t: phase42_prereg.warmup_for(t) for t in phase42_prereg.STEPS} == dict(
+        phase42_prereg.WARMUPS
+    )
+    with pytest.raises(SystemExit, match=r"^\[phase42_prereg\]"):
+        phase42_prereg.warmup_for(201)
+    assert (teach_persona.WARMUP_STEPS, teach_persona.LR, teach_persona.MAX_STEPS) == before

@@ -23,6 +23,7 @@ own them, never typed; lr = 1e-3 is the one caller-chosen literal (D-02).
 """
 
 import collections.abc
+import fnmatch
 import hashlib
 import json
 import pathlib
@@ -701,3 +702,110 @@ _prove(
 
 # D-08: the onsets the rule computed, re-asserted by the driver before any stage-2 training.
 P22_ONSETS = E3_GRID_SUBSET["p22_onset_sigma"]
+
+# =================================================================================================
+# (7) THE UNITS AND WHERE THEY WRITE (D-19, D-20, D-22; record_layout, unit_order). A unit is one
+# ledger attempt: a new sigma = 0 control (stage 1) or a noised point (stage 2). Every name, path,
+# run id and training prefix below is a function of the grid; the driver computes nothing beyond.
+# =================================================================================================
+
+
+def recipe_tag(recipe):
+    """``lr<lr:.0e>_t<steps>`` of a grid recipe (``lr3e-04_t200``); refuses a recipe outside
+    RECIPES."""
+    _prove(recipe in RECIPES, f"recipe {recipe!r} is not one of RECIPES")
+    return f"lr{recipe['lr']:.0e}_t{recipe['steps']}"
+
+
+def sigma_tag(sigma):
+    """The sigma suffix of ``phase25_record.point_key(dp_n<E3_N>, sigma)`` (``sigma0p500000``),
+    read, never formatted here; refuses a sigma outside phase35_prereg.E3_SIGMAS."""
+    _prove(sigma in phase35_prereg.E3_SIGMAS, f"sigma {sigma!r} is not one of E3_SIGMAS")
+    arm = f"dp_n{phase35_prereg.E3_N}_"
+    key = phase25_record.point_key(arm[:-1], sigma)
+    _prove(key.startswith(arm), f"point key {key!r} does not start with {arm!r}")
+    return key.removeprefix(arm)
+
+
+# D-03: the recipe whose sigma = 0 cell reuses the v4.0 control, read from the fill.
+_REUSED = tuple(c["recipe"] for c in E3_GRID_SUBSET["cells"] if c["reuse"] is not None)
+_prove(len(_REUSED) == 1, f"the grid reuses {len(_REUSED)} cells, not exactly one")
+(REUSED_RECIPE,) = _REUSED
+
+# unit_order: stage 1 the new controls in RECIPES order, stage 2 RECIPES x NOISED_SIGMAS (a REFUSED
+# recipe's points included, D-20).
+_CONTROL_CELLS = {
+    f"control_{recipe_tag(r)}": (r, CONTROL_SIGMA) for r in RECIPES if r != REUSED_RECIPE
+}
+_POINT_CELLS = {
+    f"point_{recipe_tag(r)}_{sigma_tag(s)}": (r, s) for r in RECIPES for s in NOISED_SIGMAS
+}
+CONTROL_UNITS = tuple(_CONTROL_CELLS)
+POINT_UNITS = tuple(_POINT_CELLS)
+UNITS = CONTROL_UNITS + POINT_UNITS
+_UNIT_CELLS = types.MappingProxyType({**_CONTROL_CELLS, **_POINT_CELLS})
+_prove(tuple(_UNIT_CELLS) == UNITS, "the units are not distinct")
+
+
+def unit_cell(unit):
+    """``(recipe, sigma)`` of the grid cell a unit names; refuses a name outside UNITS."""
+    _prove(isinstance(unit, str) and unit in _UNIT_CELLS, f"unit {unit!r} is not one of UNITS")
+    return _UNIT_CELLS[unit]
+
+
+def unit_record(unit):
+    """record_layout / D-22: a control's record under CONTROL_GLOB, a point's under RECORD_GLOB and
+    never under CONTROL_GLOB (a noised record there would be exempt from leg (a), 42-RESEARCH
+    Pitfall 10)."""
+    recipe, sigma = unit_cell(unit)
+    if sigma == CONTROL_SIGMA:
+        path = CONTROL_GLOB.replace("*", recipe_tag(recipe))
+        _prove(fnmatch.fnmatch(path, CONTROL_GLOB), f"{path} does not match {CONTROL_GLOB}")
+        return path
+    path = RECORD_GLOB.replace("*", f"{unit}.json")
+    _prove(fnmatch.fnmatch(path, RECORD_GLOB), f"{path} does not match {RECORD_GLOB}")
+    _prove(not fnmatch.fnmatch(path, CONTROL_GLOB), f"point {path} would read as a control record")
+    return path
+
+
+E3_RECORD = RECORD_GLOB.replace("*", "recipes.json")
+REPORT_RECORD = RECORD_GLOB.replace("*", "recipes_report.md")
+
+
+def run_id(unit):
+    """The ledger run id of one Phase 42 unit on front E3."""
+    import phase36_ledger  # torch-free; lazy so the import surface stays small
+
+    _prove(unit in UNITS, f"unit {unit!r} is not one of UNITS")
+    return phase36_ledger.run_id(42, "E3", unit)
+
+
+# Neither prefix matches results/phase42_* (the record glob): the run.csv directories they name
+# are gitignored (precedent phase41rh).
+REAL_PREFIX = "phase42e3"
+REHEARSAL_PREFIX = "phase42rh"
+
+
+def train_prefix(unit, *, rehearsal):
+    """The teach_persona.arm_outputs prefix of one unit: ``phase42e3_<unit>`` for the real run,
+    ``phase42rh_<unit>`` for the CPU rehearsal; never ``phase25_*`` nor ``phase42_*``."""
+    _prove(unit in UNITS, f"unit {unit!r} is not one of UNITS")
+    prefix = f"{REHEARSAL_PREFIX if rehearsal else REAL_PREFIX}_{unit}"
+    _prove(
+        not prefix.startswith(("phase25_", "phase42_")),
+        f"prefix {prefix!r} would write under a record glob",
+    )
+    return prefix
+
+
+def warmup_for(steps):
+    """D-05: warmup = T x teach_persona.WARMUP_STEPS // teach_persona.MAX_STEPS (the v4.0 shape),
+    refused unless exact; teach_persona's constants are read, never edited."""
+    _prove(
+        steps * teach_persona.WARMUP_STEPS % teach_persona.MAX_STEPS == 0,
+        f"warmup for T = {steps} is not an exact fraction of the v4.0 shape",
+    )
+    return steps * teach_persona.WARMUP_STEPS // teach_persona.MAX_STEPS
+
+
+_prove(all(warmup_for(t) == w for t, w in WARMUPS.items()), "warmup_for disagrees with WARMUPS")
