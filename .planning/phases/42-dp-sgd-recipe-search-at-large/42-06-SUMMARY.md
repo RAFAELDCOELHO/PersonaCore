@@ -23,7 +23,7 @@ key-files:
 decisions:
   - "WR-02 and the IN-01 threshold pin apply on the real root only: the confirmed rehearsal_shape runs scratch stage 2 with thresholds passed in, and no fill module exists before 42-09"
   - "The threshold pin is the sha256 of the executed module's __file__ (the bytes that ran); stage() already proves THRESHOLD_FILE tracked and clean"
-  - "WR-03 d17_reading: Rafael's 'confirmada nos M pontos julgados' wording applies at R = 0 too (his ruling gave the R = 0 exemption only to the lead); held is None when M = 0; the PASSA branch is unchanged"
+  - "WR-03 d17_reading (as ruled in Rafael's second follow-up): R = 0 keeps 'previsão D-17 confirmada: nenhum ponto passa'; the judged-points sentence applies only when R > 0, its preposition agreeing by count (no at M = 1, nos otherwise); held is None when M = 0; the PASSA branch is unchanged"
 requirements-completed: []
 metrics:
   duration: ~3 h (two executor passes)
@@ -34,7 +34,7 @@ metrics:
 
 # Phase 42 Plan 06: review rulings applied Summary
 
-Every finding in 42-REVIEW.md now has the ruling Rafael gave it. There are nine commits, one per ruling. Each fix was written test first, and its RED comes from the file's natural pre-fix state:
+Every finding in 42-REVIEW.md now has the ruling Rafael gave it. There are eleven commits, one per ruling; the last two apply his second follow-up on two WR-03 edge cases. Each fix was written test first, and its RED comes from the file's natural pre-fix state:
 
 - **Fixed:** WR-01, WR-02, WR-03, WR-04, WR-05, IN-01 and O-01. WR-03 uses Rafael's exact wording.
 - **Not fixed, by his ruling:** IN-02. `report()` keeps `write_text`; its docstring now documents the regeneration procedure.
@@ -73,6 +73,12 @@ Provenance, as tagged in 42-REVIEW.md Resolution: Rafael pasted the first block 
 
 > WR-03 gramática: escolher pela contagem ("1 ponto julgado", "1 ponto REFUSED"; plural nos demais), o resto da redação como escrito. Nota: na grade real R e M são sempre pares, porque o REFUSED vem do controle e atinge os dois pontos da receita juntos.
 
+Second follow-up. Provenance, as tagged in 42-REVIEW.md Resolution ("Rafael's second follow-up"): these answer the two edge cases the executor raised after WR-03 was applied. He gave them as answers to the orchestrator's AskUserQuestion.
+
+> D-17 com R = 0: manter "previsão D-17 confirmada: nenhum ponto passa", espelhando a linha principal, que mantém a null_line com R = 0. Minha frase vale só para R > 0. Um ramo, commit próprio.
+
+> M = 1: concordar pela contagem ("no 1 ponto julgado"), commit próprio, coerente com a regra de singular e plural da WR-03.
+
 ## Commits, RED and GREEN
 
 The REVIEW_BASE is 203afa3. RED is the first failure from the natural pre-fix state; GREEN is the same test after the fix.
@@ -88,6 +94,8 @@ The REVIEW_BASE is 203afa3. RED is the first failure from the natural pre-fix st
 | e7a2f66 | WR-03 | `test_report_lead_and_d17_read_only_judged_points` + `test_report_lead_null_case` + end-to-end | lead `'... (0 de 8 pontos)'` where `'... não aprendeu)'` was expected; d17 `'confirmada: nenhum ponto passa'`; ENTRIES missing `refused_lead`/`d17_judged` | 91 passed |
 | 784fdc0 | O-01 | `test_vacuous_text_carries_the_grid_epsilons` | `('800', ['1840.30', '519.70'], ['1840.29', '519.70'])` | passed |
 | d54bc88 | IN-02 (not fixed) | `test_report_documents_the_regenerate_procedure` | `AssertionError: partial (uncommitted) ... not in 'Write results/phase42_recipes_report.md ONCE ...'` | passed |
+| 147af58 | WR-03 follow-up: D-17 at R = 0 | `test_report_lead_and_d17_read_only_judged_points` (R = 0 leg) | `- previsão D-17 confirmada: nenhum ponto passa` / `+ previsão D-17 confirmada nos 8 pontos julgados; 0 pontos REFUSED fora da leitura` | 2 passed (with `test_d16_and_d17_readings`) |
+| e45fa99 | WR-03 follow-up: agreement at M = 1 | same test (M = 1 leg) | `- ... confirmada no 1 ponto julgado; 7 pontos REFUSED ...` / `+ ... confirmada nos 1 ponto julgado; 7 pontos REFUSED ...` | 2 passed |
 
 What each fix does:
 
@@ -116,8 +124,19 @@ What each fix does:
   - The end-to-end report's line 1 is now `... (0 de 6 pontos julgados; 2 pontos REFUSED, sem limiar porque o controle da receita não aprendeu)`.
 - **O-01.** `point_epsilon(0.5, 800) = 1840.2946450499012`, which rounds to 1840.29. The commit changes only the text.
 - **IN-02.** Not fixed. The docstring of `report()` gains the regeneration procedure.
+- **D-17 at R = 0 (147af58).** `ENTRIES["d17_judged"]` gains `none_refused`, the pre-e7a2f66 sentence "previsão D-17 confirmada: nenhum ponto passa". `d17_reading` returns it when no point is REFUSED and none passes. The entry's derivation now states that the judged-points sentence applies only for R > 0.
+- **Agreement at M = 1 (e45fa99).** `confirmed` takes `{prep}` from `prep = ("no", "nos")`: "no" at M = 1, "nos" otherwise. "confirmada nos" was its only occurrence in the phase42 files (grep). The lead's "0 de M ponto(s) julgado(s)" has no preposition to agree.
 
-After every commit, the quick run, the two census calls and ruff were green. The last gate, after d54bc88, gave:
+The lead and D-17 lines as printed after e45fa99:
+
+| R | lead (line 1) | D-17 |
+|---|---|---|
+| 0 | nenhuma receita manteve o recall onde a garantia é vazia (0 de 8 pontos) | previsão D-17 confirmada: nenhum ponto passa |
+| 2 | nenhuma receita manteve o recall onde a garantia é vazia (0 de 6 pontos julgados; 2 pontos REFUSED, sem limiar porque o controle da receita não aprendeu) | previsão D-17 confirmada nos 6 pontos julgados; 2 pontos REFUSED fora da leitura |
+| 8 | nenhum ponto foi julgado: os 8 pontos são REFUSED porque os controles não aprenderam; a pergunta do RECIPE-03 fica sem resposta nesta grade | previsão D-17 não lida: nenhum ponto julgado |
+| 7 | nenhuma receita manteve o recall onde a garantia é vazia (0 de 1 ponto julgado; 7 pontos REFUSED, sem limiar porque o controle da receita não aprendeu) | previsão D-17 confirmada no 1 ponto julgado; 7 pontos REFUSED fora da leitura |
+
+After every commit, the quick run, the two census calls and ruff were green. The last gate, after e45fa99, gave:
 
 - quick run: `93 passed`
 - census call 1: `13 passed, 75 deselected`
@@ -136,9 +155,9 @@ The reviewer's probe file in the scratchpad was rerun but not edited:
 
 1. **WR-02 and the IN-01 threshold pin run on the real root only.** The orchestrator accepted this. The confirmed `rehearsal_shape` passes the real fill's thresholds into scratch stage 2, and `scripts/phase42_threshold_prereg.py` does not exist until 42-09. Requiring the import on a scratch root would break the D-21 rehearsal.
 2. **The threshold pin hashes the executed module's `__file__`, not `_REPO/THRESHOLD_FILE`.** The orchestrator accepted this. In production both are the same file: `scripts/` is first on `sys.path`, and `stage()` proves the file is tracked and clean. The tests cannot plant a file inside the repository.
-3. **WR-03 D-17 at R = 0.** Rafael's D-17 sentence carries no R = 0 exemption; only the lead does. So at R = 0, D-17 now reads "previsão D-17 confirmada nos 8 pontos julgados; 0 pontos REFUSED fora da leitura", where it used to read "previsão D-17 confirmada: nenhum ponto passa". If he wants the old sentence kept at R = 0, the change is one branch.
+3. **WR-03 D-17 at R = 0. Resolved by Rafael's second follow-up (147af58).** e7a2f66 applied his D-17 sentence at R = 0 too, which read "previsão D-17 confirmada nos 8 pontos julgados; 0 pontos REFUSED fora da leitura". He ruled that R = 0 keeps "previsão D-17 confirmada: nenhum ponto passa", mirroring the lead.
 4. **WR-03 PASSA branch.** It is unchanged ("previsão D-17 não confirmada: <cells>; ..."). The cells it names are judged points by definition, because a REFUSED point never passes. `held` is now `None` when M = 0.
-5. **WR-03 singular with "nos".** "o resto da redação como escrito" keeps "nos" in "confirmada nos 1 ponto julgado", which is ungrammatical in Portuguese. That case is unreachable on the real grid, where M is always even.
+5. **WR-03 singular with "nos". Resolved by Rafael's second follow-up (e45fa99).** e7a2f66 kept "nos" literally, which gave "confirmada nos 1 ponto julgado". He ruled that the preposition agrees by count: "no 1 ponto julgado".
 6. **WR-05 disclosure fields.** It publishes the three fields he named. It does not copy Phase 41's other keys: statement, launch sha, changed, commits.
 7. **Test-only mechanics.**
    - The rigs stand `_device` in with `"cpu"`.
@@ -157,4 +176,4 @@ Pending orchestrator full suite (Task 3: HEAD, suite line and `shasum -a 256 scr
 
 ## Self-Check: PASSED
 
-The nine commits c81b483, a1ab8f1, 4ba7a65, 0df9258, 5c9fa6c, f6472c3, e7a2f66, 784fdc0 and d54bc88 are all in `git log 203afa3..HEAD`. All four modified files exist.
+The eleven commits c81b483, a1ab8f1, 4ba7a65, 0df9258, 5c9fa6c, f6472c3, e7a2f66, 784fdc0, d54bc88, 147af58 and e45fa99 are all in `git log 203afa3..HEAD`. All four modified files exist.
