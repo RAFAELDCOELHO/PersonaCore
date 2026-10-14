@@ -229,3 +229,183 @@ def test_resume_guard(monkeypatch, tmp_path):
     sidecar = phase25_points.training_sidecar(plan["point_key"])
     sidecar.write_text("{}", encoding="utf-8")
     phase42_recipes._resume_guard(plan, phase42_prereg.unit_cell(unit)[0])
+
+
+# =================================================================================================
+# (2) Scoring, retention and the write-once control and point records (plan 42-04 Task 2;
+# RECIPE-02, D-13, D-23; the unwired-driver lesson: the real consumer reads the real producer).
+# =================================================================================================
+
+_READING = {
+    "adapter_on": 5.5,
+    "adapter_off": 6.25,
+    "n_targets": 40,
+    "retention_ppl": 3.9,
+    "retention_total_tokens": 51234,
+}
+
+
+def _block(k, n):
+    return {"k": k, "n": n, "rate": k / n, "questions": n // 9, "per_family": {"a": [k, n]}}
+
+
+def _measure_rig(monkeypatch, tmp_path, *, taught=(790, 1008), heldout=(346, 648), mutate=None):
+    """_train_rig plus score_arm, load_adapted_model and measure_condition_c faked, and the pf
+    dict write_unit reads for a scratch root ``tmp_path / "out"`` with its own ledger."""
+    import phase14_recall
+    import phase25_condition_c
+
+    calls = {"train": _train_rig(monkeypatch, tmp_path, mutate=mutate), "score": [], "load": []}
+
+    def score_arm(arm, facts, adapter_path, device):
+        calls["score"].append((arm, adapter_path, device))
+        return {
+            "on_taught": _block(*taught),
+            "on_heldout": _block(*heldout),
+            "off_taught": _block(9, taught[1]),
+            "off_heldout": _block(3, heldout[1]),
+            "per_family_gain": {"a": 0.5},
+        }
+
+    def load_adapted_model(device, adapter_path=None):
+        calls["load"].append((device, adapter_path))
+        return "model", "cfg", "tok", "forbid", "artifact"
+
+    def measure_condition_c(model, tok, device, *, forbid):
+        assert (model, tok, forbid) == ("model", "tok", "forbid")
+        return dict(_READING)
+
+    monkeypatch.setattr(teach_persona, "score_arm", score_arm)
+    monkeypatch.setattr(phase14_recall, "load_adapted_model", load_adapted_model)
+    monkeypatch.setattr(phase25_condition_c, "measure_condition_c", measure_condition_c)
+    monkeypatch.setattr(phase42_recipes, "_release", lambda: None)
+    monkeypatch.setattr(phase42_recipes, "git_sha", lambda: "h1")
+    root = tmp_path / "out"
+    pf = {
+        "root": root,
+        "real": False,
+        "device": "cpu",
+        "ledger_path": tmp_path / "ledger.jsonl",
+        "heartbeat_path": tmp_path / "heartbeat.jsonl",
+        "git_sha": "h1",
+        "module_sha256": phase42_recipes.module_sha256(),
+    }
+    return calls, pf
+
+
+def _write(unit, pf):
+    state = {"point": unit, "stage": "start", "shape": None, "draw_index": None}
+    rel = phase42_recipes.write_unit(unit, pf=pf, started_utc="t0", state=state)
+    assert state["stage"] == "done"
+    return rel, json.loads((pf["root"] / rel).read_text(encoding="utf-8"))
+
+
+def test_control_record_satisfies_the_contract_and_the_real_rule(monkeypatch, tmp_path):
+    p = phase42_prereg
+    calls, pf = _measure_rig(monkeypatch, tmp_path)
+    for unit in p.CONTROL_UNITS:
+        rel, record = _write(unit, pf)
+        recipe, sigma = p.unit_cell(unit)
+        assert rel == p.unit_record(unit)
+        assert record["unit"] == unit and record["recipe"] == dict(recipe)
+        assert record["seed"] == p.SEED and record["sigma"] == p.CONTROL_SIGMA == sigma
+        assert record["taught_recall"]["numerator"] == 790
+        assert record["taught_recall"]["denominator"] == 1008
+        assert record["heldout_recall"]["numerator"] == 346
+        assert record["heldout_recall"]["denominator"] == 648
+        assert record["taught_recall_off"]["numerator"] == 9
+        assert record["epsilon"] is None and record["selection_accounted"] is False
+        assert record["clip_bind_count"] == 0
+        assert record["dialogue_gap"] == 5.5 - 6.25
+        assert record["condition_c"]["retention_ppl"] == _READING["retention_ppl"]
+        assert record["condition_c"]["seconds"] >= 0
+        assert record["training"]["train_config"] == dict(p.expected_train_config(recipe))
+        assert set(record["provenance"]["run"]) == set(phase42_recipes.RUN_PROVENANCE_KEYS)
+        run = record["provenance"]["run"]
+        assert run["device"] == "cpu" and run["started_utc"] == "t0"
+        assert run["git_sha_at_launch"] == run["git_sha_at_end"] == "h1"
+        assert run["head_moved_during_run"] is False
+        assert record["module_sha256_at_launch"] == pf["module_sha256"]
+        assert record["rehearsal_disclosure"] == {"this_is_the_rehearsal": True}
+        assert record["lost_attempts"] == []
+        # The emit's consumer reads it (D-13).
+        assert phase42_prereg.descriptive_reading(record)["dialogue_gap"] == -0.75
+    assert len(calls["score"]) == len(calls["load"]) == len(p.CONTROL_UNITS)
+
+    # The REAL Phase 35 threshold rule accepts the driver-written records.
+    v4_copy = pf["root"] / p.V4_CONTROL_RECORD
+    v4_copy.write_bytes((_ROOT / p.V4_CONTROL_RECORD).read_bytes())
+    monkeypatch.setattr(phase35_prereg, "_REPO_ROOT", pf["root"])
+    thresholds = phase35_prereg.fill(
+        "e3_recall_threshold", **phase42_prereg.threshold_fill_inputs()
+    )
+    assert set(thresholds) == {phase42_prereg.recipe_key(r) for r in p.RECIPES}
+    for unit in p.CONTROL_UNITS:
+        threshold = thresholds[phase42_prereg.recipe_key(phase42_prereg.unit_cell(unit)[0])]
+        assert threshold["control"] == phase42_prereg.unit_record(unit)
+        assert threshold["taught"] == phase35_prereg.F_Y * 790 / 1008
+        assert threshold["heldout"] == phase35_prereg.F_Y * 346 / 648
+
+
+def test_point_record_epsilon(monkeypatch, tmp_path):
+    p = phase42_prereg
+    unit = "point_lr3e-04_t800_sigma0p500000"
+    _calls, pf = _measure_rig(monkeypatch, tmp_path)
+    _rel, record = _write(unit, pf)
+    assert record["sigma"] == 0.5 and record["recipe"]["steps"] == 800
+    import math
+
+    assert math.isclose(record["epsilon"], phase42_prereg.point_epsilon(0.5, 800), rel_tol=1e-12)
+    assert record["delta"] == phase35_prereg.DELTA
+    assert record["selection_accounted"] is False
+    assert record["accounting"]["composed_steps"] == 800
+    assert set(record["accounting"]) == {"q", "composed_steps", "composed_lot_sizes"}
+    assert record["clip_norm"] == phase42_prereg.clip_norm_for(0.5)
+    assert record["clip_bind_count"] == 3
+    # The declared omission, never a refusal measurement (refusal_omitted).
+    assert record["refusal"] == p.ENTRIES["refusal_omitted"]["derivation"]
+    assert [k for k in record if "refusal" in k] == ["refusal"]
+    assert record["descriptive"] == ["clip_bind_count", "dialogue_gap", "condition_c"]
+
+
+def test_write_once_refuses_an_existing_record(monkeypatch, tmp_path):
+    unit = "control_lr1e-03_t200"
+    calls, pf = _measure_rig(monkeypatch, tmp_path)
+    _write(unit, pf)
+    assert len(calls["train"]) == len(calls["score"]) == 1
+    with pytest.raises(SystemExit, match=r"^\[phase42_recipes\].*write-once"):
+        _write(unit, pf)
+    assert len(calls["train"]) == len(calls["score"]) == 1
+
+
+def test_adapter_digest_checked_before_scoring(monkeypatch, tmp_path):
+    def mutate(blob):
+        blob["adapter_sha256"] = "0" * 64
+
+    calls, pf = _measure_rig(monkeypatch, tmp_path, mutate=mutate)
+    with pytest.raises(SystemExit, match=r"^\[phase42_recipes\].*adapter"):
+        _write("control_lr1e-03_t200", pf)
+    assert len(calls["train"]) == 1 and calls["score"] == [] and calls["load"] == []
+    assert not (pf["root"] / phase42_prereg.unit_record("control_lr1e-03_t200")).exists()
+
+
+def test_lost_attempts_are_read_from_the_ledger(monkeypatch, tmp_path):
+    import phase36_ledger
+
+    unit = "control_lr1e-03_t800"
+    _calls, pf = _measure_rig(monkeypatch, tmp_path)
+    rid = phase42_prereg.run_id(unit)
+    phase36_ledger.append("start", run_id=rid, phase=42, front="E3", ledger_path=pf["ledger_path"])
+    phase36_ledger.append(
+        "lost",
+        run_id=rid,
+        phase=42,
+        front="E3",
+        seconds=12.0,
+        flag=phase36_ledger.LOST_FLAG,
+        ledger_path=pf["ledger_path"],
+    )
+    _rel, record = _write(unit, pf)
+    assert [(x["event"], x["run_id"], x["seconds"]) for x in record["lost_attempts"]] == [
+        ("lost", rid, 12.0)
+    ]

@@ -22,6 +22,7 @@ import hashlib
 import pathlib
 import subprocess
 import sys
+import time
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "src"))
@@ -31,6 +32,8 @@ import phase25_record  # noqa: E402  (torch-free; point_key)
 import phase25_run  # noqa: E402  — atomic_write_json, beat, start_heartbeat (torch-free)
 import phase35_prereg  # noqa: E402  (torch-free at import; E3_N, DELTA, p22_onset_sigma)
 import phase36_ledger  # noqa: E402  (torch-free; the per-unit attempt)
+
+from personacore.provenance import git_sha  # noqa: E402
 
 # FIXED: the cwd of every git call and the base of the module digests.
 _REPO = pathlib.Path(__file__).resolve().parent.parent
@@ -279,3 +282,120 @@ def train_cell(unit, *, rehearsal):
         f"{unit}: the seam clipped at {live['clip_norm']!r}, not {prereg.clip_norm_for(sigma)!r}",
     )
     return plan, blob
+
+
+# =================================================================================================
+# Scoring, the descriptive retention reading and the write-once unit record (RECIPE-02, D-13, D-16)
+# =================================================================================================
+
+
+def score(plan, adapter, device):
+    """The v4.0 instrument and record shape (D-16 comparability): teach_persona.score_arm on the
+    locked facts, each block in phase25_recall._tier's numerator / denominator shape."""
+    import phase14_factset as fs  # fact material: lazy
+    import phase25_recall
+    import teach_persona as tp  # torch at import: lazy
+
+    started = time.monotonic()
+    out = tp.score_arm(plan["arm"], fs.LOCKED_FACTS, adapter, device)
+    seconds = time.monotonic() - started
+    return {
+        "taught_recall": phase25_recall._tier(out["on_taught"]),
+        "heldout_recall": phase25_recall._tier(out["on_heldout"]),
+        "taught_recall_off": phase25_recall._tier(out["off_taught"]),
+        "heldout_recall_off": phase25_recall._tier(out["off_heldout"]),
+        "per_family_gain": out["per_family_gain"],
+        "scoring_seconds": seconds,
+    }
+
+
+def retention(adapter, device):
+    """D-13, descriptive: condition (c) on ONE loaded adapted model, through
+    phase25_condition_c.measure_condition_c (the only retention path this driver reaches)."""
+    import phase14_recall  # torch at import: lazy
+    import phase25_condition_c
+
+    started = time.monotonic()
+    model, _cfg, tok, forbid, _artifact = phase14_recall.load_adapted_model(device, adapter)
+    reading = dict(phase25_condition_c.measure_condition_c(model, tok, device, forbid=forbid))
+    del model
+    _release()
+    reading["seconds"] = time.monotonic() - started
+    return reading
+
+
+def _run_provenance(pf, started_utc):
+    import torch
+
+    end_sha = git_sha()
+    return {
+        "git_sha_at_launch": pf["git_sha"],
+        "git_sha_at_end": end_sha,
+        "head_moved_during_run": end_sha != pf["git_sha"],
+        "device": pf["device"],
+        "torch_version": torch.__version__,
+        "started_utc": started_utc,
+        "finished_utc": _now(),
+    }
+
+
+def write_unit(unit, *, pf, started_utc, state):
+    """One unit inside its ledger attempt: write-once checked FIRST, the D-05 seam, the adapter
+    digest, the v4.0 scoring, the descriptive retention, then the record (epsilon at the unit's
+    own T, None at a control; the refusal leg declared omitted, never measured). Returns the
+    record's repo-relative path (the end line names it)."""
+    prereg = _prereg()
+    root = pathlib.Path(pf["root"])
+    rel = prereg.unit_record(unit)
+    out = root / rel
+    _prove(not out.exists(), f"{out} exists: write-once")
+    recipe, sigma = prereg.unit_cell(unit)
+    state.update(stage="train")
+    plan, blob = train_cell(unit, rehearsal=not pf["real"])
+    adapter = phase25_points._ROOT / blob["adapter"]
+    _prove(
+        _sha256(adapter) == blob["adapter_sha256"],
+        f"{adapter} is not the adapter the sidecar records ({blob['adapter_sha256']}): refused "
+        "before scoring",
+    )
+    state.update(stage="score")
+    scores = score(plan, adapter, pf["device"])
+    state.update(stage="retention")
+    capability = retention(adapter, pf["device"])
+    live = blob["live_mechanism"]
+    lost = [
+        line
+        for line in phase36_ledger.read_ledger(pf["ledger_path"])
+        if line["event"] == "lost" and line["run_id"] == prereg.run_id(unit)
+    ]
+    record = {
+        "unit": unit,
+        "recipe": dict(recipe),
+        "seed": prereg.SEED,
+        "sigma": sigma,
+        "n_facts": blob["n_facts"],
+        "clip_norm": live["clip_norm"],
+        **scores,
+        "epsilon": prereg.point_epsilon(sigma, recipe["steps"]),
+        "delta": phase35_prereg.DELTA,
+        "selection_accounted": prereg.SELECTION_ACCOUNTED,
+        "accounting": {
+            "q": live["q"],
+            "composed_steps": live["composed_steps"],
+            "composed_lot_sizes": live["composed_lot_sizes"],
+        },
+        "clip_bind_count": blob["clip_bind_count"],
+        "dialogue_gap": blob["ppl_adapter_on"] - blob["ppl_adapter_off"],
+        "condition_c": capability,
+        "descriptive": ("clip_bind_count", "dialogue_gap", "condition_c"),
+        "refusal": prereg.ENTRIES["refusal_omitted"]["derivation"],
+        "training": dict(blob),
+        "lost_attempts": lost,
+        "provenance": {"run": _run_provenance(pf, started_utc)},
+        "module_sha256_at_launch": pf["module_sha256"],
+    }
+    if not pf["real"]:
+        record["rehearsal_disclosure"] = {"this_is_the_rehearsal": True}
+    _write_once(out, record)
+    state.update(stage="done")
+    return rel
