@@ -172,7 +172,17 @@ None. No new endpoint, network path or file-write path. The driver still writes 
 
 ## Frozen digests
 
-Pending orchestrator full suite (Task 3: HEAD, suite line and `shasum -a 256 scripts/phase42_prereg.py scripts/phase42_recipes.py` at the committed tree).
+Full suite on the committed tree at HEAD `28c7fda` (orchestrator, 2026-10-14, `.venv/bin/pytest -q -p no:cacheprovider`):
+
+```
+4802 passed, 4 skipped, 83 warnings in 4382.36s (1:13:02)
+EXIT=0
+```
+
+```
+0ca749f0ee1c2f5194cd0f227124b60b714f94bb07d95dcbd1c693f4161a5ff5  scripts/phase42_prereg.py
+0c9be5828aa1174d774ccc4781525427883a2c461f2560a3d30dbcd8cbee7c60  scripts/phase42_recipes.py
+```
 
 ## Self-Check: PASSED
 
