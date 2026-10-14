@@ -1470,7 +1470,9 @@ def _some_refused_lead(m, r):
 
 
 def _d17_confirmed(m, r):
-    return f"previsão D-17 confirmada nos {_judged(m)}; {_refused(r)} fora da leitura"
+    # Rafael's second follow-up (2026-10-14): the preposition agrees by count, "no" at M = 1.
+    prep = "no" if m == 1 else "nos"
+    return f"previsão D-17 confirmada {prep} {_judged(m)}; {_refused(r)} fora da leitura"
 
 
 def _with_refused(r):
@@ -1502,6 +1504,7 @@ def test_report_lead_and_d17_read_only_judged_points():
         assert p.summary_line(verdicts) == f"0 de 8 pontos passam; {r} REFUSED"
         texts += [lead, d17["text"]]
     assert _some_refused_lead(1, 7) in texts and _d17_confirmed(7, 1) in texts
+    assert "previsão D-17 confirmada no 1 ponto julgado; 7 pontos REFUSED fora da leitura" in texts
     # A point passes: the summary line stays line 1 with the REFUSED count; D-17 names the cell.
     passed = {**_with_refused(2), p.POINT_UNITS[3]: p.PASSA}
     assert p.report_lead(passed) == p.summary_line(passed) == "1 de 8 pontos passam; 2 REFUSED"

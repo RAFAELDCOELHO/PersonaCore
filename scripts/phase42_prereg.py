@@ -488,7 +488,8 @@ _ENTRIES = {
         "value": types.MappingProxyType(
             {
                 "none_refused": "previsão D-17 confirmada: nenhum ponto passa",
-                "confirmed": "previsão D-17 confirmada nos {judged}; {refused} fora da leitura",
+                "confirmed": "previsão D-17 confirmada {prep} {judged}; {refused} fora da leitura",
+                "prep": ("no", "nos"),
                 "unread": "previsão D-17 não lida: nenhum ponto julgado",
             }
         ),
@@ -497,8 +498,9 @@ _ENTRIES = {
             "prediction is read only over the judged points. With no point passing: "
             "none_refused when R = 0 (the pre-WR-03 sentence, mirroring the lead's null_line; "
             "Rafael's second follow-up, 2026-10-14), confirmed with M judged and R REFUSED "
-            "(refused_lead's singular / plural forms) only when R > 0, or unread when M = 0. A "
-            "passing point keeps the reading not confirmed, naming its cells."
+            "(refused_lead's singular / plural forms, the preposition agreeing by count: no at "
+            "M = 1, nos otherwise; Rafael's second follow-up) only when R > 0, or unread when "
+            "M = 0. A passing point keeps the reading not confirmed, naming its cells."
         ),
         "kind": "preference",
         "source": f"{_CONTEXT.format('17')}; 42-REVIEW.md Resolution",
@@ -1216,7 +1218,9 @@ def d17_reading(verdicts):
         text = words["none_refused"]
     elif judged:
         text = words["confirmed"].format(
-            judged=_count(judged, forms["judged"]), refused=_count(refused, forms["refused"])
+            prep=words["prep"][0 if judged == 1 else 1],
+            judged=_count(judged, forms["judged"]),
+            refused=_count(refused, forms["refused"]),
         )
     else:
         text = words["unread"]
