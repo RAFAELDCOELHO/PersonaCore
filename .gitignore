@@ -18,6 +18,11 @@ data/
 # Phase 41 E1 calibration training CSVs (teach_persona.arm_outputs csv lands under results/;
 # the Phase 35 ordering legs would count it as a phase-41 record; 41-05 WR-03)
 results/phase41_e1_calibration_seed*/
+# Phase 42 E3 training CSVs (teach_persona.arm_outputs writes results/<prefix>_dp_n8/run.csv
+# while a run lives; phase25_points.train_stage moves it to data/phase25_runs/ on success; after
+# a crash it stays and would red the clean-tree probes)
+results/phase42e3_*/
+results/phase42rh_*/
 
 # Tooling caches
 .pytest_cache/

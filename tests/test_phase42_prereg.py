@@ -1042,3 +1042,30 @@ def test_threshold_fill_runs_the_real_rule_on_planted_controls(tmp_path, monkeyp
     # NON-VACUITY: restored, the same fill passes again.
     v4_copy.write_bytes(v4_bytes)
     assert phase35_prereg.fill("e3_recall_threshold", **phase42_prereg.threshold_fill_inputs())
+
+
+# =================================================================================================
+# (10) THE TRAINING CSV DIRECTORIES ARE GITIGNORED (plan 42-02 Task 3, T-42-09): a crashed run's
+# results/phase42e3_* / phase42rh_* csv would red the clean-tree probes; no record is ignored.
+# =================================================================================================
+
+
+def _ignored(rel):
+    run = subprocess.run(("git", "check-ignore", "-q", rel), cwd=_ROOT, check=False)
+    assert run.returncode in (0, 1), run
+    return run.returncode == 0
+
+
+def test_training_csv_directories_are_gitignored():
+    p = phase42_prereg
+    for unit in p.UNITS:
+        for rehearsal in (False, True):
+            rel = _csv_rel(unit, rehearsal)
+            assert rel.startswith("results/"), rel  # meta-guard: it lands under results/
+            assert _ignored(rel), rel
+            assert not fnmatch.fnmatch(rel, p.RECORD_GLOB), rel
+    # NON-VACUITY: the records the ordering legs must see are not ignored.
+    for unit in p.UNITS:
+        assert not _ignored(phase42_prereg.unit_record(unit)), unit
+    assert not _ignored(p.E3_RECORD)
+    assert not _ignored(p.REPORT_RECORD)
