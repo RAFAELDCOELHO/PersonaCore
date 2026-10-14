@@ -21,6 +21,7 @@ import gc
 import hashlib
 import json
 import math
+import os
 import pathlib
 import subprocess
 import sys
@@ -934,3 +935,203 @@ def emit(*, root=None, ledger_path=None, thresholds=None):
     _write_once(out, record)
     print(f"EMIT {prereg.E3_RECORD} {record['summary']}", flush=True)
     return record
+
+
+# =================================================================================================
+# The report: the E3 record rendered, nothing else (every number read from the record; D-15)
+# =================================================================================================
+
+
+def _table(header, rows):
+    """A GFM table; a pipe inside a cell is escaped, else it would add cells."""
+
+    def line(cells):
+        return "| " + " | ".join(str(c).replace("|", "\\|") for c in cells) + " |"
+
+    return [line(header), "|" + "---|" * len(header), *(line(row) for row in rows), ""]
+
+
+def _k_n(pair):
+    return f"{pair[0]}/{pair[1]}"
+
+
+def render_report(record):
+    """The E3 report (pure; returns the markdown). Line 1 is the record's lead verbatim (D-15);
+    directly after it every point's raw recall on both legs, its own control's, its label and its
+    epsilon; the summary line once, after that block, only when it is not the lead itself."""
+    record = json.loads(json.dumps(record))
+    prereg = _prereg()
+    points = record["points"]
+    out = [record["lead"]]
+    for unit in prereg.POINT_UNITS:
+        pt = points[unit]
+        out.append(
+            f"- {unit}: taught {_k_n(pt['taught_recall'])}, held-out "
+            f"{_k_n(pt['heldout_recall'])}; control taught {_k_n(pt['control_taught_recall'])}, "
+            f"control held-out {_k_n(pt['control_heldout_recall'])}; {pt['label']}; "
+            f"ε = {pt['epsilon']!r}, δ = {pt['delta']!r}, selection_accounted = "
+            f"{pt['selection_accounted']}, biased-coin bound {pt['vacuous_bound']!r}, TPR bound "
+            f"vacuous only for FPR ≥ 10^{pt['tpr']['log10_fpr_threshold']:.1f}"
+        )
+    out.append("")
+    if record["summary"] != record["lead"]:
+        out += [record["summary"], ""]
+    # The written record's keys are sorted: iterate in the pre-registered orders, never the dict's.
+    tags = [prereg.sigma_tag(s) for s in prereg.NOISED_SIGMAS]
+    recipes = [prereg.recipe_tag(r) for r in prereg.RECIPES]
+    legs = ("taught", "heldout")
+    composition = record["composition"]
+    out += [
+        "# Phase 42 — E3: DP-SGD recipe search at large ε",
+        "",
+        "## The 4 x 2 table (RECIPE-03, D-12, D-23)",
+        "",
+        "Each cell is the pre-registered label of one noised point. The last two columns are the "
+        "raw recall k/n of the recipe's own σ = 0 control (the reused v4.0 control's for the v4.0 "
+        "recipe): beside the labels, never inside them.",
+        "",
+        *_table(
+            ("recipe", *tags, "control taught", "control held-out"),
+            [
+                [row["recipe"], *(row[t] for t in tags), row["control_taught"]]
+                + [row["control_heldout"]]
+                for row in record["table"]
+            ],
+        ),
+        "## Control retention (D-18)",
+        "",
+        "Each control's retention beside the v4.0 control's, descriptive: a control that learns "
+        "with worse retention leaves every label unchanged.",
+        "",
+        *(f"- {record['control_retention'][tag]['text']}" for tag in recipes),
+        "",
+        "## ε beside the labels (RECIPE-02, D-11, D-14)",
+        "",
+        f"Basic composition over the {composition['n_points']} noised points (controls excluded): "
+        f"total ε = {composition['total_epsilon']!r}, total δ = {composition['total_delta']!r}; "
+        f"selection_accounted = {record['selection_accounted']}.",
+        "",
+        *_table(
+            ("point", "ε", "δ", "biased-coin bound", "log10 FPR threshold"),
+            [
+                [u, repr(points[u]["epsilon"]), repr(points[u]["delta"])]
+                + [
+                    repr(points[u]["vacuous_bound"]),
+                    f"{points[u]['tpr']['log10_fpr_threshold']:.1f}",
+                ]
+                for u in prereg.POINT_UNITS
+            ],
+        ),
+        *(
+            f"- {s}"
+            for s in dict.fromkeys(points[u]["tpr"]["sentence"] for u in prereg.POINT_UNITS)
+        ),
+        "",
+        "## Controls and thresholds (RECIPE-03, D-12, D-19)",
+        "",
+        *_table(
+            ("recipe", "control record", "sha256", "taught", "held-out", "threshold taught")
+            + ("threshold held-out", "reused"),
+            [
+                [tag, c["record"], c["sha256"], _k_n(c["taught_recall"]), _k_n(c["heldout_recall"])]
+                + (
+                    [prereg.REFUSED, prereg.REFUSED]
+                    if c["threshold"] == prereg.REFUSED
+                    else [repr(c["threshold"]["taught"]), repr(c["threshold"]["heldout"])]
+                )
+                + [c["reused"]]
+                for tag, c in ((t, record["controls"][t]) for t in recipes)
+            ],
+        ),
+        "## D-16: the v4.0 recipe's points beside the v4.0 readings (descriptive)",
+        "",
+        *_table(
+            ("point", "σ", "E3 taught", "v4.0 taught", "taught", "E3 held-out", "v4.0 held-out")
+            + ("held-out",),
+            [
+                [row["unit"], row["sigma"], _k_n(row["e3"]["taught"]), _k_n(row["v4"]["taught"])]
+                + [row["taught"], _k_n(row["e3"]["heldout"]), _k_n(row["v4"]["heldout"])]
+                + [row["heldout"]]
+                for row in record["d16"]
+            ],
+        ),
+        "## D-17 (descriptive)",
+        "",
+        record["d17"]["text"],
+        "",
+        "## Exact-rational disagreements (42-RESEARCH Pitfall 6)",
+        "",
+        "Every k where the pre-registered float comparison differs from the exact rational one, "
+        "per learnable recipe and leg; published, never silently resolved.",
+        "",
+        *(
+            f"- {tag} {leg}: {ks if ks else 'none'}"
+            for tag in recipes
+            if tag in record["exact_disagreements"]
+            for leg, ks in ((g, record["exact_disagreements"][tag][g]) for g in legs)
+        ),
+        "",
+        "## Leituras descritivas (D-13)",
+        "",
+        "Retention perplexity (condition c), dialogue gap, clip_bind_count and seconds per unit: "
+        "descriptive readings, never a verdict.",
+        "",
+        *_table(
+            ("unit", "retention ppl", "retention tokens", "dialogue gap", "clip_bind_count")
+            + ("train s", "scoring s"),
+            [
+                [u, repr(d["retention_ppl"]), d["retention_total_tokens"]]
+                + [repr(d["dialogue_gap"]), d["clip_bind_count"], repr(d["train_seconds"])]
+                + [repr(d["scoring_seconds"])]
+                for u, d in ((u, record["descriptive"][u]) for u in prereg.UNITS)
+            ],
+        ),
+        "## Limits",
+        "",
+        *(f"- {name}: {record['limits'][name]}" for name in _LIMITS),
+        "",
+        "## Hours and provenance",
+        "",
+        f"- E3 hours (closed ledger attempts): {record['hours']!r}",
+        f"- emitted {record['provenance']['emitted_utc']} at {record['provenance']['git_sha']}",
+        f"- {len(record['inputs'])} input records, each with its sha256 in the E3 record",
+        "",
+    ]
+    return "\n".join(out)
+
+
+def report(*, root=None):
+    """Write results/phase42_recipes_report.md ONCE from the E3 record (on the real root only from
+    a tracked, unmodified record)."""
+    root = pathlib.Path(root) if root is not None else pathlib.Path(_ROOT)
+    prereg = _prereg()
+    record_path = root / prereg.E3_RECORD
+    _prove(record_path.exists(), f"{record_path} is missing: emit the record first")
+    _prove(
+        not _is_real(root) or _tracked_and_clean(prereg.E3_RECORD),
+        f"{prereg.E3_RECORD} must be committed and unmodified before the report renders it",
+    )
+    out = root / prereg.REPORT_RECORD
+    _prove(
+        not out.exists(),
+        f"{out} exists: write-once, REFUSING to overwrite it; a correction is a dated "
+        "continuation via scripts/_addendum.py",
+    )
+    out.write_text(render_report(_load(record_path)), encoding="utf-8")
+    print(f"REPORT {out}", flush=True)
+    return out
+
+
+def main(argv=None):
+    argv = sys.argv[1:] if argv is None else list(argv)
+    commands = {"preflight": preflight, "run": run, "emit": emit, "report": report}
+    if len(argv) != 1 or argv[0] not in commands:
+        raise SystemExit(__doc__)
+    # git_sha() reads the process cwd: every command runs at the repository root.
+    os.chdir(_REPO)
+    commands[argv[0]]()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

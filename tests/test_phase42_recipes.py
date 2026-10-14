@@ -930,6 +930,9 @@ def test_worse_retention_in_a_learning_control_changes_no_label(monkeypatch, tmp
     assert row["retention_ppl"] == blob["condition_c"]["retention_ppl"]
     assert row["retention_ppl"] != a["control_retention"][tag]["retention_ppl"]
     assert "não muda rótulo" in row["text"]
+    # ... and the report names it with "não muda rótulo", among the control-retention lines.
+    text = phase42_recipes.render_report(b)
+    assert f"- {row['text']}" in text.splitlines()
 
 
 def test_build_record_epsilon_and_composition(monkeypatch, tmp_path):
@@ -1060,3 +1063,147 @@ def test_emit_is_write_once_and_carries_emit_provenance_only(monkeypatch, tmp_pa
     with pytest.raises(SystemExit, match=r"^\[phase42_recipes\].*write-once"):
         phase42_recipes.emit(root=root, ledger_path=ledger, thresholds=thr)
     assert out.read_bytes() == before
+
+
+# =================================================================================================
+# (5) render_report, report, main and the LaunchAgent (plan 42-05 Task 2; D-15, T-42-20, T-42-22).
+# =================================================================================================
+
+_NULL = "nenhuma receita manteve o recall onde a garantia é vazia (0 de 8 pontos)"
+
+
+def _point_block_line(record, unit):
+    point = record["points"][unit]
+    return (
+        f"- {unit}: taught {point['taught_recall'][0]}/{point['taught_recall'][1]}",
+        f"held-out {point['heldout_recall'][0]}/{point['heldout_recall'][1]}",
+        "control taught {}/{}".format(*point["control_taught_recall"]),
+        "control held-out {}/{}".format(*point["control_heldout_recall"]),
+        f"ε = {point['epsilon']!r}",
+    )
+
+
+def test_report_first_line_is_the_lead(monkeypatch, tmp_path):
+    p = phase42_prereg
+    root, ledger, thr, _calls = _e3_root(monkeypatch, tmp_path, _counts())
+    null = phase42_recipes.build_record(root, thresholds=thr, ledger_path=ledger)
+    assert {null["points"][u]["label"] for u in p.POINT_UNITS} == {p.NAO_PASSA}
+    root2, ledger2, thr2, _c = _e3_root(
+        monkeypatch, tmp_path / "pass", _counts(passing=(p.POINT_UNITS[3],))
+    )
+    one = phase42_recipes.build_record(root2, thresholds=thr2, ledger_path=ledger2)
+    for record, lead in ((null, _NULL), (one, "1 de 8 pontos passam; 0 REFUSED")):
+        text = phase42_recipes.render_report(record)
+        lines = text.splitlines()
+        assert text.startswith(lead + "\n") and lines[0] == record["lead"] == lead
+        # DIRECTLY after the lead: every point's raw recall on both legs, its control's and its ε.
+        block = lines[1 : 1 + len(p.POINT_UNITS)]
+        for unit, line in zip(p.POINT_UNITS, block, strict=True):
+            first, *rest = _point_block_line(record, unit)
+            assert line.startswith(first), (unit, line)
+            assert all(part in line for part in rest), (unit, line)
+        assert text.count(record["summary"]) == 1
+        assert "ainda" not in text.lower() and "possivelmente" not in text.lower()
+    # The null lead is followed by the summary once, after the block.
+    lines = phase42_recipes.render_report(null).splitlines()
+    assert lines.index(null["summary"]) > len(p.POINT_UNITS)
+
+
+def test_report_sections(monkeypatch, tmp_path):
+    p = phase42_prereg
+    root, ledger, thr, _calls = _e3_root(monkeypatch, tmp_path, _counts("control_lr1e-03_t800"))
+    record = phase42_recipes.build_record(root, thresholds=thr, ledger_path=ledger)
+    text = phase42_recipes.render_report(record)
+    lines = text.splitlines()
+    for row in record["table"]:  # the 4 x 2 table: each cell's label and its control's k/n
+        cells = [row["recipe"], *(row[p.sigma_tag(s)] for s in p.NOISED_SIGMAS)]
+        cells += [row["control_taught"], row["control_heldout"]]
+        assert "| " + " | ".join(cells) + " |" in lines
+    assert "selection_accounted = False" in text
+    assert repr(record["composition"]["total_epsilon"]) in text
+    assert "biased-coin bound" in text
+    assert "rearrangement" in text
+    for row in record["d16"]:
+        assert row["unit"] in text and row["taught"] in text and row["heldout"] in text
+    assert record["d17"]["text"] in text
+    assert "## Leituras descritivas" in text
+    assert "retention" in text and "dialogue gap" in text
+    for row in record["control_retention"].values():
+        assert f"- {row['text']}" in lines
+    assert p.ENTRIES["refusal_omitted"]["derivation"] in text
+    for derivation in record["limits"].values():
+        assert derivation in text
+    assert p.V4_CONTROL_SHA256 in text and p.REFUSED in text
+    assert "ainda" not in text.lower() and "possivelmente" not in text.lower()
+
+
+def test_report_is_write_once_and_reads_a_committed_record(monkeypatch, tmp_path):
+    p = phase42_prereg
+    root, ledger, thr, _calls = _e3_root(monkeypatch, tmp_path, _counts())
+    with pytest.raises(SystemExit, match=r"^\[phase42_recipes\].*emit the record first"):
+        phase42_recipes.report(root=root)
+    record = phase42_recipes.emit(root=root, ledger_path=ledger, thresholds=thr)
+    out = phase42_recipes.report(root=root)
+    assert out == root / p.REPORT_RECORD
+    assert out.read_text(encoding="utf-8") == phase42_recipes.render_report(record)
+    before = out.read_bytes()
+    with pytest.raises(SystemExit, match=r"^\[phase42_recipes\].*write-once"):
+        phase42_recipes.report(root=root)
+    assert out.read_bytes() == before
+    # The real root renders only a tracked, unmodified record.
+    out.unlink()
+    monkeypatch.setattr(phase42_recipes, "_ROOT", root)
+    monkeypatch.setattr(phase42_recipes, "_tracked_and_clean", lambda *rels: False)
+    with pytest.raises(SystemExit, match=r"^\[phase42_recipes\].*committed and unmodified"):
+        phase42_recipes.report(root=root)
+    assert not out.exists()
+
+
+def test_main_traces_run_with_real_root_defaults(monkeypatch):
+    seen = []
+    for name in ("preflight", "run", "emit", "report"):
+        monkeypatch.setattr(phase42_recipes, name, lambda *a, _n=name, **k: seen.append((_n, a, k)))
+    chdirs = []
+    monkeypatch.setattr(phase42_recipes.os, "chdir", chdirs.append)
+    assert phase42_recipes.main(["run"]) == 0
+    assert seen == [("run", (), {})]  # root, ledger and heartbeat take run()'s real-root defaults
+    assert chdirs == [phase42_recipes._REPO]
+    for name in ("preflight", "emit", "report"):
+        phase42_recipes.main([name])
+    assert [n for n, _a, _k in seen] == ["run", "preflight", "emit", "report"]
+    assert all(a == () and k == {} for _n, a, k in seen)
+    for argv in ([], ["x"], ["run", "emit"]):
+        with pytest.raises(SystemExit) as raised:
+            phase42_recipes.main(argv)
+        assert raised.value.code == phase42_recipes.__doc__
+    assert len(seen) == 4
+
+
+def test_plist_mirrors_the_e1_agent():
+    import plistlib
+
+    ours = plistlib.loads((_ROOT / "artifacts" / "com.personacore.phase42.e3.plist").read_bytes())
+    e1 = plistlib.loads((_ROOT / "artifacts" / "com.personacore.phase41.e1.plist").read_bytes())
+    assert ours["Label"] == "com.personacore.phase42.e3"
+    args = e1["ProgramArguments"]
+    assert args[3].endswith("scripts/phase41_erasure.py")
+    assert ours["ProgramArguments"] == [
+        *args[:3],
+        args[3].replace("scripts/phase41_erasure.py", "scripts/phase42_recipes.py"),
+        *args[4:],
+    ]
+    assert ours["ProgramArguments"][:2] == ["/usr/bin/caffeinate", "-dims"]
+    assert ours["ProgramArguments"][2].endswith("/.venv/bin/python")
+    assert ours["ProgramArguments"][4:] == ["run"]
+    assert ours["RunAtLoad"] is False and ours["KeepAlive"] is False
+    assert ours["StandardOutPath"] == e1["StandardOutPath"].replace(
+        "logs/phase41_e1.out", "logs/phase42_e3.out"
+    )
+    assert ours["StandardErrorPath"] == e1["StandardErrorPath"].replace(
+        "logs/phase41_e1.err", "logs/phase42_e3.err"
+    )
+    assert ours["StandardOutPath"].endswith("logs/phase42_e3.out")
+    assert ours["StandardErrorPath"].endswith("logs/phase42_e3.err")
+    changed = {"Label", "ProgramArguments", "StandardOutPath", "StandardErrorPath"}
+    assert set(ours) == set(e1)
+    assert {k for k in ours if ours[k] != e1[k]} == changed
