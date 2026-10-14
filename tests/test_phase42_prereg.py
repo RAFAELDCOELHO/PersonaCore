@@ -1301,3 +1301,169 @@ def test_report_lead_null_case():
         for text in (lead, phase42_prereg.summary_line(verdicts)):
             assert not any(h in text.lower() for h in _HEDGES), text
     assert phase42_prereg.report_lead(one) == "1 de 8 pontos passam; 0 REFUSED"
+
+
+# =================================================================================================
+# (12) EVERY EPSILON READING, THE EXACT-RATIONAL ENUMERATION AND THE D-16 / D-17 READINGS (plan
+# 42-03 Task 2; RECIPE-02, D-11, D-14, D-16, D-17, Pitfall 6). Epsilons are compared with
+# math.isclose against records or a live recompute, never == a typed literal (T-42-12).
+# =================================================================================================
+
+
+def _grid_epsilons():
+    return [
+        phase42_prereg.point_epsilon(
+            phase42_prereg.unit_cell(u)[1], phase42_prereg.unit_cell(u)[0]["steps"]
+        )
+        for u in phase42_prereg.POINT_UNITS
+    ]
+
+
+def _v4_point_record(sigma):
+    import phase25_record
+
+    key = phase25_record.point_key(f"dp_n{phase35_prereg.E3_N}", sigma)
+    return json.loads(phase25_record.point_record_path(key).read_text(encoding="utf-8"))
+
+
+def test_epsilon_per_point():
+    import phase25_epsilon
+
+    p = phase42_prereg
+    for steps in p.STEPS:
+        assert phase42_prereg.point_epsilon(p.CONTROL_SIGMA, steps) is None
+    for sigma in p.NOISED_SIGMAS:
+        record = _v4_point_record(sigma)
+        assert record["selection_accounted"] is False
+        assert math.isclose(
+            phase42_prereg.point_epsilon(sigma, phase35_prereg.STEP_BUDGET),
+            record["epsilon"],
+            rel_tol=1e-12,
+        )
+        live = phase25_epsilon.point_epsilon_for_sigma(
+            sigma, steps=p.T_MAX, delta=phase35_prereg.DELTA
+        )
+        assert math.isclose(phase42_prereg.point_epsilon(sigma, p.T_MAX), live, rel_tol=1e-12)
+    epsilons = _grid_epsilons()
+    assert len(epsilons) == len(p.POINT_UNITS)
+    distinct = []
+    for eps in epsilons:
+        if not any(math.isclose(eps, d, rel_tol=1e-12) for d in distinct):
+            distinct.append(eps)
+    assert len(distinct) == 3
+
+
+def test_composition():
+    p = phase42_prereg
+    epsilons = _grid_epsilons()
+    total, delta_total = phase42_prereg.composition(epsilons)
+    assert math.isclose(total, math.fsum(epsilons), rel_tol=1e-12)
+    assert math.isclose(delta_total, len(p.POINT_UNITS) * phase35_prereg.DELTA, rel_tol=1e-12)
+    with pytest.raises(ValueError, match="CONTROL_HAS_NO_EPSILON"):
+        phase42_prereg.composition(
+            [*epsilons, phase42_prereg.point_epsilon(p.CONTROL_SIGMA, p.T_MAX)]
+        )
+    assert p.SELECTION_ACCOUNTED is False
+    assert p.SELECTION_ACCOUNTED is phase35_prereg.SELECTION_ACCOUNTED
+
+
+def test_vacuous_bound():
+    for eps in _grid_epsilons():
+        assert phase42_prereg.vacuous_bound(eps) == 1.0
+    assert phase42_prereg.vacuous_bound(0.0) == 0.5
+    values = [phase42_prereg.vacuous_bound(e) for e in (0, 1, 2)]
+    assert values == sorted(values) and len(set(values)) == 3
+    assert math.isclose(phase42_prereg.vacuous_bound(1), math.e / (math.e + 1), rel_tol=1e-15)
+
+
+def test_tpr_reading():
+    p = phase42_prereg
+    eps = phase42_prereg.point_epsilon(p.NOISED_SIGMAS[-1], phase35_prereg.STEP_BUDGET)
+    assert math.isclose(eps, _v4_point_record(p.NOISED_SIGMAS[-1])["epsilon"], rel_tol=1e-12)
+    reading = phase42_prereg.tpr_reading(eps)
+    assert isinstance(reading, types.MappingProxyType)
+    expected = math.log10(1 - phase35_prereg.DELTA) - eps / math.log(10)
+    assert math.isclose(reading["log10_fpr_threshold"], expected, rel_tol=1e-12)
+    assert reading["log10_fpr_threshold"] < -69  # 5.69e-70 at eps = 159.44
+    for text in ("rearrangement", "Theorem 2.1", "FPR = 0", "TPR ≤ δ", "arXiv:1311.0776v4"):
+        assert text in reading["sentence"], text
+    assert f"10^{reading['log10_fpr_threshold']:.1f}" in reading["sentence"]
+    # No overflow at the largest grid epsilon.
+    assert math.isfinite(phase42_prereg.tpr_reading(max(_grid_epsilons()))["log10_fpr_threshold"])
+
+
+def test_exact_disagreements():
+    import fractions
+
+    p = phase42_prereg
+    assert fractions.Fraction(str(phase35_prereg.F_Y)) == fractions.Fraction(7, 10)
+    taught, heldout = p.V4_CONTROL_COUNTS["taught"], p.V4_CONTROL_COUNTS["heldout"]
+    assert phase42_prereg.exact_disagreements(_V4_THRESHOLD["taught"], taught, taught[1]) == []
+    assert phase42_prereg.exact_disagreements(_V4_THRESHOLD["heldout"], heldout, heldout[1]) == []
+    # NON-VACUITY: a threshold nudged one ulp up disagrees with the exact rule at the tie.
+    nudged = math.nextafter(_V4_THRESHOLD["taught"], 1.0)
+    found = phase42_prereg.exact_disagreements(nudged, taught, taught[1])
+    assert found and 553 in found
+    with pytest.raises(SystemExit, match=r"^\[phase42_prereg\]"):
+        phase42_prereg.exact_disagreements(_V4_THRESHOLD["taught"], (1009, 1008), 1008)
+    with pytest.raises(SystemExit, match=r"^\[phase42_prereg\]"):
+        phase42_prereg.exact_disagreements(_V4_THRESHOLD["taught"], taught, 0)
+
+
+def _reused_points(taught=(0, 1008), heldout=(0, 648)):
+    p = phase42_prereg
+    return {
+        u: (taught, heldout)
+        for u in p.POINT_UNITS
+        if phase42_prereg.unit_cell(u)[0] == p.REUSED_RECIPE
+    }
+
+
+def test_d16_and_d17_readings():
+    p = phase42_prereg
+    points = _record("results/phase25_recall.json")["points"]
+    assert set(p.V4_RECIPE_POINT_READINGS) == set(p.NOISED_SIGMAS)
+    for sigma in p.NOISED_SIGMAS:
+        point = points[f"dp_n{phase35_prereg.E3_N}_{phase42_prereg.sigma_tag(sigma)}"]
+        assert dict(p.V4_RECIPE_POINT_READINGS[sigma]) == {
+            "taught": (point["taught_recall"]["numerator"], point["taught_recall"]["denominator"]),
+            "heldout": (
+                point["heldout_recall"]["numerator"],
+                point["heldout_recall"]["denominator"],
+            ),
+        }
+    rows = phase42_prereg.d16_side_by_side(_reused_points())
+    assert len(rows) == len(p.NOISED_SIGMAS)
+    for row, sigma in zip(rows, p.NOISED_SIGMAS, strict=True):
+        assert row["sigma"] == sigma
+        assert row["e3"] == {"taught": (0, 1008), "heldout": (0, 648)}
+        assert row["v4"] == p.V4_RECIPE_POINT_READINGS[sigma]
+        assert (row["taught"], row["heldout"]) == ("repete", "repete")
+        assert row["kind"] == "descriptive"
+    moved = phase42_prereg.d16_side_by_side(_reused_points(taught=(5, 1008)))
+    assert {(r["taught"], r["heldout"]) for r in moved} == {("não repete", "repete")}
+    with pytest.raises(SystemExit, match=r"^\[phase42_prereg\]"):
+        phase42_prereg.d16_side_by_side({**_reused_points(), p.POINT_UNITS[-1]: ((0, 1), (0, 1))})
+    with pytest.raises(SystemExit, match=r"^\[phase42_prereg\]"):
+        phase42_prereg.d16_side_by_side(dict(list(_reused_points().items())[1:]))
+
+    held = phase42_prereg.d17_reading(dict.fromkeys(p.POINT_UNITS, p.NAO_PASSA))
+    assert held["held"] is True and held["passing_cells"] == ()
+    assert held["kind"] == "descriptive"
+    assert "confirmada" in held["text"] and "não confirmada" not in held["text"]
+    one = dict.fromkeys(p.POINT_UNITS, p.NAO_PASSA)
+    one["point_lr1e-03_t200_sigma0p500000"] = p.PASSA
+    missed = phase42_prereg.d17_reading(one)
+    assert missed["held"] is False
+    assert missed["passing_cells"] == (("lr1e-03_t200", "sigma0p500000"),)
+    assert "não confirmada" in missed["text"]
+    assert "lr1e-03_t200 sigma0p500000" in missed["text"]
+    assert "um achado, não uma falha" in missed["text"]
+    assert missed["kind"] == "descriptive"
+    rendered = [
+        held["text"],
+        missed["text"],
+        phase42_prereg.tpr_reading(max(_grid_epsilons()))["sentence"],
+    ]
+    for text in rendered:
+        assert not any(h in text.lower() for h in _HEDGES), text

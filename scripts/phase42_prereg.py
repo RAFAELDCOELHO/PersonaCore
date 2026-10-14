@@ -24,8 +24,10 @@ own them, never typed; lr = 1e-3 is the one caller-chosen literal (D-02).
 
 import collections.abc
 import fnmatch
+import fractions
 import hashlib
 import json
+import math
 import pathlib
 import sys
 import types
@@ -41,6 +43,7 @@ if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
 import mitigation_budget  # noqa: E402  (needs the sys.path insert above; torch-free)
+import phase25_epsilon  # noqa: E402  (same; torch-free accountant, loaded by phase35_prereg)
 import phase25_record  # noqa: E402  (same; torch-free)
 import phase29_prereg  # noqa: E402  (same; torch-free, loaded by phase35_prereg)
 import phase35_prereg  # noqa: E402  (same)
@@ -1027,3 +1030,118 @@ def report_lead(verdicts):
     if PASSA not in verdicts.values():
         return null_line()
     return summary_line(verdicts)
+
+
+# =================================================================================================
+# (10) EVERY NUMBER THE REPORT PUBLISHES BESIDE THE LABELS (RECIPE-02; D-11, D-14, D-16, D-17,
+# 42-RESEARCH Pitfall 6): per-point epsilon, basic composition, the biased-coin bound, the TPR
+# rearrangement, the exact-rational enumeration and the two predictions' readings. Descriptive:
+# none of them enters a verdict.
+# =================================================================================================
+
+SELECTION_ACCOUNTED = phase35_prereg.SELECTION_ACCOUNTED
+
+
+def point_epsilon(sigma, steps):
+    """RECIPE-02 / D-14: the committed accountant at q = 1 and delta = phase35_prereg.DELTA, at the
+    point's own T (never point_plan's, computed at STEP_BUDGET); None at the sigma = 0 control."""
+    return phase25_epsilon.point_epsilon_for_sigma(sigma, steps=steps, delta=phase35_prereg.DELTA)
+
+
+def composition(epsilons):
+    """D-14: basic composition, phase35_prereg.CURVE_TOTAL over the noised points only: (sum of
+    epsilon, len x delta). It refuses a None, so the controls are excluded by the caller."""
+    return phase35_prereg.CURVE_TOTAL(tuple(epsilons), delta=phase35_prereg.DELTA)
+
+
+def vacuous_bound(eps):
+    """D-11 primary: the biased-coin bound e^eps / (e^eps + 1) in the overflow-safe form."""
+    return 1 / (1 + math.exp(-eps))
+
+
+def tpr_reading(eps):
+    """D-11 secondary: log10 of (1 - delta) e^-eps, the FPR above which the rearranged Kairouz, Oh
+    and Viswanath Theorem 2.1 bound is vacuous, and the sentence that names it a rearrangement with
+    the FPR = 0 caveat. Computed in log space: exp(eps) overflows float64 at the grid's largest
+    epsilon."""
+    value = math.log10(1 - phase35_prereg.DELTA) - eps / math.log(10)
+    return types.MappingProxyType(
+        {
+            "log10_fpr_threshold": value,
+            "sentence": (
+                "TPR ≤ e^ε·FPR + δ is a rearrangement of Kairouz, Oh and Viswanath (ICML 2015, "
+                "arXiv:1311.0776v4) Theorem 2.1; it is vacuous only for FPR ≥ (1−δ)e^−ε (here "
+                f"10^{value:.1f}), and at FPR = 0 it still bounds TPR ≤ δ"
+            ),
+        }
+    )
+
+
+def exact_disagreements(threshold, control, n):
+    """Pitfall 6: every k in 0..n where the pre-registered float comparison k / n >= threshold
+    differs from the exact rational k / n >= F_Y x ck / cn, F_Y read as
+    Fraction(str(phase35_prereg.F_Y)). Published, never silently resolved."""
+    _rate(control)
+    _prove_count("n", n, low=1)
+    ck, cn = control
+    exact = fractions.Fraction(str(phase35_prereg.F_Y)) * fractions.Fraction(ck, cn)
+    return [k for k in range(n + 1) if (k / n >= threshold) != (fractions.Fraction(k, n) >= exact)]
+
+
+# D-16: the v4.0 recipe's noised readings, {sigma: {leg: (k, n)}}, from the same private read of
+# results/phase25_recall.json that ENTRIES["predictions"] is built from.
+V4_RECIPE_POINT_READINGS = types.MappingProxyType(
+    {
+        sigma: types.MappingProxyType(
+            {
+                leg: (
+                    _RECALL_POINTS[key][f"{leg}_recall"]["numerator"],
+                    _RECALL_POINTS[key][f"{leg}_recall"]["denominator"],
+                )
+                for leg in ("taught", "heldout")
+            }
+        )
+        for sigma, key in zip(NOISED_SIGMAS, _V4_NOISED_KEYS, strict=True)
+    }
+)
+_REUSED_POINTS = tuple(u for u in POINT_UNITS if unit_cell(u)[0] == REUSED_RECIPE)
+
+
+def d16_side_by_side(points):
+    """D-16, descriptive: each v4.0-recipe noised point's (taught, held-out) counts beside the v4.0
+    reading, "repete" / "não repete" per leg (equal counts repeat). ``points`` is keyed by exactly
+    the POINT_UNITS whose recipe is REUSED_RECIPE."""
+    _prove(
+        set(points) == set(_REUSED_POINTS),
+        f"D-16 units {sorted(set(points) ^ set(_REUSED_POINTS))} are missing or extra",
+    )
+    rows = []
+    for unit in _REUSED_POINTS:
+        sigma = unit_cell(unit)[1]
+        e3 = types.MappingProxyType(dict(zip(("taught", "heldout"), points[unit], strict=True)))
+        v4 = V4_RECIPE_POINT_READINGS[sigma]
+        row = {"unit": unit, "sigma": sigma, "e3": e3, "v4": v4, "kind": "descriptive"}
+        for leg in ("taught", "heldout"):
+            _rate(e3[leg])
+            row[leg] = "repete" if e3[leg] == v4[leg] else "não repete"
+        rows.append(types.MappingProxyType(row))
+    return tuple(rows)
+
+
+def d17_reading(verdicts):
+    """D-17, descriptive: whether the prediction (no point passes) held, and which (recipe tag,
+    sigma tag) cells passed if not; a disagreement is a finding, not a failure."""
+    _prove_verdicts(verdicts)
+    passing = tuple(
+        (recipe_tag(unit_cell(u)[0]), sigma_tag(unit_cell(u)[1]))
+        for u in POINT_UNITS
+        if verdicts[u] == PASSA
+    )
+    if passing:
+        cells = ", ".join(f"{r} {s}" for r, s in passing)
+        text = f"previsão D-17 não confirmada: {cells}; uma discordância é um achado, não uma falha"
+    else:
+        text = "previsão D-17 confirmada: nenhum ponto passa"
+    return types.MappingProxyType(
+        {"held": not passing, "passing_cells": passing, "text": text, "kind": "descriptive"}
+    )
