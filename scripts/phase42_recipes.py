@@ -20,6 +20,7 @@ import datetime
 import gc
 import hashlib
 import json
+import math
 import pathlib
 import subprocess
 import sys
@@ -703,3 +704,233 @@ def run(
         print(STAGE_1_DONE, flush=True)
     print(f"RUN DONE whole={whole}", flush=True)
     return {"stage": pf["stage"], "whole": whole}
+
+
+# =================================================================================================
+# The E3 record (CPU): the unit records read through the frozen rules, nothing computed here
+# (RECIPE-02, RECIPE-03; D-11..D-18, D-23)
+# =================================================================================================
+
+_LIMITS = (
+    "one_seed",
+    "dp_clip",
+    "controls_follow_v4",
+    "shared_noise",
+    "refusal_omitted",
+    "descriptive_readings",
+    "vacuous",
+)
+
+
+def _thresholds(root, thresholds):
+    """The real root reads only the committed fill (THRESHOLD_FILE, tracked and clean; imported
+    lazily: it exists only after plan 42-09); a scratch root passes the real fill over its own
+    control records."""
+    if _is_real(root):
+        _prove(
+            thresholds is None,
+            f"the real root reads only the committed fill in {THRESHOLD_FILE}; a passed thresholds "
+            "mapping belongs to a rehearsal root",
+        )
+        _prove(
+            _tracked_and_clean(THRESHOLD_FILE),
+            f"{THRESHOLD_FILE} must be tracked and clean before emit (D-19)",
+        )
+        import phase42_threshold_prereg
+
+        return phase42_threshold_prereg.E3_RECALL_THRESHOLD
+    _prove(
+        thresholds is not None,
+        "a rehearsal root passes thresholds (the real fill over its own control records)",
+    )
+    return thresholds
+
+
+def _pair(record, leg):
+    return (record[f"{leg}_recall"]["numerator"], record[f"{leg}_recall"]["denominator"])
+
+
+def build_record(root, *, thresholds=None, ledger_path=None):
+    """The E3 record from the unit records alone. Every label is phase42_prereg.point_verdict on a
+    point's counts and its recipe's fill threshold, the floats as given; every other number is a
+    pre-registered function's output (table, summary, lead, epsilon, composition, readings). Each
+    input record is listed with its sha256 in ``inputs``."""
+    prereg = _prereg()
+    root = pathlib.Path(root)
+    real = _root_ledger(root, ledger_path)
+    thr = _thresholds(root, thresholds)
+    _prove(
+        set(thr) == {prereg.recipe_key(r) for r in prereg.RECIPES},
+        f"the thresholds' keys {sorted(thr)} are not the grid's recipe keys",
+    )
+    rels = (prereg.V4_CONTROL_RECORD, *(prereg.unit_record(u) for u in prereg.UNITS))
+    if real:
+        _prove(
+            _tracked_and_clean(*rels),
+            "every unit record and the v4.0 control must be tracked and clean before emit",
+        )
+    inputs = {}
+    for rel in rels:
+        _prove((root / rel).exists(), f"{rel} is missing: every unit is whole before emit")
+        inputs[rel] = _sha256(root / rel)
+    _prove(
+        inputs[prereg.V4_CONTROL_RECORD] == prereg.V4_CONTROL_SHA256,
+        f"{prereg.V4_CONTROL_RECORD} is not the committed v4.0 control (D-03)",
+    )
+    records = {}
+    for unit in prereg.UNITS:
+        rel = prereg.unit_record(unit)
+        record = _load(root / rel)
+        recipe, sigma = prereg.unit_cell(unit)
+        _prove(
+            record.get("unit") == unit
+            and record.get("recipe") == dict(recipe)
+            and record.get("sigma") == sigma
+            and record.get("seed") == prereg.SEED,
+            f"{rel} does not carry unit {unit}'s recipe {dict(recipe)}, sigma {sigma} and seed "
+            f"{prereg.SEED}",
+        )
+        if sigma == prereg.CONTROL_SIGMA:
+            _prove(record["epsilon"] is None, f"{rel}: a control publishes no epsilon")
+        else:
+            expected = prereg.point_epsilon(sigma, recipe["steps"])
+            _prove(
+                isinstance(record["epsilon"], float)
+                and math.isclose(record["epsilon"], expected, rel_tol=1e-12),
+                f"{rel}: epsilon {record['epsilon']!r} is not point_epsilon({sigma}, "
+                f"{recipe['steps']}) = {expected!r}",
+            )
+            _prove(record["delta"] == phase35_prereg.DELTA, f"{rel}: delta is not DELTA")
+        records[unit] = record
+
+    control_of = {prereg.recipe_tag(prereg.unit_cell(u)[0]): u for u in prereg.CONTROL_UNITS}
+    control_recall, controls, control_retention, exact = {}, {}, {}, {}
+    for recipe in prereg.RECIPES:
+        tag = prereg.recipe_tag(recipe)
+        threshold = thr[prereg.recipe_key(recipe)]
+        if recipe == prereg.REUSED_RECIPE:
+            rel, sha = prereg.V4_CONTROL_RECORD, prereg.V4_CONTROL_SHA256
+            recall = {leg: prereg.V4_CONTROL_COUNTS[leg] for leg in ("taught", "heldout")}
+            retention_ppl = prereg.V4_CONTROL_RETENTION
+        else:
+            control = records[control_of[tag]]
+            rel = prereg.unit_record(control_of[tag])
+            sha = inputs[rel]
+            recall = {leg: _pair(control, leg) for leg in ("taught", "heldout")}
+            retention_ppl = control["condition_c"]["retention_ppl"]
+        _prove(
+            threshold == prereg.REFUSED or threshold["control"] == rel,
+            f"the {tag} threshold was filled from {threshold!r}, not from {rel}",
+        )
+        control_recall[tag] = recall
+        controls[tag] = {
+            "record": rel,
+            "sha256": sha,
+            "taught_recall": recall["taught"],
+            "heldout_recall": recall["heldout"],
+            "threshold": threshold if threshold == prereg.REFUSED else dict(threshold),
+            "reused": recipe == prereg.REUSED_RECIPE,
+        }
+        control_retention[tag] = dict(prereg.control_retention_row(recipe, retention_ppl))
+        if threshold != prereg.REFUSED:
+            exact[tag] = {}
+            for leg in ("taught", "heldout"):
+                ns = {
+                    _pair(records[u], leg)[1]
+                    for u in prereg.POINT_UNITS
+                    if prereg.unit_cell(u)[0] == recipe
+                }
+                _prove(len(ns) == 1, f"the {tag} points disagree on the {leg} denominator: {ns}")
+                exact[tag][leg] = prereg.exact_disagreements(threshold[leg], recall[leg], *ns)
+
+    verdicts, points = {}, {}
+    for unit in prereg.POINT_UNITS:
+        record = records[unit]
+        recipe, sigma = prereg.unit_cell(unit)
+        tag = prereg.recipe_tag(recipe)
+        verdicts[unit] = prereg.point_verdict(
+            _pair(record, "taught"), _pair(record, "heldout"), thr[prereg.recipe_key(recipe)]
+        )
+        eps = record["epsilon"]
+        points[unit] = {
+            "recipe": tag,
+            "sigma": sigma,
+            "label": verdicts[unit],
+            "taught_recall": _pair(record, "taught"),
+            "heldout_recall": _pair(record, "heldout"),
+            "control_taught_recall": control_recall[tag]["taught"],
+            "control_heldout_recall": control_recall[tag]["heldout"],
+            "epsilon": eps,
+            "delta": record["delta"],
+            "selection_accounted": prereg.SELECTION_ACCOUNTED,
+            "vacuous_bound": prereg.vacuous_bound(eps),
+            "tpr": dict(prereg.tpr_reading(eps)),
+            "record": prereg.unit_record(unit),
+            "sha256": inputs[prereg.unit_record(unit)],
+        }
+    total, delta_total = prereg.composition([records[u]["epsilon"] for u in prereg.POINT_UNITS])
+    reused = [u for u in prereg.POINT_UNITS if prereg.unit_cell(u)[0] == prereg.REUSED_RECIPE]
+    spent = phase36_ledger.spent(ledger_path=ledger_path, fronts=(FRONT,))
+    record = {
+        "phase": 42,
+        "front": FRONT,
+        "lead": prereg.report_lead(verdicts),
+        "summary": prereg.summary_line(verdicts),
+        "table": [dict(row) for row in prereg.table(verdicts, control_recall)],
+        "points": points,
+        "controls": controls,
+        "composition": {
+            "total_epsilon": total,
+            "total_delta": delta_total,
+            "n_points": len(prereg.POINT_UNITS),
+            "points": prereg.POINT_UNITS,
+        },
+        "selection_accounted": prereg.SELECTION_ACCOUNTED,
+        "descriptive": {u: dict(prereg.descriptive_reading(records[u])) for u in prereg.UNITS},
+        "control_retention": control_retention,
+        "d16": [
+            dict(row)
+            for row in prereg.d16_side_by_side(
+                {u: (_pair(records[u], "taught"), _pair(records[u], "heldout")) for u in reused}
+            )
+        ],
+        "d17": dict(prereg.d17_reading(verdicts)),
+        "exact_disagreements": exact,
+        "limits": {name: prereg.ENTRIES[name]["derivation"] for name in _LIMITS},
+        "hours": spent["by_front"][FRONT] / 3600,
+        "inputs": inputs,
+        "provenance": {
+            "emitted_utc": _now(),
+            "git_sha": git_sha(),
+            "module_sha256": module_sha256(),
+        },
+    }
+    return json.loads(json.dumps(record, default=dict))
+
+
+def emit(*, root=None, ledger_path=None, thresholds=None):
+    """Write results/phase42_recipes.json ONCE (CPU). On the real root: from a clean tree, the
+    threshold fill and every record it reads tracked and unmodified."""
+    prereg = _prereg()
+    root = pathlib.Path(root) if root is not None else pathlib.Path(_ROOT)
+    real = _root_ledger(root, ledger_path)
+    out = root / prereg.E3_RECORD
+    _prove(
+        not out.exists(),
+        f"{out} exists: write-once, REFUSING to overwrite it; a correction is a dated "
+        "continuation via scripts/_addendum.py",
+    )
+    if real:
+        refuse_if_dirty(
+            who="phase42_recipes",
+            detail=(
+                "the E3 record publishes git_sha and hashes its modules from the working tree; a "
+                "record written from a dirty tree names a commit it cannot be regenerated from"
+            ),
+            pathspec=LAUNCH_PATHSPEC,
+            cwd=_REPO,
+        )
+    record = build_record(root, thresholds=thresholds, ledger_path=ledger_path)
+    _write_once(out, record)
+    print(f"EMIT {prereg.E3_RECORD} {record['summary']}", flush=True)
+    return record

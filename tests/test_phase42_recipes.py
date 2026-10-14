@@ -249,16 +249,27 @@ def _block(k, n):
     return {"k": k, "n": n, "rate": k / n, "questions": n // 9, "per_family": {"a": [k, n]}}
 
 
-def _measure_rig(monkeypatch, tmp_path, *, taught=(790, 1008), heldout=(346, 648), mutate=None):
+def _measure_rig(
+    monkeypatch, tmp_path, *, taught=(790, 1008), heldout=(346, 648), mutate=None, counts=None
+):
     """_train_rig plus score_arm, load_adapted_model and measure_condition_c faked, and the pf
-    dict write_unit reads for a scratch root ``tmp_path / "out"`` with its own ledger."""
+    dict write_unit reads for a scratch root ``tmp_path / "out"`` with its own ledger. ``counts``
+    maps a unit to its own ((taught k, n), (held-out k, n)); every other unit scores the default."""
     import phase14_recall
     import phase25_condition_c
 
     calls = {"train": _train_rig(monkeypatch, tmp_path, mutate=mutate), "score": [], "load": []}
+    counts = counts or {}
 
     def score_arm(arm, facts, adapter_path, device):
         calls["score"].append((arm, adapter_path, device))
+        units = [
+            u
+            for u in counts
+            if f"/{phase42_prereg.train_prefix(u, rehearsal=True)}_" in str(adapter_path)
+        ]
+        assert len(units) <= 1
+        taught, heldout = counts[units[0]] if units else (default_taught, default_heldout)
         return {
             "on_taught": _block(*taught),
             "on_heldout": _block(*heldout),
@@ -275,6 +286,7 @@ def _measure_rig(monkeypatch, tmp_path, *, taught=(790, 1008), heldout=(346, 648
         assert (model, tok, forbid) == ("model", "tok", "forbid")
         return dict(_READING)
 
+    default_taught, default_heldout = taught, heldout
     monkeypatch.setattr(teach_persona, "score_arm", score_arm)
     monkeypatch.setattr(phase14_recall, "load_adapted_model", load_adapted_model)
     monkeypatch.setattr(phase25_condition_c, "measure_condition_c", measure_condition_c)
@@ -417,7 +429,7 @@ def test_lost_attempts_are_read_from_the_ledger(monkeypatch, tmp_path):
 # =================================================================================================
 
 
-def _run_rig(monkeypatch, tmp_path, *, real=False):
+def _run_rig(monkeypatch, tmp_path, *, real=False, counts=None):
     """_measure_rig plus a tmp root holding copies of the budget and the v4.0 control,
     refuse_if_dirty recorded, the caps reading the committed budget only. ``real``: _ROOT and the
     milestone ledger / heartbeat point into the rig, the device is mps, the rehearsal identity is
@@ -425,7 +437,7 @@ def _run_rig(monkeypatch, tmp_path, *, real=False):
     import phase36_caps
     import phase36_ledger
 
-    calls, pf = _measure_rig(monkeypatch, tmp_path)
+    calls, pf = _measure_rig(monkeypatch, tmp_path, counts=counts)
     root = pf["root"]
     for rel in (phase42_prereg.BUDGET_RECORD, phase42_prereg.V4_CONTROL_RECORD):
         (root / rel).parent.mkdir(parents=True, exist_ok=True)
@@ -781,3 +793,270 @@ def test_record_rehearsal(tmp_path, monkeypatch):
     with pytest.raises(SystemExit, match=r"^\[phase42_recipes\].*malformed"):
         phase42_recipes._kept_identity(path)
     assert phase42_recipes._kept_identity(tmp_path / "absent.json") is None
+
+
+# =================================================================================================
+# (4) build_record and emit (plan 42-05 Task 1; RECIPE-02, RECIPE-03, D-11..D-18, D-23): the E3
+# record is a pure function of the unit records and the frozen rules, on a scratch root whose
+# thresholds come from the REAL Phase 35 fill over the driver's own control records.
+# =================================================================================================
+
+_TAUGHT_N, _HELDOUT_N = phase42_prereg.V4_CONTROL_COUNTS["taught"][1], 648
+_LEARN = ((790, _TAUGHT_N), (346, _HELDOUT_N))
+_ZERO = ((0, _TAUGHT_N), (0, _HELDOUT_N))
+
+
+def _counts(unlearnable=None, passing=()):
+    """Every control learns except ``unlearnable``; every point scores 0 except ``passing``."""
+    p = phase42_prereg
+    counts = {u: _ZERO if u == unlearnable else _LEARN for u in p.CONTROL_UNITS}
+    counts.update({u: _LEARN if u in passing else _ZERO for u in p.POINT_UNITS})
+    return counts
+
+
+def _e3_root(monkeypatch, tmp_path, counts):
+    """Stage 1 through run(), the REAL threshold fill on the driver's own control records and the
+    byte-identical v4.0 control, stage 2 through run().
+    Returns (root, ledger, thresholds, calls)."""
+    calls, kw, ledger = _run_rig(monkeypatch, tmp_path, counts=counts)
+    assert phase42_recipes.run(**kw)["stage"] == 1
+    with monkeypatch.context() as m:
+        m.setattr(phase35_prereg, "_REPO_ROOT", kw["root"])
+        thresholds = phase35_prereg.fill(
+            "e3_recall_threshold", **phase42_prereg.threshold_fill_inputs()
+        )
+    assert phase42_recipes.run(**kw)["stage"] == 2
+    return kw["root"], ledger, thresholds, calls
+
+
+def _json(value):
+    return json.loads(json.dumps(value, default=dict))
+
+
+def _pair(record, leg):
+    return (record[f"{leg}_recall"]["numerator"], record[f"{leg}_recall"]["denominator"])
+
+
+def _unit_records(root):
+    p = phase42_prereg
+    return {u: json.loads((root / p.unit_record(u)).read_text("utf-8")) for u in p.UNITS}
+
+
+def _control_recall(records):
+    p = phase42_prereg
+    out = {}
+    for recipe in p.RECIPES:
+        tag = p.recipe_tag(recipe)
+        if recipe == p.REUSED_RECIPE:
+            out[tag] = {leg: p.V4_CONTROL_COUNTS[leg] for leg in ("taught", "heldout")}
+        else:
+            record = records[f"control_{tag}"]
+            out[tag] = {leg: _pair(record, leg) for leg in ("taught", "heldout")}
+    return out
+
+
+def test_build_record_labels_only_through_the_prereg(monkeypatch, tmp_path):
+    p = phase42_prereg
+    unlearnable = "control_lr1e-03_t800"
+    root, ledger, thr, _calls = _e3_root(monkeypatch, tmp_path, _counts(unlearnable))
+    record = phase42_recipes.build_record(root, thresholds=thr, ledger_path=ledger)
+    records = _unit_records(root)
+    control_recall = _control_recall(records)
+    verdicts = {}
+    for unit in p.POINT_UNITS:
+        recipe, sigma = p.unit_cell(unit)
+        r = records[unit]
+        verdicts[unit] = p.point_verdict(
+            _pair(r, "taught"), _pair(r, "heldout"), thr[p.recipe_key(recipe)]
+        )
+        point = record["points"][unit]
+        assert point["label"] == verdicts[unit]
+        assert point["taught_recall"] == list(_pair(r, "taught"))
+        assert point["heldout_recall"] == list(_pair(r, "heldout"))
+        # D-23: its own recipe's control k/n on both legs (the v4.0 control's for the v4.0 recipe).
+        tag = p.recipe_tag(recipe)
+        assert point["control_taught_recall"] == list(control_recall[tag]["taught"])
+        assert point["control_heldout_recall"] == list(control_recall[tag]["heldout"])
+        assert point["record"] == p.unit_record(unit)
+        assert (
+            point["sha256"] == hashlib.sha256((root / p.unit_record(unit)).read_bytes()).hexdigest()
+        )
+    refused = [u for u in p.POINT_UNITS if p.unit_cell(u)[0] == p.unit_cell(unlearnable)[0]]
+    assert len(refused) == len(p.NOISED_SIGMAS)
+    for unit in refused:  # D-20: they ran, are labelled REFUSED and keep their epsilon and counts
+        point = record["points"][unit]
+        assert point["label"] == p.REFUSED
+        assert point["epsilon"] > 0 and point["taught_recall"] == [0, _TAUGHT_N]
+        assert point["heldout_recall"] == [0, _HELDOUT_N]
+    assert record["summary"] == p.summary_line(verdicts) == "0 de 8 pontos passam; 2 REFUSED"
+    assert record["lead"] == p.report_lead(verdicts) and isinstance(record["lead"], str)
+    assert len(record["table"]) == len(p.RECIPES)
+    assert record["table"] == _json(p.table(verdicts, control_recall))
+    assert record["controls"][p.recipe_tag(p.REUSED_RECIPE)]["reused"] is True
+    assert record["controls"][p.recipe_tag(p.REUSED_RECIPE)]["sha256"] == p.V4_CONTROL_SHA256
+    assert record["controls"][p.recipe_tag(p.unit_cell(unlearnable)[0])]["threshold"] == p.REFUSED
+    # NON-VACUITY: one point at the control's own counts passes, and only that label moves.
+    one = p.POINT_UNITS[0]
+    root2, ledger2, thr2, _c = _e3_root(
+        monkeypatch, tmp_path / "pass", _counts(unlearnable, passing=(one,))
+    )
+    passed = phase42_recipes.build_record(root2, thresholds=thr2, ledger_path=ledger2)
+    assert passed["points"][one]["label"] == p.PASSA
+    assert {u for u in p.POINT_UNITS if passed["points"][u]["label"] != verdicts[u]} == {one}
+    assert passed["summary"] == passed["lead"] == "1 de 8 pontos passam; 2 REFUSED"
+
+
+def test_worse_retention_in_a_learning_control_changes_no_label(monkeypatch, tmp_path):
+    import shutil
+
+    p = phase42_prereg
+    root, ledger, thr, _calls = _e3_root(monkeypatch, tmp_path, _counts("control_lr1e-03_t800"))
+    worse = tmp_path / "worse"
+    shutil.copytree(root, worse)
+    unit = "control_lr1e-03_t200"
+    path = worse / p.unit_record(unit)
+    blob = json.loads(path.read_text("utf-8"))
+    blob["condition_c"]["retention_ppl"] *= 10  # learnable recall, much worse retention (D-18)
+    path.write_text(json.dumps(blob), encoding="utf-8")
+    a = phase42_recipes.build_record(root, thresholds=thr, ledger_path=ledger)
+    b = phase42_recipes.build_record(worse, thresholds=thr, ledger_path=ledger)
+    for key in ("lead", "summary", "table", "d17"):
+        assert a[key] == b[key], key
+    assert {u: a["points"][u]["label"] for u in p.POINT_UNITS} == {
+        u: b["points"][u]["label"] for u in p.POINT_UNITS
+    }
+    tag = p.recipe_tag(p.unit_cell(unit)[0])
+    row = b["control_retention"][tag]
+    assert row["retention_ppl"] == blob["condition_c"]["retention_ppl"]
+    assert row["retention_ppl"] != a["control_retention"][tag]["retention_ppl"]
+    assert "não muda rótulo" in row["text"]
+
+
+def test_build_record_epsilon_and_composition(monkeypatch, tmp_path):
+    import math
+
+    p = phase42_prereg
+    root, ledger, thr, _calls = _e3_root(monkeypatch, tmp_path, _counts())
+    record = phase42_recipes.build_record(root, thresholds=thr, ledger_path=ledger)
+    eps = []
+    for unit in p.POINT_UNITS:
+        recipe, sigma = p.unit_cell(unit)
+        point = record["points"][unit]
+        assert math.isclose(
+            point["epsilon"], p.point_epsilon(sigma, recipe["steps"]), rel_tol=1e-12
+        )
+        assert point["delta"] == phase35_prereg.DELTA
+        assert point["selection_accounted"] is False
+        assert point["vacuous_bound"] == p.vacuous_bound(point["epsilon"])
+        assert point["tpr"] == _json(p.tpr_reading(point["epsilon"]))
+        eps.append(point["epsilon"])
+    total, delta_total = p.composition(eps)
+    assert record["composition"] == {
+        "total_epsilon": total,
+        "total_delta": delta_total,
+        "n_points": len(p.POINT_UNITS),
+        "points": list(p.POINT_UNITS),
+    }
+    assert record["selection_accounted"] is False
+    assert set(record["points"]) == set(p.POINT_UNITS)  # no control contributes an epsilon
+    assert all("epsilon" not in c for c in record["controls"].values())
+
+
+def test_build_record_readings(monkeypatch, tmp_path):
+    p = phase42_prereg
+    unlearnable = "control_lr1e-03_t800"
+    root, ledger, thr, _calls = _e3_root(monkeypatch, tmp_path, _counts(unlearnable))
+    record = phase42_recipes.build_record(root, thresholds=thr, ledger_path=ledger)
+    records = _unit_records(root)
+    assert set(record["descriptive"]) == set(p.UNITS)
+    for unit in p.UNITS:
+        assert record["descriptive"][unit] == _json(p.descriptive_reading(records[unit]))
+    assert list(record["control_retention"]) == [p.recipe_tag(r) for r in p.RECIPES]
+    for recipe in p.RECIPES:
+        tag = p.recipe_tag(recipe)
+        retention = (
+            p.V4_CONTROL_RETENTION
+            if recipe == p.REUSED_RECIPE
+            else records[f"control_{tag}"]["condition_c"]["retention_ppl"]
+        )
+        assert record["control_retention"][tag] == _json(p.control_retention_row(recipe, retention))
+    reused = [u for u in p.POINT_UNITS if p.unit_cell(u)[0] == p.REUSED_RECIPE]
+    assert [row["unit"] for row in record["d16"]] == reused
+    assert record["d16"] == _json(
+        p.d16_side_by_side(
+            {u: (_pair(records[u], "taught"), _pair(records[u], "heldout")) for u in reused}
+        )
+    )
+    verdicts = {u: record["points"][u]["label"] for u in p.POINT_UNITS}
+    assert record["d17"] == _json(p.d17_reading(verdicts))
+    control_recall = _control_recall(records)
+    learnable = [p.recipe_tag(r) for r in p.RECIPES if r != p.unit_cell(unlearnable)[0]]
+    assert list(record["exact_disagreements"]) == learnable
+    for tag in learnable:
+        threshold = record["controls"][tag]["threshold"]
+        for leg, n in (("taught", _TAUGHT_N), ("heldout", _HELDOUT_N)):
+            assert record["exact_disagreements"][tag][leg] == p.exact_disagreements(
+                threshold[leg], control_recall[tag][leg], n
+            )
+    names = (
+        "one_seed",
+        "dp_clip",
+        "controls_follow_v4",
+        "shared_noise",
+        "refusal_omitted",
+        "descriptive_readings",
+        "vacuous",
+    )
+    assert record["limits"] == {n: p.ENTRIES[n]["derivation"] for n in names}
+    assert record["hours"] >= 0
+    assert set(record["inputs"]) == {p.V4_CONTROL_RECORD, *(p.unit_record(u) for u in p.UNITS)}
+
+
+def test_build_record_refuses(monkeypatch, tmp_path):
+    import shutil
+
+    p = phase42_prereg
+    root, ledger, thr, _calls = _e3_root(monkeypatch, tmp_path, _counts())
+    with pytest.raises(SystemExit, match=r"^\[phase42_recipes\].*thresholds"):
+        phase42_recipes.build_record(root, thresholds=None, ledger_path=ledger)
+    unit = "point_lr3e-04_t800_sigma0p500000"
+    for n, (field, value, match) in enumerate(
+        (
+            ("sigma", 1.0, "does not carry"),
+            ("recipe", dict(p.RECIPES[0]), "does not carry"),
+            ("epsilon", None, "is not point_epsilon"),
+        )
+    ):
+        bad = tmp_path / f"bad{n}"
+        shutil.copytree(root, bad)
+        path = bad / p.unit_record(unit)
+        blob = json.loads(path.read_text("utf-8"))
+        blob[field] = blob["epsilon"] * (1 + 1e-6) if value is None else value
+        path.write_text(json.dumps(blob), encoding="utf-8")
+        with pytest.raises(SystemExit, match=r"^\[phase42_recipes\].*" + match):
+            phase42_recipes.build_record(bad, thresholds=thr, ledger_path=ledger)
+    # The real root reads only the committed fill: a passed mapping is refused.
+    monkeypatch.setattr(phase42_recipes, "_ROOT", root)
+    with pytest.raises(SystemExit, match=r"^\[phase42_recipes\].*committed fill"):
+        phase42_recipes.build_record(root, thresholds=thr)
+
+
+def test_emit_is_write_once_and_carries_emit_provenance_only(monkeypatch, tmp_path, capsys):
+    p = phase42_prereg
+    root, ledger, thr, _calls = _e3_root(monkeypatch, tmp_path, _counts("control_lr1e-03_t800"))
+    record = phase42_recipes.emit(root=root, ledger_path=ledger, thresholds=thr)
+    out = root / p.E3_RECORD
+    assert json.loads(out.read_text("utf-8")) == record
+    assert set(record["provenance"]) == {"emitted_utc", "git_sha", "module_sha256"}
+    assert "run" not in record["provenance"]
+    assert record["provenance"]["module_sha256"] == phase42_recipes.module_sha256()
+    assert f"EMIT {p.E3_RECORD} 0 de 8 pontos passam; 2 REFUSED" in capsys.readouterr().out
+    before = out.read_bytes()
+
+    def build_record(*a, **k):
+        raise AssertionError("build_record reached after an existing record")
+
+    monkeypatch.setattr(phase42_recipes, "build_record", build_record)
+    with pytest.raises(SystemExit, match=r"^\[phase42_recipes\].*write-once"):
+        phase42_recipes.emit(root=root, ledger_path=ledger, thresholds=thr)
+    assert out.read_bytes() == before
