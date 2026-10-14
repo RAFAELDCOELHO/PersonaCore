@@ -11,9 +11,12 @@ It reads only tracked files and git history and writes nothing under results/.
 """
 
 import ast
+import collections.abc
 import hashlib
+import json
 import math
 import pathlib
+import re
 import subprocess
 import sys
 import types
@@ -169,3 +172,183 @@ def test_caps_are_checked_at_import():
     # The cap binds: one recipe more than the grid is refused.
     with pytest.raises(SystemExit, match="recipes"):
         phase36_caps.check_unit_caps("E3", recipes=len(phase42_prereg.RECIPES) + 1)
+
+
+# =================================================================================================
+# (2) THE ENTRIES: every decision D-01..D-23, the predictions and the planner defaults (Task 2).
+# =================================================================================================
+
+_CONTEXT_SHA = "dc578f9"
+_CONTEXT_PATH = ".planning/phases/42-dp-sgd-recipe-search-at-large/42-CONTEXT.md"
+_DEFAULT_TEXT = "default taken at plan time, not yet confirmed by Rafael"
+
+_DECISION_ENTRIES = frozenset(
+    {
+        "e3_grid_subset",
+        "batch_and_q",
+        "v4_control_reuse",
+        "one_seed",
+        "warmup_rule",
+        "dp_clip",
+        "controls_follow_v4",
+        "p22_check",
+        "e3_hours",
+        "shared_noise",
+        "vacuous",
+        "point_rule",
+        "descriptive_readings",
+        "summary_and_composition",
+        "null_line",
+        "predictions",
+        "lr_control_outcome",
+        "stages",
+        "refused_still_run",
+        "rehearsal",
+        "approvals",
+        "refusal_omitted",
+        "own_control_recall",
+    }
+)
+# Plan 42-06 replaces each with its confirmed form.
+_UNCONFIRMED = frozenset(
+    {"record_layout", "unit_order", "crash_rule", "rehearsal_shape", "d05_seam"}
+)
+
+
+def _record(rel):
+    return json.loads((_ROOT / rel).read_text(encoding="utf-8"))
+
+
+def _no_mutable_containers(value):
+    if isinstance(value, (list, dict, set)):
+        return False
+    if isinstance(value, collections.abc.Mapping):
+        return all(_no_mutable_containers(v) for v in value.values())
+    if isinstance(value, tuple):
+        return all(_no_mutable_containers(v) for v in value)
+    return True
+
+
+def test_entries_names_kinds_and_d_ids():
+    entries = phase42_prereg.ENTRIES
+    assert set(entries) == _DECISION_ENTRIES | _UNCONFIRMED
+    assert len(entries) == len(_DECISION_ENTRIES) + len(_UNCONFIRMED)
+    for name, entry in entries.items():
+        assert re.search(r"\b(D-\d\d|RECIPE-\d\d)\b", entry["derivation"]), name
+        assert _CONTEXT_SHA in entry["source"], name
+        expected = "derived" if name in ("e3_hours", "v4_control_reuse") else "preference"
+        assert entry["kind"] == expected, name
+        assert _no_mutable_containers(entry["value"]), name
+    reuse = entries["v4_control_reuse"]["value"]
+    assert reuse["record"] == phase42_prereg.V4_CONTROL_RECORD
+    assert reuse["sha256"] == phase42_prereg.V4_CONTROL_SHA256
+    assert reuse["taught"] == phase42_prereg.V4_CONTROL_COUNTS["taught"]
+    assert reuse["heldout"] == phase42_prereg.V4_CONTROL_COUNTS["heldout"]
+    assert reuse["seed"] == _record(phase42_prereg.V4_CONTROL_RECORD)["seed"]
+
+
+def test_every_decision_has_an_entry():
+    derivations = [entry["derivation"] for entry in phase42_prereg.ENTRIES.values()]
+    for n in range(1, 24):
+        assert any(f"D-{n:02d}" in text for text in derivations), f"D-{n:02d}"
+
+
+def test_e3_hours_is_computed_from_the_budget():
+    p = phase42_prereg
+    budget = _record(p.BUDGET_RECORD)
+    prices = budget["unit_prices"]
+
+    def price(steps):
+        seconds = prices["e3_overhead_high"] + steps * prices["e3_per_step_high"]
+        return (seconds + prices["e3_score_high"]) / 3600
+
+    runs = [cell["recipe"]["steps"] for cell in p.E3_GRID_SUBSET["cells"] if cell["reuse"] is None]
+    expected = sum(price(steps) for steps in runs)
+    value = p.ENTRIES["e3_hours"]["value"]
+    assert math.isclose(value["priced_hours"], expected, rel_tol=1e-12)
+    assert math.isclose(value["priced_hours"], 5.370215732835186, rel_tol=1e-12)
+    assert value["e3_line_hours"] == budget["front_hours"]["E3"]
+    assert value["priced_hours"] < value["e3_line_hours"]
+    derivation = p.ENTRIES["e3_hours"]["derivation"]
+    for text in ("5.58", "6.23", "results/phase25_recall.json"):
+        assert text in derivation, text
+
+
+def test_predictions_are_recorded_before_any_run():
+    import phase25_record
+
+    value = phase42_prereg.ENTRIES["predictions"]["value"]
+    assert set(value) == {"d16_v4_recipe_points", "d17_no_recipe_passes"}
+    for text in value.values():
+        assert "descriptive" in text
+        assert "a mismatch is a finding, not a failure" in text
+    d16 = value["d16_v4_recipe_points"]
+    points = _record("results/phase25_recall.json")["points"]
+    for sigma in phase42_prereg.NOISED_SIGMAS:
+        point = points[phase25_record.point_key(f"dp_n{phase35_prereg.E3_N}", sigma)]
+        for leg in ("taught_recall", "heldout_recall"):
+            assert f"{point[leg]['numerator']}/{point[leg]['denominator']}" in d16, (sigma, leg)
+    assert "0/1008" in d16 and "0/648" in d16
+    d17 = value["d17_no_recipe_passes"]
+    assert "T = 800" in d17 and "AdamW" in d17
+
+
+def test_d18_d23_wording():
+    d18 = phase42_prereg.ENTRIES["lr_control_outcome"]["derivation"]
+    for text in (
+        "phase29_prereg.control_is_unlearnable",
+        "only",
+        "changes no label",
+        "same weight",
+    ):
+        assert text in d18, text
+    assert "or degrade retention" not in d18
+    d23 = phase42_prereg.ENTRIES["own_control_recall"]["derivation"]
+    for text in ("D-23", "both legs", "D-12"):
+        assert text in d23, text
+
+
+def test_ruling_context_is_the_d18_d23_commit():
+    (sha,) = re.findall(r"\(([0-9a-f]{7,40})\)", phase42_prereg._RULING_CONTEXT)
+    ruled = subprocess.run(
+        ["git", "show", f"{sha}:{_CONTEXT_PATH}"],
+        cwd=_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    assert "D-23: Each point publishes" in ruled
+    assert "does NOT change any label" in ruled
+    # NON-VACUITY (natural): the context as first written holds neither.
+    first = subprocess.run(
+        ["git", "show", f"{_CONTEXT_SHA}:{_CONTEXT_PATH}"],
+        cwd=_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    assert "D-23: Each point publishes" not in first
+    assert "does NOT change any label" not in first
+    for name in ("lr_control_outcome", "own_control_recall"):
+        assert sha in phase42_prereg.ENTRIES[name]["source"], name
+
+
+def test_d11_wording():
+    d11 = phase42_prereg.ENTRIES["vacuous"]["derivation"]
+    for text in (
+        "e^ε/(e^ε+1)",
+        "V6-PREREG-09.md:53",
+        "rearrangement",
+        "Theorem 2.1",
+        "arXiv:1311.0776",
+        "FPR = 0",
+        "TPR ≤ δ",
+    ):
+        assert text in d11, text
+    assert '"' + "TPR ≤ e^ε" not in d11
+
+
+def test_defaults_are_labelled():
+    for name, entry in phase42_prereg.ENTRIES.items():
+        assert (_DEFAULT_TEXT in entry["derivation"]) == (name in _UNCONFIRMED), name
+    assert phase42_prereg._DEFAULT == _DEFAULT_TEXT
