@@ -1370,6 +1370,19 @@ def test_report_is_write_once_and_reads_a_committed_record(monkeypatch, tmp_path
     assert not out.exists()
 
 
+def test_report_documents_the_regenerate_procedure():
+    """42-REVIEW IN-02, not fixed (Rafael 2026-10-14): report() keeps write_text as Phases 39-41
+    do, and its docstring carries the procedure for a partial report."""
+    doc = " ".join(phase42_recipes.report.__doc__.split())
+    for phrase in (
+        "partial (uncommitted) results/phase42_recipes_report.md is deleted and regenerated from "
+        "results/phase42_recipes.json",
+        "written atomically",
+        "42-REVIEW IN-02",
+    ):
+        assert phrase in doc, phrase
+
+
 def test_main_traces_run_with_real_root_defaults(monkeypatch):
     seen = []
     for name in ("preflight", "run", "emit", "report"):

@@ -1175,7 +1175,13 @@ def render_report(record):
 
 def report(*, root=None):
     """Write results/phase42_recipes_report.md ONCE from the E3 record (on the real root only from
-    a tracked, unmodified record)."""
+    a tracked, unmodified record).
+
+    The write is a plain write_text, as in Phases 39-41 (42-REVIEW IN-02, not fixed: Rafael
+    2026-10-14; phase25_run has no atomic text helper). A crash mid-write leaves a partial
+    report that the write-once check then refuses. Procedure: a partial (uncommitted)
+    results/phase42_recipes_report.md is deleted and regenerated from
+    results/phase42_recipes.json, which emit has written atomically (atomic_write_json)."""
     root = pathlib.Path(root) if root is not None else pathlib.Path(_ROOT)
     prereg = _prereg()
     record_path = root / prereg.E3_RECORD
