@@ -383,7 +383,7 @@ _ENTRIES = {
             ".planning/research/V6-PREREG-09.md:53: under ε-DP no guesser beats probability "
             "e^ε/(e^ε+1), computed per point as 1 / (1 + exp(-ε)) in float64 (1.0 at the "
             "smallest grid ε 159.44). 3 distinct ε values (T = 200: 519.70 / 159.44; T = 800: "
-            "1840.30 / 519.70; sigma 0.5 at T = 200 and sigma 1 at T = 800 share mu = "
+            "1840.29 / 519.70; sigma 0.5 at T = 200 and sigma 1 at T = 800 share mu = "
             "sqrt(T)/sigma). Secondary, worded as a rearrangement, never a quotation: with FPR = "
             "P_FA and TPR = 1 − P_MD, the second inequality of Kairouz, Oh and Viswanath, The "
             "Composition Theorem for Differential Privacy (ICML 2015, arXiv:1311.0776v4) "

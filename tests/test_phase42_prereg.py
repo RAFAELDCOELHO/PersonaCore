@@ -1375,6 +1375,19 @@ def test_composition():
     assert p.SELECTION_ACCOUNTED is phase35_prereg.SELECTION_ACCOUNTED
 
 
+def test_vacuous_text_carries_the_grid_epsilons():
+    """42-REVIEW O-01 (Rafael 2026-10-14): the four ε written in ENTRIES["vacuous"] are each
+    round(point_epsilon(sigma, T), 2) at two decimals, T ascending, NOISED_SIGMAS order."""
+    p = phase42_prereg
+    text = p.ENTRIES["vacuous"]["derivation"]
+    written = re.findall(r"T = (\d+): (\d+\.\d\d) / (\d+\.\d\d)", text)
+    steps = sorted({r["steps"] for r in p.RECIPES})
+    assert [int(t) for t, *_ in written] == steps
+    for t, *eps in written:
+        expected = [f"{round(p.point_epsilon(s, int(t)), 2):.2f}" for s in p.NOISED_SIGMAS]
+        assert eps == expected, (t, eps, expected)
+
+
 def test_vacuous_bound():
     for eps in _grid_epsilons():
         assert phase42_prereg.vacuous_bound(eps) == 1.0
