@@ -596,6 +596,54 @@ def test_stage_2_runs_p22_before_any_training(monkeypatch, tmp_path, capsys):
         phase42_recipes.p22_check()
 
 
+_FILL = "phase42_threshold_prereg"
+# The fill file plan 42-09 writes (its one module-level statement, 42-09-PLAN Task 2 step 3).
+_FILL_BODY = (
+    "import phase35_prereg\nimport phase42_prereg\n\nE3_RECALL_THRESHOLD = phase35_prereg.fill(\n"
+    '    "e3_recall_threshold", **phase42_prereg.threshold_fill_inputs()\n)\n'
+)
+
+
+def _stand_in_fill(monkeypatch, where, body):
+    """A stand-in THRESHOLD_FILE module importable from ``where`` (the real one exists only after
+    plan 42-09); sys.modules and sys.path are restored after the test."""
+    where.mkdir(parents=True)
+    (where / f"{_FILL}.py").write_text(body, encoding="utf-8")
+    monkeypatch.syspath_prepend(str(where))
+    monkeypatch.delitem(sys.modules, _FILL, raising=False)
+    return where / f"{_FILL}.py"
+
+
+def test_stage_2_executes_the_threshold_fill_before_p22(monkeypatch, tmp_path):
+    """42-REVIEW WR-02: stage 2 on the real root imports the committed fill and proves it covers
+    exactly the grid's recipes BEFORE p22_check, require_launch, any ledger line or training."""
+    p = phase42_prereg
+    calls, kw, ledger = _run_rig(monkeypatch, tmp_path, real=True)
+    _plant(kw["root"], ledger)
+    planted = _events(ledger)
+    monkeypatch.setattr(phase35_prereg, "_REPO_ROOT", kw["root"])
+    monkeypatch.setattr(phase42_recipes, "_tracked_and_clean", lambda *rels: True)
+    monkeypatch.setitem(sys.modules, _FILL, None)  # missing: the real repository before 42-09
+    seen = []
+    monkeypatch.setattr(phase42_recipes, "p22_check", lambda: seen.append(1) or dict(p.P22_ONSETS))
+    three = _FILL_BODY + "E3_RECALL_THRESHOLD = dict(list(E3_RECALL_THRESHOLD.items())[:3])\n"
+    for leg, body in (
+        ("missing", None),
+        ("raises", "raise RuntimeError('planted')\n"),
+        ("three", three),
+    ):
+        if body is not None:
+            _stand_in_fill(monkeypatch, tmp_path / leg, body)
+        with pytest.raises(SystemExit, match=r"^\[phase42_recipes\].*phase42_threshold_prereg"):
+            phase42_recipes.run(**kw)
+        assert seen == [] and calls["train"] == [] and _events(ledger) == planted, leg
+    # NON-VACUITY: the 42-09 fill over the planted controls admits stage 2, P22 next.
+    _stand_in_fill(monkeypatch, tmp_path / "fill", _FILL_BODY)
+    pf = phase42_recipes.preflight(**kw)
+    assert pf["stage"] == 2 and seen == [1] and pf["pending"] == p.POINT_UNITS
+    assert _events(ledger) == planted and calls["train"] == []
+
+
 def test_refused_still_runs(monkeypatch, tmp_path):
     p = phase42_prereg
     calls, kw, ledger = _run_rig(monkeypatch, tmp_path)

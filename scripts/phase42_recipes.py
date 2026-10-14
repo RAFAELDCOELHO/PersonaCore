@@ -488,6 +488,29 @@ def stage(root):
     return 2 if all((pathlib.Path(root) / rel).exists() for rel in controls) else 1
 
 
+def _threshold_fill():
+    """42-REVIEW WR-02 (D-19): EXECUTE the committed fill (THRESHOLD_FILE, imported lazily: it
+    exists only after plan 42-09) and prove E3_RECALL_THRESHOLD covers exactly the grid's recipes.
+    Returns the thresholds."""
+    prereg = _prereg()
+    try:
+        import phase42_threshold_prereg
+
+        thresholds = phase42_threshold_prereg.E3_RECALL_THRESHOLD
+    except Exception as exc:
+        raise SystemExit(
+            f"[phase42_recipes] {THRESHOLD_FILE} does not execute ({exc!r}): refused before any "
+            "stage-2 training (D-19; 42-REVIEW WR-02)"
+        ) from exc
+    keys = {prereg.recipe_key(r) for r in prereg.RECIPES}
+    _prove(
+        set(thresholds) == keys,
+        f"{THRESHOLD_FILE} fills {sorted(thresholds)}, not the grid's recipe keys {sorted(keys)}: "
+        "refused before any stage-2 training (D-19; 42-REVIEW WR-02)",
+    )
+    return thresholds
+
+
 def p22_check():
     """D-08 / RECIPE-04: the P22 onset re-computed at every T of the grid, equal to the frozen
     P22_ONSETS and below every noised sigma, BEFORE any stage-2 training. Returns {T: onset}."""
@@ -602,6 +625,8 @@ def preflight(*, root=None, ledger_path=None, heartbeat_path=None, device=None, 
             "lost (crash_rule; 42-REVIEW WR-01)",
         )
     current = stage(root)
+    if current == 2 and real:  # the fill executes before P22, require_launch and any training
+        _threshold_fill()
     p22 = p22_check() if current == 2 else None
     pending = tuple(
         u
@@ -746,9 +771,7 @@ def _thresholds(root, thresholds):
             _tracked_and_clean(THRESHOLD_FILE),
             f"{THRESHOLD_FILE} must be tracked and clean before emit (D-19)",
         )
-        import phase42_threshold_prereg
-
-        return phase42_threshold_prereg.E3_RECALL_THRESHOLD
+        return _threshold_fill()
     _prove(
         thresholds is not None,
         "a rehearsal root passes thresholds (the real fill over its own control records)",
