@@ -46,7 +46,8 @@ _ROOT = _REPO
 FRONT = "E3"
 LAUNCH_PATHSPEC = ("scripts", "src", "results", "artifacts")
 PREREG_FILE = "scripts/phase42_prereg.py"
-# Not in DISCLOSED_MODULES: it does not exist until plan 42-09 (stage() reads it).
+# Not in MODULES: it does not exist until plan 42-09 (stage() reads it); pinned only where it is
+# read, stage 2 and emit on the real root (42-REVIEW IN-01).
 THRESHOLD_FILE = "scripts/phase42_threshold_prereg.py"
 DRIVER_FILE = "scripts/phase42_recipes.py"
 DISCLOSED_MODULES = (DRIVER_FILE, PREREG_FILE)
@@ -64,6 +65,12 @@ MODULES = DISCLOSED_MODULES + (
     "scripts/phase25_run.py",
     "src/personacore/privacy/dpsgd.py",
     "src/personacore/privacy/accountant.py",
+    # 42-REVIEW IN-01: the warmup + cosine the take proof stands for, and the fill's inputs.
+    "src/personacore/training/schedule.py",
+    "src/personacore/training/loop.py",
+    "scripts/mitigation_budget.py",
+    "scripts/phase25_record.py",
+    "scripts/phase14_factset.py",
 )
 RUN_PROVENANCE_KEYS = (
     "git_sha_at_launch",
@@ -502,12 +509,13 @@ def stage(root):
 def _threshold_fill():
     """42-REVIEW WR-02 (D-19): EXECUTE the committed fill (THRESHOLD_FILE, imported lazily: it
     exists only after plan 42-09) and prove E3_RECALL_THRESHOLD covers exactly the grid's recipes.
-    Returns the thresholds."""
+    Returns ``(thresholds, {THRESHOLD_FILE: sha256 of the executed file})`` (42-REVIEW IN-01)."""
     prereg = _prereg()
     try:
         import phase42_threshold_prereg
 
         thresholds = phase42_threshold_prereg.E3_RECALL_THRESHOLD
+        pin = {THRESHOLD_FILE: _sha256(phase42_threshold_prereg.__file__)}
     except Exception as exc:
         raise SystemExit(
             f"[phase42_recipes] {THRESHOLD_FILE} does not execute ({exc!r}): refused before any "
@@ -519,7 +527,7 @@ def _threshold_fill():
         f"{THRESHOLD_FILE} fills {sorted(thresholds)}, not the grid's recipe keys {sorted(keys)}: "
         "refused before any stage-2 training (D-19; 42-REVIEW WR-02)",
     )
-    return thresholds
+    return thresholds, pin
 
 
 def p22_check():
@@ -648,7 +656,7 @@ def preflight(*, root=None, ledger_path=None, heartbeat_path=None, device=None, 
         )
     current = stage(root)
     if current == 2 and real:  # the fill executes before P22, require_launch and any training
-        _threshold_fill()
+        launch_modules = {**launch_modules, **_threshold_fill()[1]}
     p22 = p22_check() if current == 2 else None
     pending = tuple(
         u
@@ -783,7 +791,7 @@ _LIMITS = (
 def _thresholds(root, thresholds):
     """The real root reads only the committed fill (THRESHOLD_FILE, tracked and clean; imported
     lazily: it exists only after plan 42-09); a scratch root passes the real fill over its own
-    control records."""
+    control records. Returns ``(thresholds, pin)``: pin is the fill's digest on the real root."""
     if _is_real(root):
         _prove(
             thresholds is None,
@@ -799,7 +807,7 @@ def _thresholds(root, thresholds):
         thresholds is not None,
         "a rehearsal root passes thresholds (the real fill over its own control records)",
     )
-    return thresholds
+    return thresholds, {}
 
 
 def _pair(record, leg):
@@ -814,7 +822,7 @@ def build_record(root, *, thresholds=None, ledger_path=None):
     prereg = _prereg()
     root = pathlib.Path(root)
     real = _root_ledger(root, ledger_path)
-    thr = _thresholds(root, thresholds)
+    thr, pin = _thresholds(root, thresholds)
     identity = None
     if real:  # the rehearsal the run rested on (42-REVIEW WR-05)
         identity_path = pathlib.Path(_ROOT) / REHEARSAL_IDENTITY
@@ -968,7 +976,7 @@ def build_record(root, *, thresholds=None, ledger_path=None):
         "provenance": {
             "emitted_utc": _now(),
             "git_sha": git_sha(),
-            "module_sha256": module_sha256(),
+            "module_sha256": {**module_sha256(), **pin},
         },
     }
     return json.loads(json.dumps(record, default=dict))

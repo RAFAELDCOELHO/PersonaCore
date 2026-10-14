@@ -1186,6 +1186,40 @@ def test_real_records_disclose_the_rehearsal(monkeypatch, tmp_path):
         phase42_recipes.build_record(root)
 
 
+def test_module_digests_pin_the_schedule_and_the_fill(monkeypatch, tmp_path):
+    """42-REVIEW IN-01: MODULES pins the code behind D-05 (schedule, loop) and the fill's inputs;
+    the threshold file is pinned only where it is read (real root: stage 2 and emit), never
+    required before plan 42-09 writes it."""
+    p = phase42_prereg
+    added = (
+        "src/personacore/training/schedule.py",
+        "src/personacore/training/loop.py",
+        "scripts/mitigation_budget.py",
+        "scripts/phase25_record.py",
+        "scripts/phase14_factset.py",
+    )
+    assert set(added) <= set(phase42_recipes.MODULES)
+    assert phase42_recipes.THRESHOLD_FILE not in phase42_recipes.MODULES
+    assert set(phase42_recipes.module_sha256()) == set(phase42_recipes.MODULES)
+    _calls, kw, ledger = _run_rig(monkeypatch, tmp_path, real=True, counts=_counts())
+    root = kw["root"]
+    assert phase42_recipes.run(**kw)["stage"] == 1
+    for unit in p.CONTROL_UNITS:  # stage 1: the fill does not exist yet, nothing pins it
+        pinned = json.loads((root / p.unit_record(unit)).read_text("utf-8"))
+        pinned = pinned["module_sha256_at_launch"]
+        assert set(pinned) == set(phase42_recipes.MODULES), unit
+    monkeypatch.setattr(phase35_prereg, "_REPO_ROOT", root)
+    monkeypatch.setattr(phase42_recipes, "_tracked_and_clean", lambda *rels: True)
+    monkeypatch.setitem(sys.modules, _FILL, None)
+    fill = _stand_in_fill(monkeypatch, tmp_path / "fill", _FILL_BODY)
+    digest = hashlib.sha256(fill.read_bytes()).hexdigest()
+    assert phase42_recipes.run(**kw)["stage"] == 2
+    expected = {**phase42_recipes.module_sha256(), phase42_recipes.THRESHOLD_FILE: digest}
+    for unit in p.POINT_UNITS:
+        assert _unit_records(root)[unit]["module_sha256_at_launch"] == expected, unit
+    assert phase42_recipes.build_record(root)["provenance"]["module_sha256"] == expected
+
+
 def test_build_record_refuses(monkeypatch, tmp_path):
     import shutil
 
