@@ -1207,3 +1207,50 @@ def test_plist_mirrors_the_e1_agent():
     changed = {"Label", "ProgramArguments", "StandardOutPath", "StandardErrorPath"}
     assert set(ours) == set(e1)
     assert {k for k in ours if ours[k] != e1[k]} == changed
+
+
+# =================================================================================================
+# (6) End to end on a scratch root (plan 42-05 Task 3; T-42-22, the unwired-driver lesson): the
+# driver's own control records and the committed v4.0 control through the REAL threshold fill,
+# then the points, emit and report, before any MPS hour.
+# =================================================================================================
+
+
+def test_end_to_end_on_a_scratch_root(monkeypatch, tmp_path, capsys):
+    p = phase42_prereg
+    calls, kw, ledger = _run_rig(monkeypatch, tmp_path, counts=_counts("control_lr1e-03_t800"))
+    root = kw["root"]
+    assert (root / p.V4_CONTROL_RECORD).read_bytes() == (_ROOT / p.V4_CONTROL_RECORD).read_bytes()
+    assert phase42_recipes.run(**kw) == {"stage": 1, "whole": list(p.CONTROL_UNITS)}
+    assert phase42_recipes.STAGE_1_DONE in capsys.readouterr().out
+    with monkeypatch.context() as m:
+        m.setattr(phase35_prereg, "_REPO_ROOT", root)
+        thresholds = phase35_prereg.fill(
+            "e3_recall_threshold", **phase42_prereg.threshold_fill_inputs()
+        )
+    v4 = thresholds[p.recipe_key(p.REUSED_RECIPE)]
+    assert v4["control"] == p.V4_CONTROL_RECORD
+    assert (v4["taught"], v4["heldout"]) == (0.5486111111111112, 0.3737654320987654)
+    assert thresholds[p.recipe_key(p.unit_cell("control_lr1e-03_t800")[0])] == p.REFUSED
+    # Stage 2: P22 re-asserted, all 8 points run (the REFUSED recipe's two included, D-20).
+    assert phase42_recipes.run(**kw) == {"stage": 2, "whole": list(p.POINT_UNITS)}
+    assert f"p22={dict(p.P22_ONSETS)}" in capsys.readouterr().out
+    expected = [
+        pair
+        for u in p.UNITS
+        for pair in (("start", p.run_id(u), None), ("end", p.run_id(u), p.unit_record(u)))
+    ]
+    assert _events(ledger) == expected and len(expected) == 2 * len(p.UNITS)
+    assert len(calls["train"]) == len(calls["score"]) == len(p.UNITS)
+    record = phase42_recipes.emit(root=root, ledger_path=ledger, thresholds=thresholds)
+    out = phase42_recipes.report(root=root)
+    printed = capsys.readouterr().out
+    assert record["summary"] == "0 de 8 pontos passam; 2 REFUSED"
+    assert f"EMIT {p.E3_RECORD} {record['summary']}" in printed
+    text = out.read_text(encoding="utf-8")
+    assert text.splitlines()[0] == record["lead"] == _NULL
+    assert text.count(record["summary"]) == 1
+    labels = [record["points"][u]["label"] for u in p.POINT_UNITS]
+    assert labels.count(p.REFUSED) == len(p.NOISED_SIGMAS)
+    assert labels.count(p.NAO_PASSA) == len(p.POINT_UNITS) - len(p.NOISED_SIGMAS)
+    print(f"E2E summary={record['summary']!r} lead={text.splitlines()[0]!r}")
