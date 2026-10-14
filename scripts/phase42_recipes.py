@@ -19,6 +19,7 @@ the functions that need them.
 import datetime
 import gc
 import hashlib
+import json
 import pathlib
 import subprocess
 import sys
@@ -31,9 +32,10 @@ import phase25_points  # noqa: E402  (torch-free at import; the one training sta
 import phase25_record  # noqa: E402  (torch-free; point_key)
 import phase25_run  # noqa: E402  — atomic_write_json, beat, start_heartbeat (torch-free)
 import phase35_prereg  # noqa: E402  (torch-free at import; E3_N, DELTA, p22_onset_sigma)
+import phase36_caps  # noqa: E402  (torch-free at import; the launch caps)
 import phase36_ledger  # noqa: E402  (torch-free; the per-unit attempt)
 
-from personacore.provenance import git_sha  # noqa: E402
+from personacore.provenance import git_sha, refuse_if_dirty  # noqa: E402
 
 # FIXED: the cwd of every git call and the base of the module digests.
 _REPO = pathlib.Path(__file__).resolve().parent.parent
@@ -399,3 +401,305 @@ def write_unit(unit, *, pf, started_utc, state):
     _write_once(out, record)
     state.update(stage="done")
     return rel
+
+
+# =================================================================================================
+# The rehearsal identity (D-21; 38-REVIEW DR-02 / DR-03)
+# =================================================================================================
+
+_IDENTITY_KEYS = frozenset({"git_sha", "module_sha256", "units", "started_utc", "cpu_seconds"})
+
+
+def _load(path):
+    return json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
+
+
+def _disclosed_digests():
+    return {rel: _sha256(_REPO / rel) for rel in DISCLOSED_MODULES}
+
+
+def _well_formed(identity):
+    return (
+        isinstance(identity, dict)
+        and set(identity) == _IDENTITY_KEYS
+        and isinstance(identity["module_sha256"], dict)
+        and set(identity["module_sha256"]) == set(DISCLOSED_MODULES)
+        and isinstance(identity["units"], list)
+    )
+
+
+def _kept_identity(path):
+    """The identity already at ``path`` (None when absent), refused when malformed or recorded at
+    other DISCLOSED_MODULES digests: a changed driver or prereg needs a fresh rehearsal."""
+    path = pathlib.Path(path)
+    if not path.exists():
+        return None
+    kept = _load(path)
+    _prove(_well_formed(kept), f"{path} is malformed (38-REVIEW DR-03)")
+    _prove(
+        kept["module_sha256"] == _disclosed_digests(),
+        f"{path} was recorded at other {DISCLOSED_MODULES} digests: a changed driver needs a fresh "
+        "rehearsal (38-REVIEW DR-02); move the old identity aside, never delete it",
+    )
+    return kept
+
+
+def record_rehearsal(path, *, units, seconds):
+    """The rehearsal identity: the first call records git_sha, the DISCLOSED_MODULES digests, its
+    units (UNITS order), started_utc and its CPU seconds; a later call at the same digests adds
+    its units and seconds and keeps every other key."""
+    prereg = _prereg()
+    path = pathlib.Path(path)
+    kept = _kept_identity(path)
+    if kept is None:
+        identity = {
+            "git_sha": git_sha(),
+            "module_sha256": _disclosed_digests(),
+            "units": [u for u in prereg.UNITS if u in units],
+            "started_utc": _now(),
+            "cpu_seconds": seconds,
+        }
+    else:
+        identity = {
+            **kept,
+            "units": [u for u in prereg.UNITS if u in kept["units"] or u in units],
+            "cpu_seconds": kept["cpu_seconds"] + seconds,
+        }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    phase25_run.atomic_write_json(path, identity)
+    print(f"REHEARSAL {'RECORDED' if kept is None else 'KEPT'} {identity['git_sha']}", flush=True)
+    return identity
+
+
+# =================================================================================================
+# Preflight: every refusal before the first start line (RECIPE-04, D-08, D-19, D-20, D-22)
+# =================================================================================================
+
+
+def stage(root):
+    """2 once stage 1 is closed: on the real root THRESHOLD_FILE and the control records tracked
+    and clean (D-19); on a scratch root every control record present under it. Else 1."""
+    prereg = _prereg()
+    controls = tuple(prereg.unit_record(u) for u in prereg.CONTROL_UNITS)
+    if _is_real(root):
+        return 2 if _tracked_and_clean(THRESHOLD_FILE, *controls) else 1
+    return 2 if all((pathlib.Path(root) / rel).exists() for rel in controls) else 1
+
+
+def p22_check():
+    """D-08 / RECIPE-04: the P22 onset re-computed at every T of the grid, equal to the frozen
+    P22_ONSETS and below every noised sigma, BEFORE any stage-2 training. Returns {T: onset}."""
+    prereg = _prereg()
+    onsets = {}
+    for steps in sorted({r["steps"] for r in prereg.RECIPES}):
+        onset = phase35_prereg.p22_onset_sigma(steps)
+        frozen = prereg.P22_ONSETS[steps]
+        _prove(
+            onset == frozen,
+            f"P22 onset at T={steps} is {onset}, not the frozen {frozen}: refused before any "
+            "training (RECIPE-04)",
+        )
+        _prove(
+            all(s > onset for s in prereg.NOISED_SIGMAS),
+            f"P22: the grid crosses the WARNING-4/5 region at T={steps} (onset {onset}): refused "
+            "before any training (RECIPE-04)",
+        )
+        onsets[steps] = onset
+    return onsets
+
+
+def _launch_requirements(*, real, device, identity, digests):
+    """The real root runs on MPS after a CPU rehearsal recorded at the current driver and prereg
+    digests (D-21); a scratch root is the rehearsal, on CPU."""
+    if not real:
+        _prove(device == "cpu", f"a rehearsal runs on CPU: pass device='cpu', not {device!r}")
+        return
+    _prove(device == "mps", f"E3 runs on MPS on the real root; resolved {device!r}")
+    _prove(identity is not None, "the rehearsal identity is missing: run the CPU rehearsal first")
+    _prove(_well_formed(identity), "the rehearsal identity is malformed (38-REVIEW DR-03)")
+    _prove(
+        identity["module_sha256"] == digests,
+        f"{DISCLOSED_MODULES} changed after the rehearsal: rehearse the launched driver and prereg",
+    )
+
+
+def _launch_pathspec(root):
+    """LAUNCH_PATHSPEC plus one ``:(exclude)`` per unit record that exists under ``root``: the run's
+    own untracked whole-unit records (a crash relaunch, crash_rule), nothing else."""
+    prereg = _prereg()
+    return LAUNCH_PATHSPEC + tuple(
+        ":(exclude)" + prereg.unit_record(u)
+        for u in prereg.UNITS
+        if (pathlib.Path(root) / prereg.unit_record(u)).exists()
+    )
+
+
+def _stale_outputs(unit, *, real):
+    """The training sidecar, adapter and checkpoint train_stage would reuse or resume."""
+    import teach_persona as tp  # torch at import: lazy
+
+    plan = cell_plan(unit, rehearsal=not real)
+    outputs = tp.arm_outputs(plan["arm"], prefix=plan["prefix"])
+    return (
+        phase25_points.training_sidecar(plan["point_key"]),
+        outputs["adapter"],
+        outputs["checkpoint"],
+    )
+
+
+def preflight(*, root=None, ledger_path=None, heartbeat_path=None, device=None, units=None):
+    """Every refusal before the first ledger start line. Writes nothing. Returns the pf dict
+    (root, real, device, ledger_path, heartbeat_path, git_sha, module_sha256, stage, pending, p22,
+    gate)."""
+    prereg = _prereg()
+    root = pathlib.Path(root) if root is not None else pathlib.Path(_ROOT)
+    real = _root_ledger(root, ledger_path, heartbeat_path)
+    device = _device() if device is None else device
+    _import_modules()
+    launch_modules = module_sha256()
+    identity_path = pathlib.Path(_ROOT) / REHEARSAL_IDENTITY
+    _launch_requirements(
+        real=real,
+        device=device,
+        identity=_load(identity_path) if real and identity_path.exists() else None,
+        digests={rel: launch_modules[rel] for rel in DISCLOSED_MODULES},
+    )
+    if real:
+        refuse_if_dirty(
+            who="phase42_recipes",
+            detail=(
+                "every unit record publishes git_sha and hashes its modules from the working "
+                "tree; a run launched from a dirty tree names a commit it cannot be regenerated "
+                "from"
+            ),
+            pathspec=_launch_pathspec(root),
+            cwd=_REPO,
+        )
+    launch_git_sha = git_sha()
+    _prove(launch_git_sha != "unknown", "git_sha() could not read HEAD (run from the repo root)")
+    lines = phase36_ledger.read_ledger(ledger_path)
+    still = set(phase36_ledger.open_runs(lines)) & {prereg.run_id(u) for u in prereg.UNITS}
+    for unit in prereg.UNITS:  # a reconcile here would make a finished unit unrecoverable
+        _prove(
+            prereg.run_id(unit) not in still or not (root / prereg.unit_record(unit)).exists(),
+            f"{prereg.run_id(unit)} is open and {prereg.unit_record(unit)} exists: append its end "
+            "line by command, NEVER reconcile (crash_rule)",
+        )
+    _prove(
+        not still,
+        f"the ledger holds an open attempt for {', '.join(sorted(still))} with no unit record: "
+        "once the run is dead, reconcile it first: phase36_ledger.py reconcile",
+    )
+    current = stage(root)
+    p22 = p22_check() if current == 2 else None
+    pending = tuple(
+        u
+        for u in (prereg.CONTROL_UNITS if current == 1 else prereg.POINT_UNITS)
+        if not (root / prereg.unit_record(u)).exists()
+    )
+    pf = {
+        "root": root,
+        "real": real,
+        "device": device,
+        "ledger_path": ledger_path,
+        "heartbeat_path": heartbeat_path,
+        "git_sha": launch_git_sha,
+        "module_sha256": launch_modules,
+        "stage": current,
+        "pending": pending,
+        "p22": p22,
+        "gate": None,
+    }
+    if current == 1 and not pending:  # every control written, the threshold file not yet tracked
+        print(STAGE_1_DONE, flush=True)
+        return pf
+    _prove(pending, f"nothing to run at stage {current}: every point record exists; emit next")
+    if units is not None:
+        units = tuple(units)
+        _prove(
+            units and units == tuple(u for u in pending if u in units),
+            f"units {units!r} must be a non-empty subset of the pending stage-{current} units "
+            f"{pending}, in UNITS order",
+        )
+        pending = units
+    lost = {line["run_id"] for line in lines if line["event"] == "lost"}
+    for unit in pending:
+        if prereg.run_id(unit) in lost:  # crash_rule: train_stage resumes or reuses its outputs
+            continue
+        for path in _stale_outputs(unit, real=real):
+            _prove(not path.exists(), f"{path} exists: an output of pending unit {unit}")
+    gate = phase36_ledger.require_launch(FRONT, ledger_path=ledger_path)
+    grid = prereg.E3_GRID_SUBSET
+    phase36_caps.check_unit_caps(
+        FRONT,
+        **phase36_caps.counts_for("e3_grid_subset", grid),
+        sigmas=len({c["sigma"] for c in grid["cells"]}),
+    )
+    print(
+        f"PREFLIGHT OK {launch_git_sha} device={device} stage={current} pending={pending} "
+        f"spent_E3_h={gate['spent_seconds'][FRONT] / 3600}"
+        + (f" p22={p22}" if p22 is not None else ""),
+        flush=True,
+    )
+    return {**pf, "pending": pending, "gate": gate}
+
+
+# =================================================================================================
+# The run: one ledger attempt per unit (D-22; crash_rule)
+# =================================================================================================
+
+
+def run(
+    *,
+    root=None,
+    ledger_path=None,
+    heartbeat_path=None,
+    device=None,
+    units=None,
+    rehearsal_identity=None,
+):
+    """THE run: preflight, then per pending unit require_launch, ONE start line, write_unit, the end
+    line naming its record. A crash inside a unit leaves an open start (reconcile -> lost). A
+    scratch root given ``rehearsal_identity`` records its units and seconds into it."""
+    prereg = _prereg()
+    pf = preflight(
+        root=root,
+        ledger_path=ledger_path,
+        heartbeat_path=heartbeat_path,
+        device=device,
+        units=units,
+    )
+    if rehearsal_identity is not None:  # refused BEFORE the first start line (38-REVIEW DR-02)
+        _prove(not pf["real"], "the real root records no rehearsal identity")
+        _kept_identity(rehearsal_identity)
+    if not pf["pending"]:
+        return {"stage": pf["stage"], "whole": []}
+    heartbeat_path = heartbeat_path or phase36_ledger.HEARTBEAT_PATH
+    started = time.monotonic()
+    whole = []
+    for unit in pf["pending"]:
+        phase36_ledger.require_launch(FRONT, ledger_path=ledger_path)
+        rid = prereg.run_id(unit)
+        phase36_ledger.append("start", run_id=rid, phase=42, front=FRONT, ledger_path=ledger_path)
+        state = {"point": rid, "stage": "start", "shape": None, "draw_index": None}
+        # B1: the thread's first beat waits a full period: beat once now.
+        phase25_run.beat(heartbeat_path, **state)
+        stop, thread = phase25_run.start_heartbeat(heartbeat_path, state)
+        try:
+            record = write_unit(unit, pf=pf, started_utc=_now(), state=state)
+        finally:
+            stop.set()
+            thread.join()
+        phase36_ledger.append(
+            "end", run_id=rid, phase=42, front=FRONT, record=record, ledger_path=ledger_path
+        )
+        print(f"UNIT {unit} WHOLE {record}", flush=True)
+        whole.append(unit)
+    if rehearsal_identity is not None:
+        record_rehearsal(rehearsal_identity, units=whole, seconds=time.monotonic() - started)
+    if pf["stage"] == 1 and all(
+        (pf["root"] / prereg.unit_record(u)).exists() for u in prereg.CONTROL_UNITS
+    ):
+        print(STAGE_1_DONE, flush=True)
+    print(f"RUN DONE whole={whole}", flush=True)
+    return {"stage": pf["stage"], "whole": whole}
