@@ -398,8 +398,7 @@ def write_unit(unit, *, pf, started_utc, state):
         "provenance": {"run": _run_provenance(pf, started_utc)},
         "module_sha256_at_launch": pf["module_sha256"],
     }
-    if not pf["real"]:
-        record["rehearsal_disclosure"] = {"this_is_the_rehearsal": True}
+    record["rehearsal_disclosure"] = _rehearsal_disclosure(pf["rehearsal"] if pf["real"] else None)
     _write_once(out, record)
     state.update(stage="done")
     return rel
@@ -428,6 +427,18 @@ def _well_formed(identity):
         and set(identity["module_sha256"]) == set(DISCLOSED_MODULES)
         and isinstance(identity["units"], list)
     )
+
+
+def _rehearsal_disclosure(identity):
+    """42-REVIEW WR-05: what a record publishes about the rehearsal it rests on, under the Phase 41
+    field names (scripts/phase41_erasure.py:1038-1040); a scratch root's records say they are it."""
+    if identity is None:
+        return {"this_is_the_rehearsal": True}
+    return {
+        "units_read": identity["units"],
+        "rehearsal_git_sha": identity["git_sha"],
+        "rehearsal_module_sha256": identity["module_sha256"],
+    }
 
 
 def _kept_identity(path):
@@ -549,6 +560,10 @@ def _launch_requirements(*, real, device, identity, digests):
     _prove(identity is not None, "the rehearsal identity is missing: run the CPU rehearsal first")
     _prove(_well_formed(identity), "the rehearsal identity is malformed (38-REVIEW DR-03)")
     _prove(
+        identity["units"],
+        "the rehearsal identity ran no unit: it proves no D-21 leg ran (42-REVIEW WR-05)",
+    )
+    _prove(
         identity["module_sha256"] == digests,
         f"{DISCLOSED_MODULES} changed after the rehearsal: rehearse the launched driver and prereg",
     )
@@ -581,7 +596,7 @@ def _stale_outputs(unit, *, real):
 def preflight(*, root=None, ledger_path=None, heartbeat_path=None, device=None, units=None):
     """Every refusal before the first ledger start line. Writes nothing. Returns the pf dict
     (root, real, device, ledger_path, heartbeat_path, git_sha, module_sha256, stage, pending, p22,
-    gate)."""
+    gate, rehearsal: the real root's rehearsal identity, None on a scratch root)."""
     prereg = _prereg()
     root = pathlib.Path(root) if root is not None else pathlib.Path(_ROOT)
     real = _root_ledger(root, ledger_path, heartbeat_path)
@@ -589,10 +604,11 @@ def preflight(*, root=None, ledger_path=None, heartbeat_path=None, device=None, 
     _import_modules()
     launch_modules = module_sha256()
     identity_path = pathlib.Path(_ROOT) / REHEARSAL_IDENTITY
+    identity = _load(identity_path) if real and identity_path.exists() else None
     _launch_requirements(
         real=real,
         device=device,
-        identity=_load(identity_path) if real and identity_path.exists() else None,
+        identity=identity,
         digests={rel: launch_modules[rel] for rel in DISCLOSED_MODULES},
     )
     if real:
@@ -651,6 +667,7 @@ def preflight(*, root=None, ledger_path=None, heartbeat_path=None, device=None, 
         "pending": pending,
         "p22": p22,
         "gate": None,
+        "rehearsal": identity,
     }
     if current == 1 and not pending:  # every control written, the threshold file not yet tracked
         print(STAGE_1_DONE, flush=True)
@@ -798,6 +815,15 @@ def build_record(root, *, thresholds=None, ledger_path=None):
     root = pathlib.Path(root)
     real = _root_ledger(root, ledger_path)
     thr = _thresholds(root, thresholds)
+    identity = None
+    if real:  # the rehearsal the run rested on (42-REVIEW WR-05)
+        identity_path = pathlib.Path(_ROOT) / REHEARSAL_IDENTITY
+        _prove(identity_path.exists(), f"{identity_path} is missing: the E3 record discloses it")
+        identity = _load(identity_path)
+        _prove(
+            _well_formed(identity) and identity["units"],
+            f"{identity_path} is malformed or ran no unit (42-REVIEW WR-05)",
+        )
     _prove(
         set(thr) == {prereg.recipe_key(r) for r in prereg.RECIPES},
         f"the thresholds' keys {sorted(thr)} are not the grid's recipe keys",
@@ -937,6 +963,7 @@ def build_record(root, *, thresholds=None, ledger_path=None):
         "exact_disagreements": exact,
         "limits": {name: prereg.ENTRIES[name]["derivation"] for name in _LIMITS},
         "hours": spent["by_front"][FRONT] / 3600,
+        "rehearsal_disclosure": _rehearsal_disclosure(identity),
         "inputs": inputs,
         "provenance": {
             "emitted_utc": _now(),

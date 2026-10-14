@@ -462,7 +462,7 @@ def _run_rig(monkeypatch, tmp_path, *, real=False, counts=None):
     monkeypatch.setattr(phase36_ledger, "HEARTBEAT_PATH", root / "data" / "rig_heartbeat.jsonl")
     monkeypatch.setattr(phase42_recipes, "_tracked_and_clean", lambda *rels: False)
     phase42_recipes.record_rehearsal(
-        root / phase42_recipes.REHEARSAL_IDENTITY, units=(), seconds=1.0
+        root / phase42_recipes.REHEARSAL_IDENTITY, units=("control_lr1e-03_t200",), seconds=1.0
     )
     return calls, {"root": root, "device": "mps"}, root / "ledger" / "rig_ledger.jsonl"
 
@@ -534,7 +534,14 @@ def test_real_root_second_run_is_a_no_op_and_excludes_its_own_records(
     assert phase42_recipes.STAGE_1_DONE in capsys.readouterr().out
     assert calls["dirty"][0]["pathspec"] == phase42_recipes.LAUNCH_PATHSPEC
     record = json.loads((kw["root"] / p.unit_record(p.CONTROL_UNITS[0])).read_text("utf-8"))
-    assert "rehearsal_disclosure" not in record
+    identity = json.loads((kw["root"] / phase42_recipes.REHEARSAL_IDENTITY).read_text("utf-8"))
+    # 42-REVIEW WR-05: the Phase 41 field names (scripts/phase41_erasure.py:1038-1040).
+    assert record["rehearsal_disclosure"] == {
+        "units_read": ["control_lr1e-03_t200"],
+        "rehearsal_git_sha": "h1",
+        "rehearsal_module_sha256": phase42_recipes._disclosed_digests(),
+    }
+    assert identity["units"] == record["rehearsal_disclosure"]["units_read"]
     assert record["provenance"]["run"]["device"] == "mps"
     # Second run: the threshold file is not tracked, so stage 1 with nothing pending.
     again = phase42_recipes.run(**kw)
@@ -834,7 +841,7 @@ def test_real_root_launch_requirements(tmp_path, monkeypatch):
     monkeypatch.setattr(phase42_recipes, "_device", lambda: "cpu")
     digests = phase42_recipes._disclosed_digests()
     path = tmp_path / "identity.json"
-    identity = phase42_recipes.record_rehearsal(path, units=(), seconds=1.0)
+    identity = phase42_recipes.record_rehearsal(path, units=("control_lr1e-03_t200",), seconds=1.0)
     req = phase42_recipes._launch_requirements
     req(real=True, device="mps", identity=identity, digests=digests)
     req(real=False, device="cpu", identity=None, digests=digests)
@@ -842,6 +849,8 @@ def test_real_root_launch_requirements(tmp_path, monkeypatch):
         ({"real": True, "device": "cpu", "identity": identity}, "MPS"),
         ({"real": True, "device": "mps", "identity": None}, "missing"),
         ({"real": True, "device": "mps", "identity": {**identity, "units": "x"}}, "malformed"),
+        # 42-REVIEW WR-05: a rehearsal that ran zero units proves no D-21 leg ran.
+        ({"real": True, "device": "mps", "identity": {**identity, "units": []}}, "ran no unit"),
         (
             {
                 "real": True,
@@ -1146,6 +1155,37 @@ def test_build_record_readings(monkeypatch, tmp_path):
     assert set(record["inputs"]) == {p.V4_CONTROL_RECORD, *(p.unit_record(u) for u in p.UNITS)}
 
 
+def test_real_records_disclose_the_rehearsal(monkeypatch, tmp_path):
+    """42-REVIEW WR-05: on the real root every unit record AND the E3 record publish the rehearsal
+    they rest on: units_read, rehearsal_git_sha, rehearsal_module_sha256 (the Phase 41 names)."""
+    p = phase42_prereg
+    _calls, kw, ledger = _run_rig(monkeypatch, tmp_path, real=True, counts=_counts())
+    root = kw["root"]
+    assert phase42_recipes.run(**kw)["stage"] == 1
+    monkeypatch.setattr(phase35_prereg, "_REPO_ROOT", root)
+    monkeypatch.setattr(phase42_recipes, "_tracked_and_clean", lambda *rels: True)
+    monkeypatch.setitem(sys.modules, _FILL, None)
+    _stand_in_fill(monkeypatch, tmp_path / "fill", _FILL_BODY)
+    assert phase42_recipes.run(**kw)["stage"] == 2
+    identity = json.loads((root / phase42_recipes.REHEARSAL_IDENTITY).read_text("utf-8"))
+    expected = {
+        "units_read": identity["units"],
+        "rehearsal_git_sha": identity["git_sha"],
+        "rehearsal_module_sha256": identity["module_sha256"],
+    }
+    assert expected["units_read"] == ["control_lr1e-03_t200"]
+    for unit in p.UNITS:
+        assert _unit_records(root)[unit]["rehearsal_disclosure"] == expected, unit
+    record = phase42_recipes.build_record(root)
+    assert record["rehearsal_disclosure"] == expected
+    # A zero-unit identity is refused at emit too.
+    (root / phase42_recipes.REHEARSAL_IDENTITY).write_text(
+        json.dumps(dict(identity, units=[])), encoding="utf-8"
+    )
+    with pytest.raises(SystemExit, match=r"^\[phase42_recipes\].*ran no unit"):
+        phase42_recipes.build_record(root)
+
+
 def test_build_record_refuses(monkeypatch, tmp_path):
     import shutil
 
@@ -1183,6 +1223,7 @@ def test_emit_is_write_once_and_carries_emit_provenance_only(monkeypatch, tmp_pa
     assert json.loads(out.read_text("utf-8")) == record
     assert set(record["provenance"]) == {"emitted_utc", "git_sha", "module_sha256"}
     assert "run" not in record["provenance"]
+    assert record["rehearsal_disclosure"] == {"this_is_the_rehearsal": True}
     assert record["provenance"]["module_sha256"] == phase42_recipes.module_sha256()
     assert f"EMIT {p.E3_RECORD} 0 de 8 pontos passam; 2 REFUSED" in capsys.readouterr().out
     before = out.read_bytes()
