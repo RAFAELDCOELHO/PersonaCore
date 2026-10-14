@@ -470,12 +470,21 @@ def _events(ledger):
     return [(x["event"], x["run_id"], x["record"]) for x in phase36_ledger.read_ledger(ledger)]
 
 
-def _plant(root, unlearnable=None):
+def _plant(root, ledger, unlearnable=None):
+    """The 3 control records planted under ``root``, each named by an end line in ``ledger``."""
+    import phase36_ledger
+
     from test_phase42_prereg import _plant_controls
 
     p = phase42_prereg
     learnable = p.V4_CONTROL_COUNTS["taught"][0], p.V4_CONTROL_COUNTS["heldout"][0]
     _plant_controls(root, {u: (0, 0) if u == unlearnable else learnable for u in p.CONTROL_UNITS})
+    for unit in p.CONTROL_UNITS:
+        rid = p.run_id(unit)
+        phase36_ledger.append("start", run_id=rid, phase=42, front="E3", ledger_path=ledger)
+        phase36_ledger.append(
+            "end", run_id=rid, phase=42, front="E3", record=p.unit_record(unit), ledger_path=ledger
+        )
 
 
 def test_preflight_stage_1_pending_controls(monkeypatch, tmp_path, capsys):
@@ -566,7 +575,8 @@ def test_stage_reads_the_threshold_file_and_the_controls_on_the_real_root(monkey
 def test_stage_2_runs_p22_before_any_training(monkeypatch, tmp_path, capsys):
     p = phase42_prereg
     calls, kw, ledger = _run_rig(monkeypatch, tmp_path)
-    _plant(kw["root"])
+    _plant(kw["root"], ledger)
+    planted = _events(ledger)
     pf = phase42_recipes.preflight(**kw)
     assert pf["stage"] == 2 and pf["p22"] == dict(p.P22_ONSETS)
     assert "p22=" in capsys.readouterr().out
@@ -579,7 +589,7 @@ def test_stage_2_runs_p22_before_any_training(monkeypatch, tmp_path, capsys):
     )
     with pytest.raises(SystemExit, match=r"^\[phase42_recipes\] P22"):
         phase42_recipes.run(**kw)
-    assert calls["train"] == [] and _events(ledger) == []
+    assert calls["train"] == [] and _events(ledger) == planted
     # Equal to the frozen onset yet crossing: a frozen onset can be checked only both ways.
     monkeypatch.setattr(p, "P22_ONSETS", {**p.P22_ONSETS, p.T_MAX: max(p.NOISED_SIGMAS)})
     with pytest.raises(SystemExit, match=r"^\[phase42_recipes\] P22: the grid crosses"):
@@ -589,7 +599,8 @@ def test_stage_2_runs_p22_before_any_training(monkeypatch, tmp_path, capsys):
 def test_refused_still_runs(monkeypatch, tmp_path):
     p = phase42_prereg
     calls, kw, ledger = _run_rig(monkeypatch, tmp_path)
-    _plant(kw["root"], unlearnable="control_lr1e-03_t800")
+    _plant(kw["root"], ledger, unlearnable="control_lr1e-03_t800")
+    planted = len(_events(ledger))
     pf = phase42_recipes.preflight(**kw)
     assert pf["stage"] == 2 and pf["pending"] == p.POINT_UNITS  # D-20: all 8
     refused = [
@@ -598,7 +609,7 @@ def test_refused_still_runs(monkeypatch, tmp_path):
     assert len(refused) == len(p.NOISED_SIGMAS)
     out = phase42_recipes.run(**kw, units=tuple(refused))
     assert out == {"stage": 2, "whole": refused}
-    assert [e for e, _r, _x in _events(ledger)] == ["start", "end"] * len(refused)
+    assert [e for e, _r, _x in _events(ledger)[planted:]] == ["start", "end"] * len(refused)
 
 
 def test_launch_refuses_without_require_launch(monkeypatch, tmp_path):
@@ -669,6 +680,51 @@ def test_open_run_and_stale_outputs_are_refused(monkeypatch, tmp_path):
         phase42_recipes.cell_plan(unit, rehearsal=True)["point_key"]
     ).write_text("{}", encoding="utf-8")
     assert phase42_recipes.preflight(**kw)["pending"] == p.CONTROL_UNITS
+    assert calls["train"] == []
+
+
+def test_a_record_no_end_line_names_is_refused(monkeypatch, tmp_path):
+    """42-REVIEW WR-01: a unit record whose attempt was reconciled lost has no end line and can
+    never get one (the ledger refuses an end after lost); preflight refuses it by name."""
+    import phase36_ledger
+
+    p = phase42_prereg
+    calls, kw, ledger = _run_rig(monkeypatch, tmp_path)
+    unit = p.CONTROL_UNITS[0]
+    rid = p.run_id(unit)
+    phase36_ledger.append("start", run_id=rid, phase=42, front="E3", ledger_path=ledger)
+    phase36_ledger.append(
+        "lost",
+        run_id=rid,
+        phase=42,
+        front="E3",
+        seconds=0.0,
+        flag=phase36_ledger.NO_BEAT_FLAG,
+        ledger_path=ledger,
+    )
+    record = kw["root"] / p.unit_record(unit)
+    record.parent.mkdir(parents=True, exist_ok=True)
+    record.write_text("{}", encoding="utf-8")
+    with pytest.raises(SystemExit, match=r"^\[phase42_recipes\].*no end line.*reconciled lost"):
+        phase42_recipes.preflight(**kw)
+    with pytest.raises(SystemExit, match="no open attempt to end"):
+        phase36_ledger.append(
+            "end", run_id=rid, phase=42, front="E3", record=p.unit_record(unit), ledger_path=ledger
+        )
+    # An end line of ANOTHER unit's run naming this record does not admit it.
+    other = p.run_id(p.CONTROL_UNITS[1])
+    phase36_ledger.append("start", run_id=other, phase=42, front="E3", ledger_path=ledger)
+    phase36_ledger.append(
+        "end", run_id=other, phase=42, front="E3", record=p.unit_record(unit), ledger_path=ledger
+    )
+    with pytest.raises(SystemExit, match=r"^\[phase42_recipes\].*no end line"):
+        phase42_recipes.preflight(**kw)
+    # NON-VACUITY: a relaunched attempt of its own run whose end line names the record admits it.
+    phase36_ledger.append("start", run_id=rid, phase=42, front="E3", ledger_path=ledger)
+    phase36_ledger.append(
+        "end", run_id=rid, phase=42, front="E3", record=p.unit_record(unit), ledger_path=ledger
+    )
+    assert unit not in phase42_recipes.preflight(**kw)["pending"]
     assert calls["train"] == []
 
 

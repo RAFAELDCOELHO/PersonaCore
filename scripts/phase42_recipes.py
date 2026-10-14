@@ -592,6 +592,15 @@ def preflight(*, root=None, ledger_path=None, heartbeat_path=None, device=None, 
         f"the ledger holds an open attempt for {', '.join(sorted(still))} with no unit record: "
         "once the run is dead, reconcile it first: phase36_ledger.py reconcile",
     )
+    named = {(x["run_id"], x["record"]) for x in lines if x["event"] == "end"}
+    for unit in prereg.UNITS:  # 42-REVIEW WR-01
+        rel = prereg.unit_record(unit)
+        _prove(
+            not (root / rel).exists() or (prereg.run_id(unit), rel) in named,
+            f"{rel} exists but no end line of {prereg.run_id(unit)} names it: its attempt was "
+            "reconciled lost with the record written, and the ledger refuses an end line after "
+            "lost (crash_rule; 42-REVIEW WR-01)",
+        )
     current = stage(root)
     p22 = p22_check() if current == 2 else None
     pending = tuple(
