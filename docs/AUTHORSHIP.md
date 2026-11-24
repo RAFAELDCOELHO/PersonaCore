@@ -163,7 +163,7 @@ resolve to the author's e-mail, plus seven by `Cursor Agent` (`docs/authorship-e
 
 | Identity | Commits | What they are |
 |---|---|---|
-| `Rafael <rafael.d.cooelho@gmail.com>` | 592 | everything produced in Claude Code sessions, by the orchestrating session and by GSD sub-agents |
+| `Rafael <the author's address>` | 592 | everything produced in Claude Code sessions, by the orchestrating session and by GSD sub-agents |
 | `RAFAELDCOELHO` (same e-mail) | 4 | GitHub-side merges of PRs #1, #2, #4 and one `CITATION.cff` merge |
 | `Cursor Agent <cursoragent@cursor.com>` | 7 | PRs #1 and #2, 2026-09-01 (§4.2) |
 
@@ -457,7 +457,7 @@ committed. Answers go below this list as dated additions; nothing is filled in b
 7. §7: Which run was "killed externally at 60 minutes" and by what.
 8. §2.2: Phase 21 session 1 (privacy unit, ragged geometry, D-01…D-11) has no discussion log; confirm those decisions were the author's ratification of the research fork rather than adopted by default.
 9. §2.6 / §4.3: The magnitude check that preceded the condition-(c) reopening is attributed to the author only in the AI-written vault note; confirm.
-10. General: Age (16) and school context appear nowhere in the repository; this document does not assert them.
+10. General: age and school context appear nowhere in the repository; this document does not assert them.
 
 ---
 
