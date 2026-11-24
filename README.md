@@ -446,6 +446,17 @@ v4.0 — *Leakage Mitigation and Relearning Validation* — is in progress: Phas
 waits at an operator checkpoint before its 88–150 hour M3 run. No adapter from that sweep exists
 yet, so no number above changes.
 
+## Use of AI tools (recorded 2026-11-24)
+
+This is a single-author project built with AI coding agents. The author directed the work: he chose
+what to measure and report, and in Phases 20–25 made the calls reserved for a person (locked
+decisions, human-UAT rulings, blocking checkpoints). AI agents, mainly Claude Code (Anthropic) plus 7
+Cursor commits, wrote the code, tests, plans and reports under his direction; he did not type the
+code. Independent of who wrote a line, the v3.0 erasure rule was committed as code before the data
+it judges, a test checks that order in git, and negative results are published as the rule returned
+them. Claude Code drafted this text; the full account, with a source for each statement, is in
+[`docs/AI_USE.md`](docs/AI_USE.md).
+
 ## License and citation
 
 PersonaCore is released under the [MIT License](LICENSE). To cite it, use GitHub's
