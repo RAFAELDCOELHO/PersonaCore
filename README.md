@@ -11,7 +11,7 @@
 ![on-device](https://img.shields.io/badge/runs%20on-a%20laptop%20CPU-555)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-[Quick start](#quick-start) · [Results](#results-at-a-glance) · [How it works](#what-is-this) · [Evidence](#evidence) · [Repository map](#repository-map) · [Corrections](#record-of-corrections) · [Technical report](docs/REPORT.md) · [Notebook](demo.ipynb)
+[Quick start](#quick-start) · [Results](#results-at-a-glance) · [How it works](#what-is-this) · [Evidence](#evidence) · [Repository map](#repository-map) · [Corrections](#record-of-corrections) · [Technical report](docs/REPORT.md) · [Authorship](docs/AUTHORSHIP.md) · [Notebook](demo.ipynb)
 
 ![Teach-then-recall demo: the same question asked with the persona adapter on and off, the memory ON turn answering with the taught dog name and the memory OFF turn not, while the token-id panel shows an identical prompt](assets/demo_personachat.webp)
 
@@ -92,6 +92,7 @@ flowchart LR
 | [`tests/`](tests) | The CPU-only pytest suite, including the doc tests that lock the numbers on this page to their sources |
 | [`results/`](results) | Committed evaluation artifacts: training curves, ablation cohort, A/B and audit reports, figures |
 | [`docs/REPORT.md`](docs/REPORT.md) · [`demo.ipynb`](demo.ipynb) | The technical report and the executed results notebook |
+| [`docs/AUTHORSHIP.md`](docs/AUTHORSHIP.md) | The v4.0 authorship record: who decided, what the AI tools executed, and how each claim is verified, reconstructed from repository artifacts with an evidence annex |
 
 ### Record of corrections
 

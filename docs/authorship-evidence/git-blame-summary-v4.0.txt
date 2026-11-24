@@ -1,0 +1,112 @@
+# git blame author summary — central v4.0 modules (HEAD 15dce85, 2026-09-03)
+
+All lines are attributed to the git identity that committed them. See AUTHORSHIP.md §3 for why this cannot separate human-typed from AI-generated lines.
+
+## scripts/mitigation_gate.py
+first add: 95b3c8a 2026-08-20
+commits touching: 9
+commits with Claude-Session trailer: 0
+  blame: 1431 author Rafael
+
+## scripts/mitigation_unit.py
+first add: 8d3beb4 2026-08-23
+commits touching: 1
+commits with Claude-Session trailer: 0
+  blame:  252 author Rafael
+
+## scripts/mitigation_budget.py
+first add: dc2147f 2026-08-27
+commits touching: 5
+commits with Claude-Session trailer: 2
+  blame: 1016 author Rafael
+
+## scripts/mitigation_accountant.py
+first add: 36ce7fb 2026-08-25
+commits touching: 1
+commits with Claude-Session trailer: 0
+  blame:  493 author Rafael
+
+## src/personacore/privacy/dpsgd.py
+first add: a786cb8 2026-08-25
+commits touching: 4
+commits with Claude-Session trailer: 0
+  blame:  647 author Rafael
+
+## src/personacore/privacy/accountant.py
+first add: 3321421 2026-08-25
+commits touching: 12
+commits with Claude-Session trailer: 0
+  blame: 1080 author Rafael
+
+## scripts/phase21_filler.py
+first add: fe9cabe 2026-08-23
+commits touching: 3
+commits with Claude-Session trailer: 0
+  blame:  443 author Rafael
+
+## scripts/phase21_unit_record.py
+first add: 280e2c1 2026-08-23
+commits touching: 6
+commits with Claude-Session trailer: 0
+  blame: 1483 author Rafael
+
+## scripts/phase23_prereg.py
+first add: c7de5d4 2026-08-26
+commits touching: 1
+commits with Claude-Session trailer: 0
+  blame:  456 author Rafael
+
+## scripts/phase23_run.py
+first add: 5303819 2026-08-27
+commits touching: 15
+commits with Claude-Session trailer: 0
+  blame: 5079 author Rafael
+
+## scripts/phase24_adversarial.py
+first add: 628dc21 2026-08-30
+commits touching: 4
+commits with Claude-Session trailer: 2
+  blame:  421 author Rafael
+
+## scripts/phase24_record.py
+first add: 5aed70f 2026-08-30
+commits touching: 1
+commits with Claude-Session trailer: 0
+  blame:  503 author Rafael
+
+## scripts/phase25_prereg.py
+first add: 7664879 2026-08-31
+commits touching: 4
+commits with Claude-Session trailer: 1
+  blame:  666 author Rafael
+
+## scripts/phase25_run.py
+first add: 99cc4fc 2026-08-31
+commits touching: 3
+commits with Claude-Session trailer: 2
+  blame:  876 author Rafael
+
+## scripts/phase25_record.py
+first add: 8c42bd6 2026-08-31
+commits touching: 1
+commits with Claude-Session trailer: 1
+  blame:  945 author Rafael
+
+## scripts/phase25_verdict.py
+first add: 53e5600 2026-08-31
+commits touching: 1
+commits with Claude-Session trailer: 1
+  blame:  631 author Rafael
+
+## scripts/teach_persona.py
+first add: dac344f 2026-08-02
+commits touching: 25
+commits with Claude-Session trailer: 3
+  blame: 3133 author Rafael
+
+## src/personacore/training/loop.py
+first add: 488ef5d 2026-06-04
+commits touching: 17
+commits with Claude-Session trailer: 0
+  blame:  976 author Rafael
+
