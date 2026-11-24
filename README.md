@@ -452,7 +452,7 @@ This is a single-author project built with AI coding agents (`CITATION.cff:5-7`;
 lines 15–16). Each statement below names the record that supports it. Claude Code drafted this
 section on 2026-11-24 from the records it cites.
 
-`AUTHORSHIP.md` means `docs/AUTHORSHIP.md` on the branch `docs/authorship` (commit `866dc2b`). Claude
+`AUTHORSHIP.md` means `docs/AUTHORSHIP.md` on the branch `docs/authorship` (commit `86cda17`). Claude
 Code wrote it from the repository's artifacts, and it covers milestone v4.0, Phases 20–25 (its lines
 6–12; §4.1, line 227).
 
